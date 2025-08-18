@@ -6,7 +6,7 @@ export default function Chat() {
   const [allowed, setAllowed] = useState(null) // null=checking, true/false=result
   const [messages, setMessages] = useState([])
   const [sending, setSending] = useState(false)
-  const PAYHIP_URL = 'https://payhip.com/YOUR_PRODUCT' // <-- change to your real Payhip product URL
+  const PAYHIP_URL = 'https://hypnoticmeditations.ai/b/U7Z5m' // <-- change to your real Payhip product URL
 
   // --- auth session ---
   useEffect(() => {
