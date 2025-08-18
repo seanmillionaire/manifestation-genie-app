@@ -66,7 +66,7 @@ export default function Chat() {
     )
   }
 
-  // ... keep your imports and gating logic exactly as-is above
+
 
   return (
     <div style={{maxWidth:800, margin:'40px auto', fontFamily:'Inter, system-ui'}}>
