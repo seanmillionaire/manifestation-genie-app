@@ -168,7 +168,7 @@ export default function Chat() {
     )
   }
 
-   return (
+     return (
     <div className="wrap">
       <header className="hero">
         <h1><span>Manifestation</span> Genie</h1>
@@ -218,6 +218,7 @@ export default function Chat() {
       <Style/>
     </div>
   )
+
 }
 
 function LoaderScreen({ text }) {
