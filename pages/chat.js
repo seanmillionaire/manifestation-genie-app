@@ -1,3 +1,4 @@
+// pages/chat.js
 import AppHero from '../components/AppHero'
 import QuickGuide from '../components/QuickGuide'
 import FomoFeed from '../components/FomoFeed'
@@ -74,13 +75,14 @@ export default function Chat() {
       setMessages([...next, { role: 'assistant', content: data.reply || '…' }])
     } catch (err) {
       console.error(err)
-      setMessages([...next, { role: 'assistant', content: 'Error contacting Genie.' }])
+      setMessages([...next, { role: 'assistant', content: 'Error contacting Manifestation Genie.' }])
     } finally {
       setSending(false)
       inputRef.current?.focus()
     }
   }
 
+  // --- auth/allowlist screens ---
   if (!session) {
     return (
       <div className="wrap">
@@ -92,9 +94,7 @@ export default function Chat() {
       </div>
     )
   }
-
   if (allowed === null) return <LoaderScreen text="Checking access…" />
-
   if (!allowed) {
     return (
       <div className="wrap">
@@ -108,65 +108,28 @@ export default function Chat() {
     )
   }
 
-return (
-  <div className="wrap">
-    <AppHero name={session.user.email} />
+  // --- main UI ---
+  return (
+    <div className="wrap">
+      <AppHero name={session.user.email} />
 
-    <div className="chatCard">
-      <div className="list" ref={listRef}>
-        {messages.map((m, i) => (
-          <div key={i} className={`row ${m.role === 'user' ? 'me' : 'genie'}`}>
-            <div className="avatar">{m.role === 'user' ? '🧑' : '🔮'}</div>
-            <div className={`bubble ${m.role}`}>
-              <div className="tag">{m.role === 'user' ? 'You' : 'Manifestation Genie'}</div>
-              <div className="msg">{m.content}</div>
+      <div className="chatCard">
+        <div className="list" ref={listRef}>
+          {messages.map((m, i) => (
+            <div key={i} className={`row ${m.role === 'user' ? 'me' : 'genie'}`}>
+              <div className="avatar">{m.role === 'user' ? '🧑' : '🔮'}</div>
+              <div className={`bubble ${m.role}`}>
+                <div className="tag">{m.role === 'user' ? 'You' : 'Manifestation Genie'}</div>
+                <div className="msg">{m.content}</div>
+              </div>
             </div>
-          </div>
-        ))}
-
-        {sending && (
-          <div className="row genie">
-            <div className="avatar">🔮</div>
-            <div className="bubble assistant">
-              <div className="tag">Manifestation Genie</div>
-              <div className="dots"><span/><span/><span/></div>
-            </div>
-          </div>
-        )}
-      </div>
-
-      <form onSubmit={handleSend} className="composer">
-        <textarea
-          ref={inputRef}
-          name="prompt"
-          placeholder="Type your message… (Shift+Enter for a newline)"
-          rows={2}
-          onKeyDown={handleKeyDown}
-          disabled={sending}
-        />
-        <button type="submit" disabled={sending}>
-          {sending ? 'Sending…' : 'Send'}
-        </button>
-      </form>
-    </div>
-
-    <QuickGuide />
-    <FomoFeed />
-
-    <div className="bottomBar">
-      <button className="ghost" onClick={() => supabase.auth.signOut()}>Logout</button>
-    </div>
-
-    <Style />
-  </div>
-)
-
+          ))}
 
           {sending && (
             <div className="row genie">
               <div className="avatar">🔮</div>
               <div className="bubble assistant">
-                <div className="tag">Genie</div>
+                <div className="tag">Manifestation Genie</div>
                 <div className="dots"><span/><span/><span/></div>
               </div>
             </div>
@@ -182,9 +145,14 @@ return (
             onKeyDown={handleKeyDown}
             disabled={sending}
           />
-          <button type="submit" disabled={sending}>{sending ? 'Sending…' : 'Send'}</button>
+          <button type="submit" disabled={sending}>
+            {sending ? 'Sending…' : 'Send'}
+          </button>
         </form>
       </div>
+
+      <QuickGuide />
+      <FomoFeed />
 
       <div className="bottomBar">
         <button className="ghost" onClick={() => supabase.auth.signOut()}>Logout</button>
