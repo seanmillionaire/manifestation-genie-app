@@ -137,9 +137,10 @@ export default function Chat() {
       {/* HEADER — uses your existing .hero styling */}
       <header className="hero">
         <h1>
-          Manifestation Genie<br>Your AI Assistant for Turning Goals into Reality
+          Manifestation Genie
         </h1>
-      
+      <p className="sub">
+          Your AI Assistant for Turning Goals into Reality</p>
         <p className="sub small">
           👋 Welcome back, {session.user.email}.
         </p>
