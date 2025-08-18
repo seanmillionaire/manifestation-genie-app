@@ -4,22 +4,21 @@ import { supabase } from '../src/supabaseClient'
 
 export default function Chat() {
   const [session, setSession] = useState(null)
-  const [allowed, setAllowed] = useState(null)
+  const [allowed, setAllowed] = useState(null)      // null=checking
   const [messages, setMessages] = useState([])
   const [sending, setSending] = useState(false)
-  const [sessionId, setSessionId] = useState(null)
   const inputRef = useRef(null)
   const listRef  = useRef(null)
-  const PAYHIP_URL = 'https://hypnoticmeditations.ai/b/U7Z5m' // <-- change this
+  const PAYHIP_URL = 'https://payhip.com/YOUR_PRODUCT' // <-- set your product link
 
-  // auth session
+  // --- auth session ---
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => setSession(session))
     const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => setSession(s))
     return () => sub.subscription.unsubscribe()
   }, [])
 
-  // allowlist gate
+  // --- allowlist check ---
   useEffect(() => {
     async function run() {
       if (!session?.user?.email) return
@@ -28,72 +27,27 @@ export default function Chat() {
         .select('status')
         .eq('email', session.user.email)
         .maybeSingle()
-      setAllowed(!error && data?.status === 'active')
+      if (error) setAllowed(false); else setAllowed(data?.status === 'active')
     }
     run()
   }, [session])
 
-  // create/reuse a DB chat session, then load history
+  // --- auto-scroll to bottom when messages change ---
   useEffect(() => {
-    async function bootstrap() {
-      if (!allowed || !session?.user?.id) return
-      const userId = session.user.id
-
-      // reuse latest
-      const { data: found } = await supabase
-        .from('sessions')
-        .select('id')
-        .eq('user_id', userId)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle()
-
-      let sid = found?.id
-      if (!sid) {
-        const { data: created, error: cErr } = await supabase
-          .from('sessions')
-          .insert([{ user_id: userId, title: 'Daily chat' }])
-          .select('id')
-          .single()
-        if (cErr) { console.error(cErr); return }
-        sid = created.id
-      }
-      setSessionId(sid)
-
-      // load messages
-      const { data: rows, error: mErr } = await supabase
-        .from('messages')
-        .select('role, content, created_at')
-        .eq('session_id', sid)
-        .order('created_at', { ascending: true })
-      if (mErr) { console.error(mErr); return }
-      setMessages(rows || [])
+    if (listRef.current) {
+      listRef.current.scrollTop = listRef.current.scrollHeight
     }
-    if (allowed !== null) bootstrap()
-  }, [allowed, session])
-
-  // auto-scroll
-  useEffect(() => {
-    if (listRef.current) listRef.current.scrollTop = listRef.current.scrollHeight
   }, [messages, sending])
 
   async function handleSend(e) {
     e.preventDefault()
     const input = inputRef.current.value.trim()
-    if (!input || sending || !sessionId || !session?.user?.id) return
+    if (!input || sending) return
 
     const next = [...messages, { role: 'user', content: input }]
     setMessages(next)
     inputRef.current.value = ''
     setSending(true)
-
-    // save user msg
-    await supabase.from('messages').insert([{
-      session_id: sessionId,
-      user_id: session.user.id,
-      role: 'user',
-      content: input
-    }])
 
     try {
       const r = await fetch('/api/chat', {
@@ -102,21 +56,9 @@ export default function Chat() {
         body: JSON.stringify({ messages: next })
       })
       const data = await r.json()
-      const reply = data.reply || '…'
-
-      const final = [...next, { role: 'assistant', content: reply }]
-      setMessages(final)
-
-      // save assistant msg
-      await supabase.from('messages').insert([{
-        session_id: sessionId,
-        user_id: session.user.id,
-        role: 'assistant',
-        content: reply
-      }])
+      setMessages([...next, { role: 'assistant', content: data.reply || '…' }])
     } catch (err) {
-      console.error(err)
-      setMessages([...messages, { role: 'assistant', content: 'Error contacting Genie.' }])
+      setMessages([...next, { role: 'assistant', content: 'Error contacting Genie.' }])
     } finally {
       setSending(false)
       inputRef.current?.focus()
@@ -130,26 +72,32 @@ export default function Chat() {
     }
   }
 
-  // gates
   if (!session) {
     return (
-      <div className="wrap"><div className="card">
-        <p>Not logged in.</p><a href="/login" className="btn">Go to Login</a>
-      </div><Style/></div>
-    )
-  }
-  if (allowed === null) return <LoaderScreen text="Checking access…" />
-  if (!allowed) {
-    return (
-      <div className="wrap"><div className="card">
-        <h2>Access inactive</h2>
-        <p>Your email isn’t active for Manifestation Genie.</p>
-        <a href={PAYHIP_URL} className="btn">Get Access</a>
-      </div><Style/></div>
+      <div className="wrap">
+        <div className="card">
+          <p>Not logged in.</p>
+          <a href="/login" className="btn">Go to Login</a>
+        </div>
+        <Style/>
+      </div>
     )
   }
 
-  // main
+  if (allowed === null) return <LoaderScreen text="Checking access…" />
+  if (!allowed) {
+    return (
+      <div className="wrap">
+        <div className="card">
+          <h2>Access inactive</h2>
+          <p>Your email isn’t active for Manifestation Genie.</p>
+          <a href={PAYHIP_URL} className="btn">Get Access</a>
+        </div>
+        <Style/>
+      </div>
+    )
+  }
+
   return (
     <div className="wrap">
       <h1 className="title">Manifestation Genie</h1>
@@ -159,13 +107,14 @@ export default function Chat() {
         <div className="list" ref={listRef}>
           {messages.map((m, i) => (
             <div key={i} className={`bubble ${m.role === 'user' ? 'me' : 'genie'}`}>
-              <span className="tag">{m.role === 'user' ? 'You' : 'Genie'}</span>
+              {m.role === 'assistant' && <span className="genieTag">Genie</span>}
+              {m.role === 'user' && <span className="youTag">You</span>}
               <div className="msg">{m.content}</div>
             </div>
           ))}
           {sending && (
             <div className="bubble genie">
-              <span className="tag">Genie</span>
+              <span className="genieTag">Genie</span>
               <div className="dots"><span/><span/><span/></div>
             </div>
           )}
@@ -193,15 +142,20 @@ export default function Chat() {
   )
 }
 
+// small loader screen component
 function LoaderScreen({ text }) {
   return (
-    <div className="wrap"><div className="card center">
-      <div className="dots big"><span/><span/><span/></div>
-      <p style={{marginTop:12}}>{text}</p>
-    </div><Style/></div>
+    <div className="wrap">
+      <div className="card center">
+        <div className="dots big"><span/><span/><span/></div>
+        <p style={{marginTop:12}}>{text}</p>
+      </div>
+      <Style/>
+    </div>
   )
 }
 
+// Styled-JSX: paste once; tweaks the whole page without separate CSS files
 function Style() {
   return (
     <style jsx>{`
@@ -216,12 +170,15 @@ function Style() {
       .btn { background: #6d28d9; color: #fff; border: 0; border-radius: 8px; padding: 10px 14px; cursor: pointer; }
       .btn:disabled { opacity: 0.6; cursor: default; }
       .linkBtn { margin-top: 16px; border: 0; background: transparent; color: #6d28d9; cursor: pointer; }
+
+      /* bubbles */
       .bubble { max-width: 78%; margin: 10px 8px; padding: 10px 12px; border-radius: 12px; position: relative; }
       .bubble.me { margin-left: auto; background: #6d28d9; color: white; }
       .bubble.genie { background: white; border: 1px solid #e5e7eb; }
-      .tag { font-size: 12px; opacity: 0.7; display: block; margin-bottom: 4px; }
+      .genieTag, .youTag { font-size: 12px; opacity: 0.7; display: block; margin-bottom: 4px; }
       .dots { display: inline-flex; gap: 6px; align-items: center; height: 18px; }
       .dots span { width: 6px; height: 6px; background: #6d28d9; border-radius: 50%; animation: blink 1.2s infinite ease-in-out; }
+      .bubble.me .dots span { background: white; }
       .dots.big span { width: 8px; height: 8px; }
       .dots span:nth-child(2) { animation-delay: 0.15s; }
       .dots span:nth-child(3) { animation-delay: 0.3s; }
