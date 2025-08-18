@@ -38,7 +38,7 @@ export default function Chat() {
       <div style={{padding:20}}>
         <h2>Access inactive</h2>
         <p>Your email isn’t active for Manifestation Genie.</p>
-        <a href="YOUR_PAYHIP_PRODUCT_URL">Get Access</a>
+        <a href="U7Z5m">Get Access</a>
       </div>
     )
   }
