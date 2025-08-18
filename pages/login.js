@@ -7,7 +7,12 @@ export default function Login() {
   async function handleLogin(e) {
     e.preventDefault()
     const email = e.target.email.value
-    const { error } = await supabase.auth.signInWithOtp({ email })
+    const { error } = await supabase.auth.signInWithOtp({
+      email,
+      options: {
+        emailRedirectTo: 'https://app.manifestationgenie.ai/chat'
+      }
+    })
     if (error) { alert(error.message); return }
     setSent(true)
   }
@@ -19,13 +24,7 @@ export default function Login() {
         <p>Magic link sent. Check your email.</p>
       ) : (
         <form onSubmit={handleLogin}>
-          <input
-            type="email"
-            name="email"
-            placeholder="you@example.com"
-            required
-            style={{width:'100%', padding:12, marginBottom:12}}
-          />
+          <input type="email" name="email" placeholder="you@example.com" required style={{width:'100%', padding:12, marginBottom:12}} />
           <button type="submit" style={{padding:'10px 16px'}}>Send magic link</button>
         </form>
       )}
