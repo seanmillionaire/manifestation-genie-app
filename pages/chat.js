@@ -3,23 +3,23 @@ import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../src/supabaseClient'
 
 export default function Chat() {
-  const [session, setSession] = useState(null)         // Supabase auth session
-  const [allowed, setAllowed] = useState(null)         // allowlist gate
-  const [messages, setMessages] = useState([])         // UI messages
+  const [session, setSession] = useState(null)
+  const [allowed, setAllowed] = useState(null)
+  const [messages, setMessages] = useState([])
   const [sending, setSending] = useState(false)
-  const [sessionId, setSessionId] = useState(null)     // DB session id (public.sessions.id)
+  const [sessionId, setSessionId] = useState(null)
   const inputRef = useRef(null)
   const listRef  = useRef(null)
-  const PAYHIP_URL = 'https://hypnoticmeditations.ai/b/U7Z5m' // <-- set your real Payhip product URL
+  const PAYHIP_URL = 'https://hypnoticmeditations.ai/b/U7Z5m' // <-- change this
 
-  // --- auth session ---
+  // auth session
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => setSession(session))
     const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => setSession(s))
     return () => sub.subscription.unsubscribe()
   }, [])
 
-  // --- allowlist gate ---
+  // allowlist gate
   useEffect(() => {
     async function run() {
       if (!session?.user?.email) return
@@ -33,13 +33,13 @@ export default function Chat() {
     run()
   }, [session])
 
-  // --- ensure a DB chat "session" exists for this user; then load history ---
+  // create/reuse a DB chat session, then load history
   useEffect(() => {
     async function bootstrap() {
       if (!allowed || !session?.user?.id) return
       const userId = session.user.id
 
-      // 1) try to reuse most-recent session
+      // reuse latest
       const { data: found } = await supabase
         .from('sessions')
         .select('id')
@@ -49,7 +49,6 @@ export default function Chat() {
         .maybeSingle()
 
       let sid = found?.id
-      // 2) if none, create one
       if (!sid) {
         const { data: created, error: cErr } = await supabase
           .from('sessions')
@@ -61,7 +60,7 @@ export default function Chat() {
       }
       setSessionId(sid)
 
-      // 3) load messages for that session
+      // load messages
       const { data: rows, error: mErr } = await supabase
         .from('messages')
         .select('role, content, created_at')
@@ -73,7 +72,7 @@ export default function Chat() {
     if (allowed !== null) bootstrap()
   }, [allowed, session])
 
-  // --- auto-scroll on update ---
+  // auto-scroll
   useEffect(() => {
     if (listRef.current) listRef.current.scrollTop = listRef.current.scrollHeight
   }, [messages, sending])
@@ -88,7 +87,7 @@ export default function Chat() {
     inputRef.current.value = ''
     setSending(true)
 
-    // insert user message
+    // save user msg
     await supabase.from('messages').insert([{
       session_id: sessionId,
       user_id: session.user.id,
@@ -97,7 +96,6 @@ export default function Chat() {
     }])
 
     try {
-      // ask OpenAI via your API route
       const r = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -106,10 +104,10 @@ export default function Chat() {
       const data = await r.json()
       const reply = data.reply || '…'
 
-      // show & store assistant reply
       const final = [...next, { role: 'assistant', content: reply }]
       setMessages(final)
 
+      // save assistant msg
       await supabase.from('messages').insert([{
         session_id: sessionId,
         user_id: session.user.id,
@@ -118,8 +116,7 @@ export default function Chat() {
       }])
     } catch (err) {
       console.error(err)
-      const final = [...messages, { role: 'assistant', content: 'Error contacting Genie.' }]
-      setMessages(final)
+      setMessages([...messages, { role: 'assistant', content: 'Error contacting Genie.' }])
     } finally {
       setSending(false)
       inputRef.current?.focus()
@@ -133,7 +130,7 @@ export default function Chat() {
     }
   }
 
-  // ---- UI gates ----
+  // gates
   if (!session) {
     return (
       <div className="wrap"><div className="card">
@@ -152,7 +149,7 @@ export default function Chat() {
     )
   }
 
-  // ---- main chat ----
+  // main
   return (
     <div className="wrap">
       <h1 className="title">Manifestation Genie</h1>
