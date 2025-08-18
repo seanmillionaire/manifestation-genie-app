@@ -84,69 +84,116 @@ export default function Chat() {
   }
 
   return (
-    <div style={{ maxWidth: 800, margin: '40px auto', fontFamily: 'Inter, system-ui' }}>
-      <h1>Manifestation Genie</h1>
-      <p>Welcome, {session.user.email}</p>
+    <div className="wrap">
+      <header className="hero">
+        <h1><span>Manifestation</span> Genie</h1>
+        <div className="sub">Welcome, {session.user.email}</div>
+      </header>
 
-      <div style={{ border: '1px solid #ddd', padding: 16, borderRadius: 8 }}>
-        <div id="chat" style={{ minHeight: 200, marginBottom: 12 }}>
+      <div className="chatCard">
+        <div className="list" ref={listRef}>
           {messages.map((m, i) => (
-            <p key={i}>
-              <strong>{m.role === 'user' ? 'You' : 'Genie'}:</strong> {m.content}
-            </p>
+            <div key={i} className={`row ${m.role === 'user' ? 'me' : 'genie'}`}>
+              <div className="avatar">{m.role === 'user' ? '🧑' : '🔮'}</div>
+              <div className={`bubble ${m.role}`}>
+                <div className="tag">{m.role === 'user' ? 'You' : 'Genie'}</div>
+                <div className="msg">{m.content}</div>
+              </div>
+            </div>
           ))}
-          {sending && <p><em>Genie is thinking…</em></p>}
+
+          {sending && (
+            <div className="row genie">
+              <div className="avatar">🔮</div>
+              <div className="bubble assistant">
+                <div className="tag">Genie</div>
+                <div className="dots"><span/><span/><span/></div>
+              </div>
+            </div>
+          )}
         </div>
 
-        <form onSubmit={handleSend}>
-          <input
-            type="text"
+        <form onSubmit={handleSend} className="composer">
+          <textarea
+            ref={inputRef}
             name="prompt"
-            placeholder="Type your message..."
-            style={{ width: '100%', padding: 12 }}
-            required
+            placeholder="Type your message… (Shift+Enter for a newline)"
+            rows={2}
+            onKeyDown={handleKeyDown}
+            disabled={sending}
           />
-          <button type="submit" style={{ marginTop: 8, padding: '8px 12px' }} disabled={sending}>
-            {sending ? 'Sending…' : 'Send'}
-          </button>
+          <button type="submit" disabled={sending}>{sending ? 'Sending…' : 'Send'}</button>
         </form>
       </div>
 
-            <button style={{marginTop:16}} onClick={() => supabase.auth.signOut()}>Logout</button>
+      <div className="bottomBar">
+        <button className="ghost" onClick={() => supabase.auth.signOut()}>Logout</button>
+      </div>
+
+      <Style/>
     </div>
   )
+
 }
 
 function Style() {
   return (
     <style jsx>{`
-      body {
-        font-family: Inter, system-ui;
-        background: #f9fafb;
-        margin: 0;
-        padding: 0;
+      .wrap{max-width:920px;margin:28px auto 40px;padding:0 16px}
+      .hero{margin:8px 0 16px;text-align:center}
+      .hero h1{margin:0;font-size:34px;letter-spacing:0.2px;
+        background:linear-gradient(90deg,var(--brand),var(--brand-2));
+        -webkit-background-clip:text;background-clip:text;color:transparent}
+      .hero h1 span{opacity:.85}
+      .sub{color:var(--muted);margin-top:6px;font-size:14px}
+
+      .chatCard{
+        background:var(--card);
+        border:1px solid var(--soft);
+        border-radius:16px;
+        box-shadow:0 10px 30px rgba(0,0,0,.25);
+        overflow:hidden;
       }
-      h1 { text-align: center; margin-bottom: 20px; }
-      .card {
-        background: #fff;
-        border: 1px solid #ddd;
-        border-radius: 8px;
-        padding: 16px;
-        margin-bottom: 20px;
+
+      .list{height:56vh;min-height:300px;overflow-y:auto;padding:14px 12px 0;}
+
+      .row{display:flex;gap:10px;margin:10px 6px}
+      .row.me{justify-content:flex-end}
+      .row .avatar{width:28px;height:28px;display:flex;align-items:center;justify-content:center;
+        background:#1d1f33;border:1px solid var(--soft);border-radius:50%;flex:0 0 28px;font-size:14px}
+      .row.me .avatar{order:2}
+
+      .bubble{max-width:72%;padding:10px 12px;border-radius:14px;line-height:1.45}
+      .bubble.user{background:linear-gradient(180deg,var(--me),#6d28d9);color:#fff}
+      .bubble.assistant{background:var(--genie);border:1px solid var(--soft)}
+      .tag{font-size:11px;opacity:.7;margin-bottom:4px}
+      .msg{white-space:pre-wrap}
+
+      .composer{display:flex;gap:10px;padding:12px;border-top:1px solid var(--soft);position:sticky;bottom:0;background:var(--card)}
+      .composer textarea{
+        flex:1;resize:none;border:1px solid var(--soft);background:#0f1022;color:var(--text);
+        border-radius:10px;padding:10px 12px;font-family:inherit;outline:none
       }
-      #chat p { margin: 8px 0; }
-      #chat strong { color: #4a148c; }
-      form input {
-        border: 1px solid #ccc;
-        border-radius: 4px;
+      .composer button{
+        background:linear-gradient(90deg,var(--brand),var(--brand-2));
+        color:#0b0c18;border:0;border-radius:10px;padding:10px 16px;cursor:pointer;font-weight:600
       }
-      form button {
-        background: #4a148c;
-        color: white;
-        border: none;
-        border-radius: 4px;
-        cursor: pointer;
+      .composer button:disabled{opacity:.7;cursor:default}
+
+      .bottomBar{display:flex;justify-content:flex-end;margin-top:10px}
+      .ghost{background:transparent;color:var(--muted);border:1px solid var(--soft);padding:8px 12px;border-radius:10px;cursor:pointer}
+
+      .dots{display:inline-flex;gap:6px;align-items:center;height:18px}
+      .dots span{width:6px;height:6px;border-radius:50%;background:var(--brand);animation:blink 1.2s infinite ease-in-out}
+      .dots span:nth-child(2){animation-delay:.15s}
+      .dots span:nth-child(3){animation-delay:.3s}
+      @keyframes blink{0%,80%,100%{opacity:.25}40%{opacity:1}}
+      
+      @media (max-width:560px){
+        .list{height:60vh}
+        .bubble{max-width:80%}
       }
     `}</style>
   )
 }
+
