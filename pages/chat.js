@@ -1,5 +1,4 @@
 
-import { supabase } from '../src/supabaseClient'
 
 export default function Chat() {
   const [session, setSession] = useState(null)
