@@ -137,13 +137,13 @@ export default function Chat() {
       {/* HEADER — uses your existing .hero styling */}
       <header className="hero">
         <h1>
-          <span>Manifestation Genie — Your AI Assistant for Turning Goals into Reality</span>
+          Manifestation Genie — Your AI Assistant for Turning Goals into Reality
         </h1>
         <p className="sub">
           Most self‑help feels good in the moment, then nothing changes. Manifestation Genie fixes that flaw — giving you daily prompts, personalized accountability, and step‑by‑step guidance until your vision becomes real.
         </p>
         <p className="sub small">
-          Welcome back, {session.user.email}. Ask. Act. Achieve.
+          👁️ Welcome back, {session.user.email}.
         </p>
       </header>
 
