@@ -108,24 +108,59 @@ export default function Chat() {
     )
   }
 
-  return (
-    <div className="wrap">
-      <header className="hero">
-        <h1>Manifestation Genie</h1>
-        <div className="sub">Welcome, {session.user.email}</div>
-      </header>
+return (
+  <div className="wrap">
+    <AppHero name={session.user.email} />
 
-      <div className="chatCard">
-        <div className="list" ref={listRef}>
-          {messages.map((m, i) => (
-            <div key={i} className={`row ${m.role === 'user' ? 'me' : 'genie'}`}>
-              <div className="avatar">{m.role === 'user' ? '🧑' : '🔮'}</div>
-              <div className={`bubble ${m.role}`}>
-                <div className="tag">{m.role === 'user' ? 'You' : 'Genie'}</div>
-                <div className="msg">{m.content}</div>
-              </div>
+    <div className="chatCard">
+      <div className="list" ref={listRef}>
+        {messages.map((m, i) => (
+          <div key={i} className={`row ${m.role === 'user' ? 'me' : 'genie'}`}>
+            <div className="avatar">{m.role === 'user' ? '🧑' : '🔮'}</div>
+            <div className={`bubble ${m.role}`}>
+              <div className="tag">{m.role === 'user' ? 'You' : 'Manifestation Genie'}</div>
+              <div className="msg">{m.content}</div>
             </div>
-          ))}
+          </div>
+        ))}
+
+        {sending && (
+          <div className="row genie">
+            <div className="avatar">🔮</div>
+            <div className="bubble assistant">
+              <div className="tag">Manifestation Genie</div>
+              <div className="dots"><span/><span/><span/></div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <form onSubmit={handleSend} className="composer">
+        <textarea
+          ref={inputRef}
+          name="prompt"
+          placeholder="Type your message… (Shift+Enter for a newline)"
+          rows={2}
+          onKeyDown={handleKeyDown}
+          disabled={sending}
+        />
+        <button type="submit" disabled={sending}>
+          {sending ? 'Sending…' : 'Send'}
+        </button>
+      </form>
+    </div>
+
+    <QuickGuide />
+    <FomoFeed />
+
+    <div className="bottomBar">
+      <button className="ghost" onClick={() => supabase.auth.signOut()}>Logout</button>
+    </div>
+
+    <Style />
+  </div>
+)
+
 
           {sending && (
             <div className="row genie">
