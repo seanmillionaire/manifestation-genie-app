@@ -1,6 +1,3 @@
-there is no duplicate line in the code you gave me
-
-
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../src/supabaseClient'
 
