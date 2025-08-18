@@ -3,39 +3,59 @@ import { supabase } from '../src/supabaseClient'
 
 export default function Chat() {
   const [session, setSession] = useState(null)
-  const [allowed, setAllowed] = useState(null)
+  const [allowed, setAllowed] = useState(null) // null=checking, true/false=result
 
+  // get auth session
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session)
-    })
+    supabase.auth.getSession().then(({ data: { session } }) => setSession(session))
     const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => setSession(s))
     return () => sub.subscription.unsubscribe()
   }, [])
 
+  // check allowlist by email
   useEffect(() => {
     async function run() {
-      if (!session) return
-      const email = session.user.email
+      if (!session?.user?.email) return
       const { data, error } = await supabase
         .from('allowlist')
         .select('status')
-        .eq('email', email)
+        .eq('email', session.user.email)
         .maybeSingle()
-      if (error) { console.error(error); setAllowed(false); return }
-      setAllowed(data?.status === 'active')
+      if (error) {
+        console.error(error)
+        setAllowed(false)
+      } else {
+        setAllowed(data?.status === 'active')
+      }
     }
     run()
   }, [session])
 
-  if (!session) return <p>Not logged in. <a href="/login">Login</a></p>
-  if (allowed === null) return <p>Checking access…</p>
-  if (!allowed) return <p>Access inactive. <a href="YOUR_PAYHIP_URL">Get access</a></p>
+  if (!session) return <div style={{padding:20}}><p>Not logged in.</p><a href="/login">Go to Login</a></div>
+  if (allowed === null) return <div style={{padding:20}}>Checking access…</div>
+  if (!allowed) {
+    return (
+      <div style={{padding:20}}>
+        <h2>Access inactive</h2>
+        <p>Your email isn’t active for Manifestation Genie.</p>
+        <a href="YOUR_PAYHIP_PRODUCT_URL">Get Access</a>
+      </div>
+    )
+  }
 
   return (
-    <div>
+    <div style={{maxWidth:800, margin:'40px auto', fontFamily:'Inter, system-ui'}}>
       <h1>Manifestation Genie</h1>
-      {/* embed your chatbot here */}
+      <p>Welcome, {session.user.email}</p>
+
+      {/* === Embed your chatbot widget below this line === */}
+      <div style={{border:'1px solid #ddd', padding:16, borderRadius:8}}>
+        <p>🔮 Your chat will appear here.</p>
+        {/* Example: <script src="https://your-bot-provider/embed.js"></script> */}
+        {/* Example container: <div id="mg-bot" data-user={session.user.email}></div> */}
+      </div>
+
+      <button style={{marginTop:16}} onClick={() => supabase.auth.signOut()}>Logout</button>
     </div>
   )
 }
