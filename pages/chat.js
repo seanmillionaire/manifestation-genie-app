@@ -114,14 +114,6 @@ export default function Chat() {
         <h1>Manifestation Genie</h1>
         <div className="sub">Welcome, {session.user.email}</div>
       </header>
-return (
-  <main className="max-w-3xl mx-auto px-4">
-    <AppHero />         {/* headline + subhead */}
-    {/* your existing chat box code stays here */}
-    <QuickGuide />      {/* steps under chat */}
-    <FomoFeed />        {/* rotating proof messages */}
-  </main>
-)
 
       <div className="chatCard">
         <div className="list" ref={listRef}>
