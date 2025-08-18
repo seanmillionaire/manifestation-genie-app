@@ -1,7 +1,4 @@
 // pages/chat.js
-import AppHero from '../components/AppHero'
-import QuickGuide from '../components/QuickGuide'
-import FomoFeed from '../components/FomoFeed'
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../src/supabaseClient'
 
@@ -14,6 +11,29 @@ export default function Chat() {
 
   const listRef = useRef(null)
   const inputRef = useRef(null)
+
+  // --- FOMO ticker (non-competitive) ---
+  const FOMO_MESSAGES = [
+    '🌍 4,327 people logged in to Manifestation Genie today.',
+    '🔥 14,201 actions completed this week inside Manifestation Genie.',
+    '🎯 James completed his 7‑day streak with Manifestation Genie.',
+    '💡 Maria in California finished today’s Manifestation Genie action step.',
+    '💰 Ashley celebrated paying off $1,000 using Manifestation Genie’s guidance.',
+    '🧘 427 users finished a mindfulness prompt in Manifestation Genie today.',
+    '🚀 David marked a 30‑day consistency streak in Manifestation Genie.',
+    '✨ 93% of new users completed at least 1 action in Manifestation Genie this week.',
+    '🎉 Sarah hit her first milestone: publishing her blog, tracked with Manifestation Genie.',
+    '🌟 17,482 people took action through Manifestation Genie this month.',
+  ]
+  const [fomoIdx, setFomoIdx] = useState(0)
+  const fomoPaused = useRef(false)
+
+  useEffect(() => {
+    const t = setInterval(() => {
+      if (!fomoPaused.current) setFomoIdx((i) => (i + 1) % FOMO_MESSAGES.length)
+    }, 4000)
+    return () => clearInterval(t)
+  }, [])
 
   // --- auth session ---
   useEffect(() => {
@@ -69,20 +89,23 @@ export default function Chat() {
       const r = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: next })
+        body: JSON.stringify({ messages: next }),
       })
       const data = await r.json()
       setMessages([...next, { role: 'assistant', content: data.reply || '…' }])
     } catch (err) {
       console.error(err)
-      setMessages([...next, { role: 'assistant', content: 'Error contacting Manifestation Genie.' }])
+      setMessages([
+        ...next,
+        { role: 'assistant', content: 'Error contacting Manifestation Genie.' },
+      ])
     } finally {
       setSending(false)
       inputRef.current?.focus()
     }
   }
 
-  // --- auth/allowlist screens ---
+  // --- auth/allowlist gates ---
   if (!session) {
     return (
       <div className="wrap">
@@ -111,8 +134,20 @@ export default function Chat() {
   // --- main UI ---
   return (
     <div className="wrap">
-      <AppHero name={session.user.email} />
+      {/* HEADER — uses your existing .hero styling */}
+      <header className="hero">
+        <h1>
+          <span>Manifestation Genie — Your AI Assistant for Turning Goals into Reality</span>
+        </h1>
+        <p className="sub">
+          Most self‑help feels good in the moment, then nothing changes. Manifestation Genie fixes that flaw — giving you daily prompts, personalized accountability, and step‑by‑step guidance until your vision becomes real.
+        </p>
+        <p className="sub small">
+          Welcome back, {session.user.email}. Ask. Act. Achieve.
+        </p>
+      </header>
 
+      {/* CHAT */}
       <div className="chatCard">
         <div className="list" ref={listRef}>
           {messages.map((m, i) => (
@@ -130,7 +165,11 @@ export default function Chat() {
               <div className="avatar">🔮</div>
               <div className="bubble assistant">
                 <div className="tag">Manifestation Genie</div>
-                <div className="dots"><span/><span/><span/></div>
+                <div className="dots">
+                  <span />
+                  <span />
+                  <span />
+                </div>
               </div>
             </div>
           )}
@@ -151,8 +190,45 @@ export default function Chat() {
         </form>
       </div>
 
-      <QuickGuide />
-      <FomoFeed />
+      {/* QUICK GUIDE */}
+      <section className="panel">
+        <h2 className="panelTitle">How to Use Manifestation Genie</h2>
+        <div className="steps">
+          <div className="step">
+            <span>✨</span>
+            <div>
+              <b>Ask</b>
+              <div className="muted">Type your goal, desire, or challenge.</div>
+            </div>
+          </div>
+          <div className="step">
+            <span>🎯</span>
+            <div>
+              <b>Receive</b>
+              <div className="muted">Get a clear daily action — personalized for you.</div>
+            </div>
+          </div>
+          <div className="step">
+            <span>🚀</span>
+            <div>
+              <b>Act</b>
+              <div className="muted">Complete the step, check it off, and track progress.</div>
+            </div>
+          </div>
+        </div>
+        <div className="micro">Check in daily — small actions compound into big manifestations.</div>
+      </section>
+
+      {/* FOMO TICKER */}
+      <div
+        className="panel fomo"
+        onMouseEnter={() => (fomoPaused.current = true)}
+        onMouseLeave={() => (fomoPaused.current = false)}
+        aria-live="polite"
+        role="status"
+      >
+        {FOMO_MESSAGES[fomoIdx]}
+      </div>
 
       <div className="bottomBar">
         <button className="ghost" onClick={() => supabase.auth.signOut()}>Logout</button>
@@ -167,7 +243,11 @@ function LoaderScreen({ text }) {
   return (
     <div className="wrap">
       <div className="card center">
-        <div className="dots big"><span/><span/><span/></div>
+        <div className="dots big">
+          <span />
+          <span />
+          <span />
+        </div>
         <p style={{ marginTop: 12 }}>{text}</p>
       </div>
       <Style />
@@ -189,7 +269,6 @@ function Style() {
         --text:#e7e9ff;
       }
 
-      /* animated gradient background */
       body{
         margin:0; color:var(--text); font-family:Inter,system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
         background:
@@ -207,6 +286,7 @@ function Style() {
       }
 
       .wrap{max-width:920px;margin:28px auto 40px;padding:0 16px}
+
       .hero{margin:8px 0 16px;text-align:center}
       .hero h1{
         margin:0;font-size:34px;letter-spacing:0.2px;
@@ -216,6 +296,7 @@ function Style() {
       }
       .hero h1 span{opacity:.85}
       .sub{color:var(--muted);margin-top:6px;font-size:14px}
+      .sub.small{ font-size:13px; opacity:.75 }
 
       .card{
         background:var(--card);
@@ -227,8 +308,7 @@ function Style() {
       .center{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:50vh;text-align:center}
       .btn{
         display:inline-block;margin-top:10px;padding:10px 14px;border-radius:10px;font-weight:600;text-decoration:none;
-        background:linear-gradient(90deg,var(--brand),var(--brand-2)); color:#0b0c18;
-        border:0;
+        background:linear-gradient(90deg,var(--brand),var(--brand-2)); color:#0b0c18; border:0;
       }
 
       .chatCard{
@@ -236,8 +316,7 @@ function Style() {
         border:1px solid var(--soft);
         border-radius:16px;
         box-shadow:0 10px 30px rgba(0,0,0,.35), inset 0 0 0 1px rgba(255,255,255,.03);
-        overflow:hidden;
-        backdrop-filter: blur(6px);
+        overflow:hidden; backdrop-filter: blur(6px);
       }
 
       .list{height:56vh;min-height:300px;overflow-y:auto;padding:14px 12px 0;}
@@ -287,9 +366,32 @@ function Style() {
       .dots span:nth-child(3){animation-delay:.3s}
       @keyframes blink{0%,80%,100%{opacity:.25}40%{opacity:1}}
 
+      /* New panels */
+      .panel{
+        margin-top:16px;
+        background:var(--card);
+        border:1px solid var(--soft);
+        border-radius:16px;
+        padding:16px;
+        box-shadow:0 10px 30px rgba(0,0,0,.20);
+      }
+      .panelTitle{
+        margin:0 0 10px 0;
+        font-size:14px;
+        letter-spacing:.6px;
+        text-transform:uppercase;
+        color:var(--muted);
+      }
+      .steps{ display:grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap:12px; }
+      .step{ display:flex; gap:10px; align-items:flex-start; }
+      .step span{ font-size:18px; line-height:1; margin-top:2px }
+      .muted{ color:var(--muted); font-size:13px; opacity:.9; }
+      .micro{ margin-top:10px; color:var(--muted); font-size:12px; }
+      .fomo{ font-size:14px; }
       @media (max-width:560px){
         .list{height:60vh}
         .bubble{max-width:80%}
+        .steps{ grid-template-columns: 1fr; }
       }
     `}</style>
   )
