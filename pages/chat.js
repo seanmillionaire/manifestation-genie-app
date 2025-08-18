@@ -112,9 +112,41 @@ export default function Chat() {
         </form>
       </div>
 
-      <button style={{ marginTop: 16 }} onClick={() => supabase.auth.signOut()}>
-        Logout
-      </button>
+            <button style={{marginTop:16}} onClick={() => supabase.auth.signOut()}>Logout</button>
     </div>
+  )
+}
+
+function Style() {
+  return (
+    <style jsx>{`
+      body {
+        font-family: Inter, system-ui;
+        background: #f9fafb;
+        margin: 0;
+        padding: 0;
+      }
+      h1 { text-align: center; margin-bottom: 20px; }
+      .card {
+        background: #fff;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        padding: 16px;
+        margin-bottom: 20px;
+      }
+      #chat p { margin: 8px 0; }
+      #chat strong { color: #4a148c; }
+      form input {
+        border: 1px solid #ccc;
+        border-radius: 4px;
+      }
+      form button {
+        background: #4a148c;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+      }
+    `}</style>
   )
 }
