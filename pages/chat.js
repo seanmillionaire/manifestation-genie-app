@@ -1,6 +1,3 @@
-rm pages/chat.js
-cat > pages/chat.js <<'EOF'
-// pages/chat.js
 import { useEffect, useState } from 'react'
 import { supabase } from '../src/supabaseClient'
 
@@ -9,14 +6,16 @@ export default function Chat() {
   const [allowed, setAllowed] = useState(null) // null=checking, true/false=result
   const [messages, setMessages] = useState([])
   const [sending, setSending] = useState(false)
-  const PAYHIP_URL = 'https://payhip.com/YOUR_PRODUCT' // TODO: real URL
+  const PAYHIP_URL = 'https://hypnoticmeditations.ai/b/U7Z5m' // <-- change to your real Payhip product URL
 
+  // --- auth session ---
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => setSession(session))
     const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => setSession(s))
     return () => sub.subscription.unsubscribe()
   }, [])
 
+  // --- allowlist check by email ---
   useEffect(() => {
     async function run() {
       if (!session?.user?.email) return
@@ -40,10 +39,12 @@ export default function Chat() {
     const input = e.target.prompt.value.trim()
     if (!input) return
 
+    // 1) show your message
     const next = [...messages, { role: 'user', content: input }]
     setMessages(next)
     e.target.reset()
 
+    // 2) ask the server
     setSending(true)
     try {
       const r = await fetch('/api/chat', {
@@ -117,6 +118,3 @@ export default function Chat() {
     </div>
   )
 }
-EOF
-
-git add -A && git commit -m "Fix: clean chat.js (imports only at top)" && git push
