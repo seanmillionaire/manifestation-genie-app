@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+
 import { supabase } from '../src/supabaseClient'
 
 export default function Chat() {
