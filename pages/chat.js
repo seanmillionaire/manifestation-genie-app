@@ -4,6 +4,29 @@ import { supabase } from '../src/supabaseClient'
 export default function Chat() {
   const [session, setSession] = useState(null)
   const [allowed, setAllowed] = useState(null) // null=checking, true/false=result
+  const [messages, setMessages] = useState([]);
+
+  async function handleSend(e) {
+    e.preventDefault();
+    const input = e.target.prompt.value.trim();
+    if (!input) return;
+
+    // 1) show your message
+    const next = [...messages, { role: 'user', content: input }];
+    setMessages(next);
+    e.target.reset();
+
+    // 2) ask the server
+    const r = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messages: next })
+    });
+    const data = await r.json();
+
+    // 3) show Genie reply
+    setMessages([...next, { role: 'assistant', content: data.reply }]);
+  }
 
   // get auth session
   useEffect(() => {
@@ -43,16 +66,30 @@ export default function Chat() {
     )
   }
 
+  // ... keep your imports and gating logic exactly as-is above
+
   return (
     <div style={{maxWidth:800, margin:'40px auto', fontFamily:'Inter, system-ui'}}>
       <h1>Manifestation Genie</h1>
       <p>Welcome, {session.user.email}</p>
 
-      {/* === Embed your chatbot widget below this line === */}
       <div style={{border:'1px solid #ddd', padding:16, borderRadius:8}}>
-        <p>🔮 Your chat will appear here.</p>
-        {/* Example: <script src="https://your-bot-provider/embed.js"></script> */}
-        {/* Example container: <div id="mg-bot" data-user={session.user.email}></div> */}
+        <div id="chat" style={{minHeight:200, marginBottom:12}}>
+          {messages?.map((m, i) => (
+            <p key={i}><strong>{m.role === 'user' ? 'You' : 'Genie'}:</strong> {m.content}</p>
+          ))}
+        </div>
+
+        <form onSubmit={handleSend}>
+          <input
+            type="text"
+            name="prompt"
+            placeholder="Type your message..."
+            style={{width:'100%', padding:12}}
+            required
+          />
+          <button type="submit" style={{marginTop:8, padding:'8px 12px'}}>Send</button>
+        </form>
       </div>
 
       <button style={{marginTop:16}} onClick={() => supabase.auth.signOut()}>Logout</button>
