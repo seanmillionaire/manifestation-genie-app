@@ -108,7 +108,7 @@ export default function Chat() {
   return (
     <div className="wrap">
       <header className="hero">
-        <h1><span>Manifestation</span> Genie</h1>
+        <h1>Manifestation Genie</h1>
         <div className="sub">Welcome, {session.user.email}</div>
       </header>
 
