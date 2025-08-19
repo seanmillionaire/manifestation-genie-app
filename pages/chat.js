@@ -542,17 +542,7 @@ function Style() {
         font-size:15px;
       }
 
-      /* FIXED HEIGHT CHAT CONSOLE */
-.list {
-  height: 380px;          /* pick your number */
-  overflow-y: auto;
-  margin-bottom: 16px;
-  padding-right: 4px;
-  scroll-behavior: smooth;
-  overscroll-behavior: contain;
-  scrollbar-gutter: stable both-edges;
-  -webkit-overflow-scrolling: touch; /* smoother on iOS */
-}
+
 
 
       .row { display:flex; gap:14px; margin:16px 8px; }
