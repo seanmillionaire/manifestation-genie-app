@@ -8,65 +8,77 @@ const todayStr = () => new Date().toISOString().slice(0,10)
 const HM_STORE_URL = 'https://hypnoticmeditations.ai'  // or your Payhip URL
 
 // ---------- Tone tools: strip fluff → compress to a single practical line ----------
+// ---------- Tone tools: no-fluff, natural one-liners ----------
+function toOneLiner(text, max = 140) {
+  if (!text) return ''
+  let t = String(text)
+    .replace(/\u2018|\u2019/g, "'")
+    .replace(/\u201C|\u201D/g, '"')
+    .replace(/\s+/g, ' ')
+    .trim()
+
+  if (t.length > max) {
+    const stop = t.search(/[.?!;:]/)
+    if (stop !== -1 && stop < max) t = t.slice(0, stop + 1)
+    if (t.length > max) t = t.slice(0, max - 1) + '…'
+  }
+  return t
+}
+
+// ---------- Tone tools: no-fluff, natural one-liners ----------
+function toOneLiner(text, max = 140) {
+  if (!text) return ''
+  let t = String(text)
+    .replace(/\u2018|\u2019/g, "'")
+    .replace(/\u201C|\u201D/g, '"')
+    .replace(/\s+/g, ' ')
+    .trim()
+
+  if (t.length > max) {
+    const stop = t.search(/[.?!;:]/)
+    if (stop !== -1 && stop < max) t = t.slice(0, stop + 1)
+    if (t.length > max) t = t.slice(0, max - 1) + '…'
+  }
+  return t
+}
+
 function enforceTone(raw) {
   if (!raw) return ''
   let t = String(raw)
 
-  // 1) Remove emojis/sparkles and decorative symbols
   t = t.replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}]/gu, '')
 
-  // 2) Lower noise words & hype
-  const KILL = [
-    'awesome','great','amazing','beautiful','magical','powerful','sparkling','excited',
-    'let’s','lets','imagine','visualize','picture','ready to','shall we','how about',
-    'no worries','don’t worry','i understand','you got this','journey','celebrate',
-    'manifest','vibes','energy','✨','⭐','🎉','👏','😉','🙂','😊'
+  const killWords = [
+    'awesome','amazing','magical','celebrate','journey','no worries','you got this',
+    'imagine','visualize','picture','ready to','shall we','how about'
   ]
-  const REPLACE = [
-    [/^\s*hey[,!]\s*/i, ''],
-    [/\b(step\s*\d+:?)\s*/ig, ''],
-    [/\b(can you|could you|would you|would you like to|wanna)\b/gi, ''],
-    [/\b(let me|i can|i will)\b/gi, ''],
-    [/\b(i’ll|we’ll|we are going to|i am going to)\b/gi, ''],
-    [/\b(in a few moments|for a moment|right now)\b/gi, ''],
-    [/\b(one sentence|in one sentence)\b/gi, ''],
-    [/\b(quick|quickly|just)\b/gi, ''],
-    [/\b(please|kindly)\b/gi, ''],
-    [/[!]+/g, ''],
-    [/\s{2,}/g, ' '],
-  ]
-  for (const w of KILL) t = t.replace(new RegExp('\\b'+w.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'\\b','gi'), '')
-  for (const [re, sub] of REPLACE) t = t.replace(re, sub)
-
-  // 3) Convert fluffy starters into imperatives/questions
-  t = t.replace(/\b(let us|let’s|lets)\s+/gi, '')
-       .replace(/\bwe\s+paused\s+at\b/gi, 'Resume at')
-       .replace(/\bwant to continue now\??/gi, 'Continue?')
-       .replace(/\bdoes that feel better\??/gi, 'Better?')
-       .replace(/\bready\??/gi, 'Ready?')
-
-  // 4) Collapse whitespace
-  t = t.replace(/\s+/g, ' ').trim()
-
-  // 5) Prefer first concrete clause; trim length
-  return toOneLiner(t, 120)
-}
-
-function toOneLiner(text, max = 160) {
-  if (!text) return ''
-  let t = String(text).replace(/\s+/g, ' ').trim()
-  // strip markdown junk
-  t = t.replace(/[*_`#>|-]/g, '').trim()
-  // prefer first punctuation stop
-  if (t.length > max) {
-    const stop = t.search(/[.?;:]/)
-    if (stop !== -1 && stop < max) t = t.slice(0, stop + 1)
-    if (t.length > max) t = t.slice(0, max - 1) + '…'
+  for (const w of killWords) {
+    t = t.replace(new RegExp(`\\b${w.replace(/[.*+?^${}()|[\\]\\\\]/g,'\\$&')}\\b`, 'gi'), '')
   }
-  // remove trailing hype punctuation
-  t = t.replace(/[!]+$/,'').trim()
+
+  t = t
+    .replace(/\bwe paused at\b/gi, 'Resume at')
+    .replace(/\bwant to continue now\??/gi, 'Continue?')
+    .replace(/\bdoes that feel better\??/gi, 'Better?')
+    .replace(/\b(let’s|lets)\s+/gi, '')
+    .replace(/\bplease\b/gi, '')
+
+  t = t
+    .replace(/\(\s*\)/g, '')
+    .replace(/"\s*"/g, '')
+    .replace(/“\s*”/g, '')
+    .replace(/\s*["”]\s*([?.!])/g, '$1')
+    .replace(/([?.!])["”]\s*/g, '$1 ')
+    .replace(/\s*["“]/g, ' "').replace(/["”]\s*/g, '" ')
+    .replace(/\s{2,}/g, ' ')
+    .replace(/([?!]){2,}/g, '$1')
+    .replace(/\s*([?.!])\s*$/,'$1')
+
+  t = toOneLiner(t, 120)
+  t = t.replace(/(\(\)|""|'')$/,'').trim()
   return t
 }
+
 
 export default function Chat() {
   const [session, setSession] = useState(null)
@@ -301,23 +313,24 @@ export default function Chat() {
       const steps = stepsRows || []
       const firstIncomplete = steps.find(s => !s.completed)
 
-      const hello = `Welcome back, ${userName}. `
-      let body
-      if (!hasName) {
-        body = `Add your name to personalize.`
-      } else if (!wizardDone) {
-        body = `Resume today’s quick setup.`
-      } else if (firstIncomplete) {
-        body = `Resume at Step ${firstIncomplete.step_order}: “${firstIncomplete.label}”?`
-      } else if (steps.length > 0) {
-        body = `You finished today’s steps. Reflect or start a new intent?`
-      } else if (intentRow?.intent) {
-        body = `Current intent: “${intentRow.intent}”. Generate a plan?`
-      } else {
-        body = `Start today’s flow?`
-      }
+const hello = `Welcome back, ${userName}. `
+let body
+if (!hasName) {
+  body = `Add your name to personalize.`
+} else if (!wizardDone) {
+  body = `Resume today’s quick setup.`
+} else if (firstIncomplete) {
+  body = `Resume at Step ${firstIncomplete.step_order} — ${firstIncomplete.label}. Continue?`
+} else if (steps.length > 0) {
+  body = `You finished today’s steps. Reflect or start a new intent?`
+} else if (intentRow?.intent) {
+  body = `Current intent — ${intentRow.intent}. Generate a plan?`
+} else {
+  body = `Start today’s flow?`
+}
 
-      setMessages([{ role: 'assistant', content: enforceTone(hello + body) }])
+setMessages([{ role: 'assistant', content: enforceTone(hello + body) }])
+
       setBootGreeted(true)
     }
     greet()
