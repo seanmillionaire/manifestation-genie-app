@@ -7,65 +7,93 @@ export default function Chat() {
   const [session, setSession] = useState(null)
   const [allowed, setAllowed] = useState(null) // null=checking, true/false=result
 
-  // wizard gate
+  // gates
   const [hasName, setHasName] = useState(false)
   const [checkingName, setCheckingName] = useState(true)
   const [wizardDone, setWizardDone] = useState(false)
 
-  // chat state (your original)
+  // chat
   const [messages, setMessages] = useState([])
   const [sending, setSending] = useState(false)
-  const PAYHIP_URL = 'https://hypnoticmeditations.ai/b/U7Z5m' // <-- change to real product URL
-
   const listRef = useRef(null)
   const inputRef = useRef(null)
 
-  // --- FOMO ticker ---
-  const FOMO_MESSAGES = [
-    '🌍 4,327 people logged in to Manifestation Genie today.'
-  ]
-  const [fomoIdx, setFomoIdx] = useState(0)
-  const fomoPaused = useRef(false)
+  // single FOMO line
+  const [todayCount, setTodayCount] = useState(null)
+
+  const PAYHIP_URL = 'https://hypnoticmeditations.ai/b/U7Z5m' // change to real product URL
+
+  // --- auth session (ignore token refresh noise) ---
   useEffect(() => {
-    const t = setInterval(() => { if (!fomoPaused.current) setFomoIdx(i => (i+1)%FOMO_MESSAGES.length) }, 4000)
-    return () => clearInterval(t)
+    let active = true
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (active) setSession(session)
+    })
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, s) => {
+      if (event === 'SIGNED_IN' || event === 'SIGNED_OUT') {
+        setSession(s)
+      }
+      // Ignore TOKEN_REFRESHED / USER_UPDATED to prevent UI resets on tab focus
+    })
+    return () => { active = false; subscription.unsubscribe() }
   }, [])
 
-  // --- auth session ---
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => setSession(session))
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => setSession(s))
-    return () => sub.subscription.unsubscribe()
-  }, [])
-
-  // --- allowlist check ---
+  // --- allowlist check by email ---
   useEffect(() => {
     async function run() {
       if (!session?.user?.email) return
-      const { data, error } = await supabase.from('allowlist').select('status').eq('email', session.user.email).maybeSingle()
-      if (error) { console.error(error); setAllowed(false) } else { setAllowed(data?.status === 'active') }
+      const { data, error } = await supabase
+        .from('allowlist')
+        .select('status')
+        .eq('email', session.user.email)
+        .maybeSingle()
+      if (error) setAllowed(false)
+      else setAllowed(data?.status === 'active')
     }
     run()
   }, [session])
 
-  // --- name check (Step 1 gate) ---
+  // --- name check gate (Step 1) ---
   useEffect(() => {
     async function run() {
       if (!session?.user?.id) return
-      const { data } = await supabase.from('profiles').select('full_name').eq('id', session.user.id).maybeSingle()
+      const { data } = await supabase
+        .from('profiles')
+        .select('full_name')
+        .eq('id', session.user.id)
+        .maybeSingle()
       setHasName(!!(data?.full_name && data.full_name.trim().length > 0))
       setCheckingName(false)
     }
     run()
   }, [session])
 
+  // --- single FOMO line: count users active today (from daily_entries) ---
+  useEffect(() => {
+    async function fetchCount() {
+      const today = new Date().toISOString().slice(0, 10)
+      // count distinct users who have a daily_entries row today
+      // supabase-js v2: use head:true with count:'exact'
+      const { count, error } = await supabase
+        .from('daily_entries')
+        .select('user_id', { count: 'exact', head: true })
+        .eq('entry_date', today)
+      if (!error) setTodayCount(count ?? 0)
+    }
+    fetchCount()
+  }, [])
+
   // auto-scroll chat
   useEffect(() => {
-    const el = listRef.current; if (!el) return; el.scrollTop = el.scrollHeight
+    const el = listRef.current
+    if (el) el.scrollTop = el.scrollHeight
   }, [messages, sending])
 
   function handleKeyDown(e) {
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); e.currentTarget.form?.requestSubmit() }
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      e.currentTarget.form?.requestSubmit()
+    }
   }
 
   async function handleSend(e) {
@@ -79,16 +107,17 @@ export default function Chat() {
     setSending(true)
     try {
       const r = await fetch('/api/chat', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ messages: next }),
       })
       const data = await r.json()
       setMessages([...next, { role: 'assistant', content: data.reply || '…' }])
     } catch (err) {
-      console.error(err)
       setMessages([...next, { role: 'assistant', content: 'Error contacting Manifestation Genie.' }])
     } finally {
-      setSending(false); inputRef.current?.focus()
+      setSending(false)
+      inputRef.current?.focus()
     }
   }
 
@@ -101,7 +130,11 @@ export default function Chat() {
     useEffect(() => {
       if (!session?.user) return
       ;(async () => {
-        const { data } = await supabase.from('profiles').select('full_name').eq('id', session.user.id).maybeSingle()
+        const { data } = await supabase
+          .from('profiles')
+          .select('full_name')
+          .eq('id', session.user.id)
+          .maybeSingle()
         setName(data?.full_name || '')
         setLoading(false)
       })()
@@ -110,23 +143,26 @@ export default function Chat() {
     async function save() {
       if (!session?.user) return
       setSaving(true)
-      await supabase.from('profiles').upsert({ id: session.user.id, full_name: name || null })
+      await supabase
+        .from('profiles')
+        .upsert({ id: session.user.id, full_name: name || null })
       setSaving(false)
-      setHasName(!!(name && name.trim()))
+      const ok = !!(name && name.trim())
+      setHasName(ok)
     }
 
-    if (loading) return <div className="panel"><div className="panelTitle">Display Name</div>Loading…</div>
+    if (loading) return <div className="card">Loading…</div>
     return (
-      <section className="panel">
-        <h2 className="panelTitle">Step 1 — Display Name</h2>
-        <div style={{display:'flex', gap:8}}>
+      <section className="card">
+        <h2 className="panelTitle">Step 1 — Your Name</h2>
+        <div style={{ display: 'flex', gap: 8 }}>
           <input
             value={name}
-            onChange={(e)=>setName(e.target.value)}
+            onChange={(e) => setName(e.target.value)}
             placeholder="Your name (used by the Genie)"
-            style={{flex:1, background:'#0f1022', border:'1px solid var(--soft)', color:'var(--text)', borderRadius:10, padding:'10px 12px'}}
+            className="textInput"
           />
-          <button className="ghost" onClick={save} disabled={saving || !name.trim()}>
+          <button type="button" className="btn" onClick={save} disabled={saving || !name.trim()}>
             {saving ? 'Saving…' : 'Save & Continue'}
           </button>
         </div>
@@ -146,7 +182,7 @@ export default function Chat() {
       </div>
     )
   }
-  if (allowed === null || checkingName) return <LoaderScreen text="Preparing your Genie…" />
+  if (allowed === null || checkingName) return <Loader text="Preparing your Genie…" />
   if (!allowed) {
     return (
       <div className="wrap">
@@ -165,96 +201,71 @@ export default function Chat() {
       {/* HEADER */}
       <header className="hero">
         <h1>Manifestation Genie</h1>
-        <p className="sub">Your Personal AI Assistant for Turning Goals into Reality</p>
+        <p className="sub">Your AI Assistant for Turning Goals into Reality</p>
         <p className="sub small">👋 Welcome back, {session.user.email}.</p>
       </header>
 
       {/* STEP 1: NAME */}
       {!hasName && <NameStep />}
 
-      {/* STEP 2: WIZARD (only after name is saved; chat locked until done) */}
+      {/* STEP 2: WIZARD (chat unlocks after onDone) */}
       {hasName && !wizardDone && (
-        <section className="panel">
+        <section className="card">
           <h2 className="panelTitle">Step 2 — Today’s Genie Flow</h2>
-          <GenieFlow session={session} onDone={()=>setWizardDone(true)} />
-          <div style={{marginTop:10, fontSize:12, color:'var(--muted)'}}>
-            Complete the flow to unlock the chat console.
-          </div>
+          <GenieFlow session={session} onDone={() => setWizardDone(true)} />
+          <div className="microNote">Complete the flow to unlock the chat console.</div>
         </section>
       )}
 
-      {/* AFTER: CHAT CONSOLE */}
+      {/* AFTER: CHAT */}
       {hasName && wizardDone && (
-        <>
-          <div className="panel">
-            <h2 className="panelTitle">Chat with the Genie</h2>
-            <div className="chatCard" style={{marginTop:0}}>
-              <div className="list" ref={listRef}>
-                {messages.map((m, i) => (
-                  <div key={i} className={`row ${m.role === 'user' ? 'me' : 'genie'}`}>
-                    <div className="avatar">{m.role === 'user' ? '🧑' : '🔮'}</div>
-                    <div className={`bubble ${m.role}`}>
-                      <div className="tag">{m.role === 'user' ? 'You' : 'Manifestation Genie'}</div>
-                      <div className="msg">{m.content}</div>
-                    </div>
-                  </div>
-                ))}
-
-                {sending && (
-                  <div className="row genie">
-                    <div className="avatar">🔮</div>
-                    <div className="bubble assistant">
-                      <div className="tag">Manifestation Genie</div>
-                      <div className="dots">
-                        <span /><span /><span />
-                      </div>
-                    </div>
-                  </div>
-                )}
+        <section className="card">
+          <h2 className="panelTitle">Chat with the Genie</h2>
+          <div className="list" ref={listRef}>
+            {messages.map((m, i) => (
+              <div key={i} className={`row ${m.role === 'user' ? 'me' : ''}`}>
+                <div className="avatar">{m.role === 'user' ? '🧑' : '🔮'}</div>
+                <div className={`bubble ${m.role === 'user' ? 'user' : ''}`}>
+                  <div className="tag">{m.role === 'user' ? 'You' : 'Manifestation Genie'}</div>
+                  <div className="msg">{m.content}</div>
+                </div>
               </div>
-
-              <form onSubmit={handleSend} className="composer">
-                <textarea
-                  ref={inputRef}
-                  name="prompt"
-                  placeholder="Type your message… (Shift+Enter for a newline)"
-                  rows={2}
-                  onKeyDown={handleKeyDown}
-                  disabled={sending}
-                />
-                <button type="submit" disabled={sending}>
-                  {sending ? 'Sending…' : 'Send'}
-                </button>
-              </form>
-            </div>
+            ))}
+            {sending && (
+              <div className="row">
+                <div className="avatar">🔮</div>
+                <div className="bubble">
+                  <div className="tag">Manifestation Genie</div>
+                  <div className="dots"><span /><span /><span /></div>
+                </div>
+              </div>
+            )}
           </div>
 
-          {/* QUICK GUIDE */}
-          <section className="panel">
-            <h2 className="panelTitle">How to Use Manifestation Genie</h2>
-            <div className="steps">
-              <div className="step"><span>✨</span><div><b>Ask</b><div className="muted">Tell the Genie what you need next.</div></div></div>
-              <div className="step"><span>🎯</span><div><b>Receive</b><div className="muted">Get one clear action with context.</div></div></div>
-              <div className="step"><span>🚀</span><div><b>Act</b><div className="muted">Ship it. Check it off. Repeat daily.</div></div></div>
-            </div>
-            <div className="micro">Small actions compound into big manifestations.</div>
-          </section>
-        </>
+          <form onSubmit={handleSend} className="composer">
+            <textarea
+              ref={inputRef}
+              name="prompt"
+              placeholder="Type your message… (Shift+Enter for a newline)"
+              rows={2}
+              onKeyDown={handleKeyDown}
+              disabled={sending}
+              className="textArea"
+            />
+            <button type="submit" className="btn" disabled={sending}>
+              {sending ? 'Sending…' : 'Send'}
+            </button>
+          </form>
+        </section>
       )}
 
-      {/* FOMO TICKER */}
-      <div
-        className="panel fomo"
-        onMouseEnter={() => (fomoPaused.current = true)}
-        onMouseLeave={() => (fomoPaused.current = false)}
-        aria-live="polite"
-        role="status"
-      >
-        {FOMO_MESSAGES[fomoIdx]}
+      {/* SINGLE FOMO LINE */}
+      <div className="fomoLine">
+        {todayCount !== null && <>🔥 {todayCount} people used Manifestation Genie today</>}
       </div>
 
-      <div className="bottomBar">
-        <button className="ghost" onClick={() => supabase.auth.signOut()}>Logout</button>
+      <div className="bottomRight">
+        <button type="button" className="ghost" onClick={() => supabase.auth.signOut()}>Logout</button>
       </div>
 
       <Style />
@@ -262,11 +273,11 @@ export default function Chat() {
   )
 }
 
-function LoaderScreen({ text }) {
+function Loader({ text }) {
   return (
     <div className="wrap">
       <div className="card center">
-        <div className="dots big"><span /><span /><span /></div>
+        <div className="dots"><span /><span /><span /></div>
         <p style={{ marginTop: 12 }}>{text}</p>
       </div>
       <Style />
@@ -277,141 +288,100 @@ function LoaderScreen({ text }) {
 function Style() {
   return (
     <style jsx global>{`
-      html, body {
-        margin: 0;
-        padding: 0;
-        background: #ffffff !important; /* White everywhere */
-        color: #000000;
-        height: 100%;
+      html, body, #__next { margin:0; padding:0; background:#fff; color:#000; min-height:100%; }
+      * { box-sizing: border-box; }
+
+      .wrap { max-width: 760px; margin: 36px auto 48px; padding: 0 16px; }
+
+      .hero { text-align: center; margin-bottom: 24px; }
+      .hero h1 { margin:0; font-size: 36px; font-weight: 900; color:#000; }
+      .sub { margin-top: 8px; font-size: 16px; color:#111; }
+      .sub.small { font-size: 14px; color:#444; }
+
+      .card {
+        background:#fff;
+        color:#000;
+        border:2px solid #000;
+        border-radius:12px;
+        padding:20px;
+        margin-bottom:20px;
       }
 
-      #__next, .wrap {
-        background: #ffffff !important;
+      .panelTitle { margin:0 0 10px 0; font-size:16px; font-weight:800; text-transform:uppercase; }
+      .microNote { margin-top:8px; font-size:12px; color:#444; }
+
+      .textInput {
+        flex:1;
+        border:2px solid #000;
+        border-radius:8px;
+        padding:10px 12px;
+        font-size:14px;
+        background:#fff;
+        color:#000;
+        outline:none;
       }
 
-      .wrap {
-        max-width: 720px;
-        margin: 40px auto;
-        padding: 0 16px;
+      .textArea {
+        flex:1;
+        border:2px solid #000;
+        border-radius:8px;
+        padding:10px 12px;
+        font-size:14px;
+        background:#fff;
+        color:#000;
+        outline:none;
       }
 
-      .hero {
-        text-align: center;
-        margin-bottom: 24px;
+      .btn {
+        background:#000;
+        color:#fff;
+        border:2px solid #000;
+        border-radius:8px;
+        padding:10px 16px;
+        font-weight:700;
+        cursor:pointer;
       }
-      .hero h1 {
-        margin: 0;
-        font-size: 36px;
-        font-weight: 800;
-        color: #000;
-      }
-      .sub {
-        color: #333;
-        margin-top: 8px;
-        font-size: 16px;
-      }
-      .sub.small {
-        font-size: 14px;
-        color: #666;
-      }
+      .btn:disabled { opacity:.7; cursor:default; }
 
-      .card, .panel, .chatCard {
-        background: #fff;
-        border: 2px solid #000;
-        border-radius: 12px;
-        padding: 20px;
-        margin-bottom: 20px;
-      }
-
-      .panelTitle {
-        margin: 0 0 12px 0;
-        font-size: 16px;
-        font-weight: 700;
-        color: #000;
-        text-transform: uppercase;
-      }
-
-      .btn, .ghost, .composer button {
-        background: #000;
-        color: #fff;
-        border: none;
-        border-radius: 8px;
-        padding: 10px 16px;
-        font-weight: 600;
-        cursor: pointer;
-      }
       .ghost {
-        background: transparent;
-        border: 2px solid #000;
-        color: #000;
+        background:#fff;
+        color:#000;
+        border:2px solid #000;
+        border-radius:8px;
+        padding:8px 12px;
+        font-weight:700;
+        cursor:pointer;
       }
 
-      .composer {
-        display: flex;
-        gap: 10px;
-        margin-top: 12px;
-      }
-      .composer textarea {
-        flex: 1;
-        border: 2px solid #000;
-        border-radius: 8px;
-        padding: 10px;
-        font-size: 14px;
-      }
+      .list { max-height: 320px; overflow-y: auto; margin-bottom: 12px; }
+      .row { display:flex; gap:10px; margin:12px 6px; }
+      .row.me { justify-content: flex-end; }
+      .avatar { font-size: 20px; }
 
-      .list {
-        max-height: 300px;
-        overflow-y: auto;
-        margin-bottom: 12px;
-      }
-
-      .row {
-        display: flex;
-        align-items: flex-start;
-        margin-bottom: 12px;
-        gap: 8px;
-      }
       .bubble {
-        border: 2px solid #000;
-        border-radius: 8px;
-        padding: 10px;
-        background: #f9f9f9;
-        color: #000;
         max-width: 75%;
+        padding: 10px 12px;
+        border: 2px solid #000;
+        border-radius: 10px;
+        background: #f6f6f6;
+        color: #000;
       }
-      .bubble.user {
-        background: #000;
-        color: #fff;
-      }
-      .avatar {
-        font-size: 20px;
-      }
-      .tag {
-        font-size: 12px;
-        font-weight: 600;
-        margin-bottom: 4px;
-      }
+      .bubble.user { background:#000; color:#fff; }
 
-      .steps {
-        display: grid;
-        grid-template-columns: 1fr;
-        gap: 12px;
-      }
-      .step {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-      }
-      .step span {
-        font-size: 18px;
-      }
+      .tag { font-size: 12px; font-weight: 700; margin-bottom: 4px; opacity:.85; }
+      .msg { white-space: pre-wrap; }
 
-      .fomo {
-        font-size: 14px;
-        font-weight: 600;
-        text-align: center;
-      }
+      .composer { display:flex; gap:10px; align-items:flex-end; }
+
+      .dots { display:inline-flex; gap:6px; align-items:center; }
+      .dots span { width:6px; height:6px; background:#000; border-radius:50%; opacity:.25; animation: blink 1.2s infinite ease-in-out; }
+      .dots span:nth-child(2){ animation-delay:.15s }
+      .dots span:nth-child(3){ animation-delay:.3s }
+      @keyframes blink { 0%,80%,100%{opacity:.25} 40%{opacity:1} }
+
+      .fomoLine { text-align:center; font-weight:800; margin: 16px 0; }
+
+      .bottomRight { display:flex; justify-content:flex-end; }
     `}</style>
   )
 }
-
