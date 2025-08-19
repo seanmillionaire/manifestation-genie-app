@@ -1,4 +1,4 @@
-// pages/login.js
+// /pages/login.js
 import { useState } from 'react'
 import { supabase } from '../src/supabaseClient'
 
@@ -52,7 +52,7 @@ export default function Login() {
               {error && <div className="error">{error}</div>}
 
               <div className="actions">
-                <button type="submit" className="btn" disabled={sending || !email.trim()}>
+                <button type="submit" className="btn btn-primary" disabled={sending || !email.trim()}>
                   {sending ? 'Sending magic link…' : 'Send magic link'}
                 </button>
               </div>
@@ -69,7 +69,7 @@ export default function Login() {
             </p>
             <div className="actions" style={{ marginTop: 18 }}>
               <a href="/login" className="ghost">Use a different email</a>
-              <a href="/chat" className="btn">Back to app</a>
+              <a href="/chat" className="btn btn-primary">Back to app</a>
             </div>
           </>
         )}
@@ -83,26 +83,25 @@ export default function Login() {
 function Style() {
   return (
     <style jsx global>{`
-      html, body, #__next { margin:0; padding:0; background:#fff; color:#000; min-height:100%; }
+      /* DO NOT touch html/body – globals.css controls background & text */
       * { box-sizing: border-box; }
 
-      /* Match Chat page spacing/typography */
       .wrap { max-width: 960px; margin: 64px auto 88px; padding: 0 24px; }
 
       .hero { text-align: center; margin-bottom: 40px; }
-      .hero h1 { margin:0; font-size: 44px; font-weight: 900; color:#000; letter-spacing:.2px; }
-      .sub { margin: 10px auto 0; font-size: 18px; color:#111; max-width: 68ch; line-height: 1.6; }
-      .sub.small { font-size: 16px; color:#444; }
+      .hero h1 { margin:0; font-size: 44px; font-weight: 900; color: var(--gold); letter-spacing:.2px; }
+      .sub { margin: 10px auto 0; font-size: 18px; color: rgba(255,255,255,0.9); max-width: 68ch; line-height: 1.6; }
+      .sub.small { font-size: 16px; color: rgba(255,255,255,0.7); }
 
       .card {
-        background:#fff;
-        color:#000;
-        border:2px solid #000;
+        background: rgba(255,255,255,0.04);
+        color: var(--white);
+        border: 1px solid rgba(255,255,255,0.12);
         border-radius:16px;
         padding:32px 32px 28px;
         margin-bottom:28px;
+        backdrop-filter: blur(6px);
       }
-
       .center { display:flex; flex-direction:column; align-items:center; text-align:center; }
 
       .panelTitle {
@@ -111,6 +110,7 @@ function Style() {
         font-weight:800;
         text-transform:uppercase;
         letter-spacing:.6px;
+        color: var(--gold);
       }
 
       .label {
@@ -119,38 +119,17 @@ function Style() {
         font-size:14px;
         font-weight:700;
         margin: 0 0 8px 2px;
+        color: rgba(255,255,255,0.9);
       }
 
-      .textInput {
-        width:100%;
-        border:2px solid #000;
-        border-radius:12px;
-        padding:14px 16px;
-        font-size:16px;
-        background:#fff;
-        color:#000;
-        outline:none;
-        line-height:1.5;
-      }
+      /* Inputs inherit base styles from globals.css; set layout only */
+      .textInput { width:100%; }
 
-      .btn {
-        background:#000;
-        color:#fff;
-        border:2px solid #000;
-        border-radius:12px;
-        padding:12px 18px;
-        font-weight:800;
-        cursor:pointer;
-        font-size:16px;
-        text-decoration:none;
-        display:inline-block;
-      }
-      .btn:disabled { opacity:.7; cursor:default; }
-
+      /* Buttons: base in globals.css; ghost variant for secondary */
       .ghost {
-        background:#fff;
-        color:#000;
-        border:2px solid #000;
+        background: transparent;
+        color: var(--white);
+        border:1px solid rgba(255,255,255,0.3);
         border-radius:12px;
         padding:12px 18px;
         font-weight:800;
@@ -159,6 +138,7 @@ function Style() {
         text-decoration:none;
         display:inline-block;
       }
+      .ghost:hover { border-color: var(--gold); color: var(--gold); }
 
       .actions {
         display:flex;
@@ -167,10 +147,10 @@ function Style() {
         margin-top:16px;
       }
 
-      .microNote { color:#444; font-size:13px; }
+      .microNote { color: rgba(255,255,255,0.65); font-size:13px; }
 
       .error {
-        color:#c80000;
+        color:#ff6b6b;
         text-align:left;
         margin-top:10px;
         font-size:14px;
