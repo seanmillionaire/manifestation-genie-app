@@ -6,6 +6,13 @@ import GenieFlow from '../components/GenieFlow'
 export default function Chat() {
   const [session, setSession] = useState(null)
   const [allowed, setAllowed] = useState(null) // null=checking, true/false=result
+
+  // wizard gate
+  const [hasName, setHasName] = useState(false)
+  const [checkingName, setCheckingName] = useState(true)
+  const [wizardDone, setWizardDone] = useState(false)
+
+  // chat state (your original)
   const [messages, setMessages] = useState([])
   const [sending, setSending] = useState(false)
   const PAYHIP_URL = 'https://hypnoticmeditations.ai/b/U7Z5m' // <-- change to real product URL
@@ -13,7 +20,7 @@ export default function Chat() {
   const listRef = useRef(null)
   const inputRef = useRef(null)
 
-  // --- FOMO ticker (non-competitive) ---
+  // --- FOMO ticker ---
   const FOMO_MESSAGES = [
     '🌍 4,327 people logged in to Manifestation Genie today.',
     '🔥 14,201 actions completed this week inside Manifestation Genie.',
@@ -28,11 +35,8 @@ export default function Chat() {
   ]
   const [fomoIdx, setFomoIdx] = useState(0)
   const fomoPaused = useRef(false)
-
   useEffect(() => {
-    const t = setInterval(() => {
-      if (!fomoPaused.current) setFomoIdx((i) => (i + 1) % FOMO_MESSAGES.length)
-    }, 4000)
+    const t = setInterval(() => { if (!fomoPaused.current) setFomoIdx(i => (i+1)%FOMO_MESSAGES.length) }, 4000)
     return () => clearInterval(t)
   }, [])
 
@@ -43,44 +47,40 @@ export default function Chat() {
     return () => sub.subscription.unsubscribe()
   }, [])
 
-  // --- allowlist check by email ---
+  // --- allowlist check ---
   useEffect(() => {
     async function run() {
       if (!session?.user?.email) return
-      const { data, error } = await supabase
-        .from('allowlist')
-        .select('status')
-        .eq('email', session.user.email)
-        .maybeSingle()
-      if (error) {
-        console.error(error)
-        setAllowed(false)
-      } else {
-        setAllowed(data?.status === 'active')
-      }
+      const { data, error } = await supabase.from('allowlist').select('status').eq('email', session.user.email).maybeSingle()
+      if (error) { console.error(error); setAllowed(false) } else { setAllowed(data?.status === 'active') }
     }
     run()
   }, [session])
 
-  // auto-scroll
+  // --- name check (Step 1 gate) ---
   useEffect(() => {
-    const el = listRef.current
-    if (!el) return
-    el.scrollTop = el.scrollHeight
+    async function run() {
+      if (!session?.user?.id) return
+      const { data } = await supabase.from('profiles').select('full_name').eq('id', session.user.id).maybeSingle()
+      setHasName(!!(data?.full_name && data.full_name.trim().length > 0))
+      setCheckingName(false)
+    }
+    run()
+  }, [session])
+
+  // auto-scroll chat
+  useEffect(() => {
+    const el = listRef.current; if (!el) return; el.scrollTop = el.scrollHeight
   }, [messages, sending])
 
   function handleKeyDown(e) {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault()
-      e.currentTarget.form?.requestSubmit()
-    }
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); e.currentTarget.form?.requestSubmit() }
   }
 
   async function handleSend(e) {
     e.preventDefault()
     const input = e.target.prompt.value.trim()
     if (!input) return
-
     const next = [...messages, { role: 'user', content: input }]
     setMessages(next)
     e.target.reset()
@@ -88,30 +88,25 @@ export default function Chat() {
     setSending(true)
     try {
       const r = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ messages: next }),
       })
       const data = await r.json()
       setMessages([...next, { role: 'assistant', content: data.reply || '…' }])
     } catch (err) {
       console.error(err)
-      setMessages([
-        ...next,
-        { role: 'assistant', content: 'Error contacting Manifestation Genie.' },
-      ])
+      setMessages([...next, { role: 'assistant', content: 'Error contacting Manifestation Genie.' }])
     } finally {
-      setSending(false)
-      inputRef.current?.focus()
+      setSending(false); inputRef.current?.focus()
     }
   }
 
-  // --- simple display name editor (WHERE #4 LIVES) ---
-  // If you want this separate, move it into /pages/profile.jsx; keeping inline is simplest.
-  function NameEditor() {
+  // ---------- inline Name Step (Step 1) ----------
+  function NameStep() {
     const [name, setName] = useState('')
     const [loading, setLoading] = useState(true)
     const [saving, setSaving] = useState(false)
+
     useEffect(() => {
       if (!session?.user) return
       ;(async () => {
@@ -126,12 +121,13 @@ export default function Chat() {
       setSaving(true)
       await supabase.from('profiles').upsert({ id: session.user.id, full_name: name || null })
       setSaving(false)
+      setHasName(!!(name && name.trim()))
     }
 
-    if (loading) return null
+    if (loading) return <div className="panel"><div className="panelTitle">Display Name</div>Loading…</div>
     return (
-      <div className="panel" style={{marginTop:12}}>
-        <h2 className="panelTitle">Display Name</h2>
+      <section className="panel">
+        <h2 className="panelTitle">Step 1 — Display Name</h2>
         <div style={{display:'flex', gap:8}}>
           <input
             value={name}
@@ -139,9 +135,11 @@ export default function Chat() {
             placeholder="Your name (used by the Genie)"
             style={{flex:1, background:'#0f1022', border:'1px solid var(--soft)', color:'var(--text)', borderRadius:10, padding:'10px 12px'}}
           />
-          <button className="ghost" onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save'}</button>
+          <button className="ghost" onClick={save} disabled={saving || !name.trim()}>
+            {saving ? 'Saving…' : 'Save & Continue'}
+          </button>
         </div>
-      </div>
+      </section>
     )
   }
 
@@ -157,7 +155,7 @@ export default function Chat() {
       </div>
     )
   }
-  if (allowed === null) return <LoaderScreen text="Checking access…" />
+  if (allowed === null || checkingName) return <LoaderScreen text="Preparing your Genie…" />
   if (!allowed) {
     return (
       <div className="wrap">
@@ -171,7 +169,6 @@ export default function Chat() {
     )
   }
 
-  // --- main UI ---
   return (
     <div className="wrap">
       {/* HEADER */}
@@ -181,86 +178,78 @@ export default function Chat() {
         <p className="sub small">👋 Welcome back, {session.user.email}.</p>
       </header>
 
-      {/* NAME EDITOR (#4) */}
-      <NameEditor />
+      {/* STEP 1: NAME */}
+      {!hasName && <NameStep />}
 
-      {/* GENIE DAILY FLOW (new) */}
-      <div className="panel">
-        <h2 className="panelTitle">Today’s Genie Flow</h2>
-        <GenieFlow session={session} />
-      </div>
+      {/* STEP 2: WIZARD (only after name is saved; chat locked until done) */}
+      {hasName && !wizardDone && (
+        <section className="panel">
+          <h2 className="panelTitle">Step 2 — Today’s Genie Flow</h2>
+          <GenieFlow session={session} onDone={()=>setWizardDone(true)} />
+          <div style={{marginTop:10, fontSize:12, color:'var(--muted)'}}>
+            Complete the flow to unlock the chat console.
+          </div>
+        </section>
+      )}
 
-      {/* CHAT (your existing) */}
-      <div className="chatCard">
-        <div className="list" ref={listRef}>
-          {messages.map((m, i) => (
-            <div key={i} className={`row ${m.role === 'user' ? 'me' : 'genie'}`}>
-              <div className="avatar">{m.role === 'user' ? '🧑' : '🔮'}</div>
-              <div className={`bubble ${m.role}`}>
-                <div className="tag">{m.role === 'user' ? 'You' : 'Manifestation Genie'}</div>
-                <div className="msg">{m.content}</div>
+      {/* AFTER: CHAT CONSOLE */}
+      {hasName && wizardDone && (
+        <>
+          <div className="panel">
+            <h2 className="panelTitle">Chat with the Genie</h2>
+            <div className="chatCard" style={{marginTop:0}}>
+              <div className="list" ref={listRef}>
+                {messages.map((m, i) => (
+                  <div key={i} className={`row ${m.role === 'user' ? 'me' : 'genie'}`}>
+                    <div className="avatar">{m.role === 'user' ? '🧑' : '🔮'}</div>
+                    <div className={`bubble ${m.role}`}>
+                      <div className="tag">{m.role === 'user' ? 'You' : 'Manifestation Genie'}</div>
+                      <div className="msg">{m.content}</div>
+                    </div>
+                  </div>
+                ))}
+
+                {sending && (
+                  <div className="row genie">
+                    <div className="avatar">🔮</div>
+                    <div className="bubble assistant">
+                      <div className="tag">Manifestation Genie</div>
+                      <div className="dots">
+                        <span /><span /><span />
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
-            </div>
-          ))}
 
-          {sending && (
-            <div className="row genie">
-              <div className="avatar">🔮</div>
-              <div className="bubble assistant">
-                <div className="tag">Manifestation Genie</div>
-                <div className="dots">
-                  <span />
-                  <span />
-                  <span />
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-
-        <form onSubmit={handleSend} className="composer">
-          <textarea
-            ref={inputRef}
-            name="prompt"
-            placeholder="Type your message… (Shift+Enter for a newline)"
-            rows={2}
-            onKeyDown={handleKeyDown}
-            disabled={sending}
-          />
-          <button type="submit" disabled={sending}>
-            {sending ? 'Sending…' : 'Send'}
-          </button>
-        </form>
-      </div>
-
-      {/* QUICK GUIDE */}
-      <section className="panel">
-        <h2 className="panelTitle">How to Use Manifestation Genie</h2>
-        <div className="steps">
-          <div className="step">
-            <span>✨</span>
-            <div>
-              <b>Ask</b>
-              <div className="muted">Type your goal, desire, or challenge.</div>
+              <form onSubmit={handleSend} className="composer">
+                <textarea
+                  ref={inputRef}
+                  name="prompt"
+                  placeholder="Type your message… (Shift+Enter for a newline)"
+                  rows={2}
+                  onKeyDown={handleKeyDown}
+                  disabled={sending}
+                />
+                <button type="submit" disabled={sending}>
+                  {sending ? 'Sending…' : 'Send'}
+                </button>
+              </form>
             </div>
           </div>
-          <div className="step">
-            <span>🎯</span>
-            <div>
-              <b>Receive</b>
-              <div className="muted">Get a clear daily action — personalized for you.</div>
+
+          {/* QUICK GUIDE */}
+          <section className="panel">
+            <h2 className="panelTitle">How to Use Manifestation Genie</h2>
+            <div className="steps">
+              <div className="step"><span>✨</span><div><b>Ask</b><div className="muted">Tell the Genie what you need next.</div></div></div>
+              <div className="step"><span>🎯</span><div><b>Receive</b><div className="muted">Get one clear action with context.</div></div></div>
+              <div className="step"><span>🚀</span><div><b>Act</b><div className="muted">Ship it. Check it off. Repeat daily.</div></div></div>
             </div>
-          </div>
-          <div className="step">
-            <span>🚀</span>
-            <div>
-              <b>Act</b>
-              <div className="muted">Complete the step, check it off, and track progress.</div>
-            </div>
-          </div>
-        </div>
-        <div className="micro">Check in daily — small actions compound into big manifestations.</div>
-      </section>
+            <div className="micro">Small actions compound into big manifestations.</div>
+          </section>
+        </>
+      )}
 
       {/* FOMO TICKER */}
       <div
@@ -286,11 +275,7 @@ function LoaderScreen({ text }) {
   return (
     <div className="wrap">
       <div className="card center">
-        <div className="dots big">
-          <span />
-          <span />
-          <span />
-        </div>
+        <div className="dots big"><span /><span /><span /></div>
         <p style={{ marginTop: 12 }}>{text}</p>
       </div>
       <Style />
@@ -330,34 +315,69 @@ function Style() {
       }
       .sub{color:var(--muted);margin-top:6px;font-size:14px}
       .sub.small{ font-size:13px; opacity:.75 }
-      .card{background:var(--card); border:1px solid var(--soft); border-radius:16px; box-shadow:0 10px 30px rgba(0,0,0,.25); padding:24px;}
+      .card{
+        background:var(--card); border:1px solid var(--soft); border-radius:16px; box-shadow:0 10px 30px rgba(0,0,0,.25); padding:24px;
+      }
       .center{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:50vh;text-align:center}
       .btn{display:inline-block;margin-top:10px;padding:10px 14px;border-radius:10px;font-weight:600;text-decoration:none;
         background:linear-gradient(90deg,var(--brand),var(--brand-2)); color:#0b0c18; border:0;}
-      .chatCard{background:linear-gradient(180deg, rgba(18,20,44,.9), rgba(10,12,32,.9));
-        border:1px solid var(--soft); border-radius:16px; box-shadow:0 10px 30px rgba(0,0,0,.35), inset 0 0 0 1px rgba(255,255,255,.03);
-        overflow:hidden; backdrop-filter: blur(6px); margin-top:16px;}
+      .chatCard{
+        background:linear-gradient(180deg, rgba(18,20,44,.9), rgba(10,12,32,.9));
+        border:1px solid var(--soft);
+        border-radius:16px;
+        box-shadow:0 10px 30px rgba(0,0,0,.35), inset 0 0 0 1px rgba(255,255,255,.03);
+        overflow:hidden; backdrop-filter: blur(6px); margin-top:16px;
+      }
       .list{height:56vh;min-height:300px;overflow-y:auto;padding:14px 12px 0;}
       .row{display:flex;gap:10px;margin:10px 6px}
       .row.me{justify-content:flex-end}
-      .row .avatar{width:28px;height:28px;display:flex;align-items:center;justify-content:center;background:#1d1f33;border:1px solid var(--soft);border-radius:50%;flex:0 0 28px;font-size:14px}
+      .row .avatar{
+        width:28px;height:28px;display:flex;align-items:center;justify-content:center;
+        background:#1d1f33;border:1px solid var(--soft);border-radius:50%;flex:0 0 28px;font-size:14px
+      }
       .row.me .avatar{order:2}
       .bubble{max-width:72%;padding:10px 12px;border-radius:14px;line-height:1.45}
-      .bubble.user{background:linear-gradient(180deg,var(--me),#6d28d9); color:#fff; box-shadow:0 6px 18px rgba(139,92,246,.22), inset 0 0 0 1px rgba(255,255,255,.06);}
-      .bubble.assistant{background:linear-gradient(180deg, rgba(20,25,54,.9), rgba(13,17,39,.9)); border:1px solid var(--soft);
-        box-shadow:0 6px 18px rgba(34,211,238,.1), inset 0 0 0 1px rgba(255,255,255,.03);}
+      .bubble.user{
+        background:linear-gradient(180deg,var(--me),#6d28d9);
+        color:#fff; box-shadow:0 6px 18px rgba(139,92,246,.22), inset 0 0 0 1px rgba(255,255,255,.06);
+      }
+      .bubble.assistant{
+        background:linear-gradient(180deg, rgba(20,25,54,.9), rgba(13,17,39,.9));
+        border:1px solid var(--soft);
+        box-shadow:0 6px 18px rgba(34,211,238,.1), inset 0 0 0 1px rgba(255,255,255,.03);
+      }
       .tag{font-size:11px;opacity:.7;margin-bottom:4px}
       .msg{white-space:pre-wrap}
-      .composer{display:flex;gap:10px;padding:12px;border-top:1px solid var(--soft);position:sticky;bottom:0;
-        background:linear-gradient(180deg, rgba(10,12,30,.92), rgba(8,10,24,.92)); backdrop-filter: blur(8px);}
-      .composer textarea{flex:1;resize:none;border:1px solid var(--soft);background:#0f1022;color:var(--text);
-        border-radius:10px;padding:10px 12px;font-family:inherit;outline:none}
-      .composer button{background:linear-gradient(90deg,var(--brand),var(--brand-2)); color:#0b0c18;border:0;border-radius:10px;padding:10px 16px;cursor:pointer;font-weight:600}
+      .composer{
+        display:flex;gap:10px;padding:12px;border-top:1px solid var(--soft);position:sticky;bottom:0;
+        background:linear-gradient(180deg, rgba(10,12,30,.92), rgba(8,10,24,.92)); backdrop-filter: blur(8px);
+      }
+      .composer textarea{
+        flex:1;resize:none;border:1px solid var(--soft);background:#0f1022;color:var(--text);
+        border-radius:10px;padding:10px 12px;font-family:inherit;outline:none
+      }
+      .composer button{
+        background:linear-gradient(90deg,var(--brand),var(--brand-2));
+        color:#0b0c18;border:0;border-radius:10px;padding:10px 16px;cursor:pointer;font-weight:600
+      }
       .composer button:disabled{opacity:.7;cursor:default}
       .bottomBar{display:flex;justify-content:flex-end;margin-top:10px}
       .ghost{background:transparent;color:var(--muted);border:1px solid var(--soft);padding:8px 12px;border-radius:10px;cursor:pointer}
-      .panel{margin-top:16px;background:var(--card);border:1px solid var(--soft);border-radius:16px;padding:16px;box-shadow:0 10px 30px rgba(0,0,0,.20);}
-      .panelTitle{margin:0 0 10px 0;font-size:14px;letter-spacing:.6px;text-transform:uppercase;color:var(--muted);}
+      .panel{
+        margin-top:16px;
+        background:var(--card);
+        border:1px solid var(--soft);
+        border-radius:16px;
+        padding:16px;
+        box-shadow:0 10px 30px rgba(0,0,0,.20);
+      }
+      .panelTitle{
+        margin:0 0 10px 0;
+        font-size:14px;
+        letter-spacing:.6px;
+        text-transform:uppercase;
+        color:var(--muted);
+      }
       .steps{ display:grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap:12px; }
       .step{ display:flex; gap:10px; align-items:flex-start; }
       .step span{ font-size:18px; line-height:1; margin-top:2px }
