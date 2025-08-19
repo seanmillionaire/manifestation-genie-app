@@ -483,6 +483,15 @@ function Style() {
       .hero h1 { margin:0; font-size: 44px; font-weight: 900; color:#000; letter-spacing:.2px; }
       .sub { margin: 10px auto 0; font-size: 18px; color:#111; max-width: 68ch; line-height: 1.6; }
       .sub.small { font-size: 16px; color:#444; }
+.chat-console {
+  height: 500px;          /* pick the size you want */
+  max-height: 500px;      /* ensures it never grows past this */
+  overflow-y: auto;       /* makes it scrollable */
+  padding: 1rem;          /* optional for spacing */
+  border: 1px solid #ccc; /* optional border */
+  background: #fff;       /* simple white background */
+}
+
 
       .card {
         background:#fff;
