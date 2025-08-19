@@ -544,8 +544,8 @@ function Style() {
 
       /* FIXED HEIGHT CHAT CONSOLE */
       .list {
-        height: 420px;                 /* 🔒 fixed from first render */
-        min-height: 420px;             /* keep the box from shrinking */
+        height: 300px;                 /* 🔒 fixed from first render */
+        min-height: 300px;             /* keep the box from shrinking */
         overflow-y: auto;              /* scroll when content grows */
         margin-bottom: 16px;
         padding-right: 4px;
@@ -592,7 +592,7 @@ function Style() {
 
       .bottomRight { display:flex; justify-content:flex-end; margin-top: 20px; }
 
-      @media (max-width: 560px) {
+      @media (max-width: 460px) {
         .wrap { margin: 40px auto 64px; padding: 0 16px; }
         .hero h1 { font-size: 34px; }
         .sub { font-size: 16px; }
