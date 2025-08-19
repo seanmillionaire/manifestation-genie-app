@@ -3,11 +3,15 @@ import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../src/supabaseClient'
 import GenieFlow from '../components/GenieFlow'
 
+function todayStr() {
+  return new Date().toISOString().slice(0,10)
+}
+
 export default function Chat() {
   const [session, setSession] = useState(null)
-  const [allowed, setAllowed] = useState(null) // null=checking, true/false=result
+  const [allowed, setAllowed] = useState(null) // null=checking
 
-  // gates
+  // ----- gates persisted in localStorage (stable across focus changes) -----
   const [hasName, setHasName] = useState(false)
   const [checkingName, setCheckingName] = useState(true)
   const [wizardDone, setWizardDone] = useState(false)
@@ -21,25 +25,62 @@ export default function Chat() {
   // single FOMO line
   const [todayCount, setTodayCount] = useState(null)
 
-  const PAYHIP_URL = 'https://hypnoticmeditations.ai/b/U7Z5m' // change to real product URL
+  const PAYHIP_URL = 'https://hypnoticmeditations.ai/b/U7Z5m' // change for prod
 
-  // --- auth session (ignore token refresh noise) ---
+  // ----- load persisted gates on mount -----
   useEffect(() => {
-    let active = true
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (active) setSession(session)
-    })
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, s) => {
-      if (event === 'SIGNED_IN' || event === 'SIGNED_OUT') {
-        setSession(s)
+    const boot = async () => {
+      const { data: { session } } = await supabase.auth.getSession()
+      setSession(session || null)
+
+      const uid = session?.user?.id
+      const dateKey = todayStr()
+      if (uid) {
+        // Persisted name flag
+        const nameKey = `mg_hasName_${uid}`
+        const persistedName = localStorage.getItem(nameKey)
+        if (persistedName === 'true') setHasName(true)
+
+        // Persisted wizard completion (per day)
+        const wizKey = `mg_wizardDone_${uid}_${dateKey}`
+        const persistedWiz = localStorage.getItem(wizKey)
+        if (persistedWiz === 'true') setWizardDone(true)
       }
-      // Ignore TOKEN_REFRESHED / USER_UPDATED to prevent UI resets on tab focus
-    })
-    return () => { active = false; subscription.unsubscribe() }
+    }
+    boot()
   }, [])
 
-  // --- allowlist check by email ---
+  // ----- auth listener (IGNORE token refresh noise) -----
   useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, nextSession) => {
+      // Only react if the user actually changed (prevents “restart on focus”)
+      const currentUid = session?.user?.id
+      const nextUid = nextSession?.user?.id
+      if (event === 'SIGNED_OUT') {
+        setSession(null)
+        setHasName(false)
+        setWizardDone(false)
+        return
+      }
+      if (event === 'SIGNED_IN') {
+        if (currentUid !== nextUid) {
+          setSession(nextSession)
+          // reload persisted flags for the new user
+          const nameKey = `mg_hasName_${nextUid}`
+          const wizKey = `mg_wizardDone_${nextUid}_${todayStr()}`
+          if (localStorage.getItem(nameKey) === 'true') setHasName(true)
+          if (localStorage.getItem(wizKey) === 'true') setWizardDone(true)
+        }
+      }
+      // Ignore TOKEN_REFRESHED / USER_UPDATED / etc.
+    })
+    return () => subscription.unsubscribe()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session?.user?.id])
+
+  // ----- allowlist (one shot per user/email) -----
+  useEffect(() => {
+    let cancelled = false
     async function run() {
       if (!session?.user?.email) return
       const { data, error } = await supabase
@@ -47,43 +88,49 @@ export default function Chat() {
         .select('status')
         .eq('email', session.user.email)
         .maybeSingle()
-      if (error) setAllowed(false)
-      else setAllowed(data?.status === 'active')
+      if (!cancelled) setAllowed(error ? false : data?.status === 'active')
     }
     run()
-  }, [session])
+    return () => { cancelled = true }
+  }, [session?.user?.email])
 
-  // --- name check gate (Step 1) ---
+  // ----- name gate: only set TRUE, never auto‑flip to false on focus -----
   useEffect(() => {
+    let cancelled = false
     async function run() {
       if (!session?.user?.id) return
+      // if we already have it from localStorage, don't flip‑flop
+      if (hasName) { setCheckingName(false); return }
       const { data } = await supabase
         .from('profiles')
         .select('full_name')
         .eq('id', session.user.id)
         .maybeSingle()
-      setHasName(!!(data?.full_name && data.full_name.trim().length > 0))
+      if (cancelled) return
+      const ok = !!(data?.full_name && data.full_name.trim().length > 0)
+      setHasName(ok)
+      if (ok) localStorage.setItem(`mg_hasName_${session.user.id}`, 'true')
       setCheckingName(false)
     }
     run()
-  }, [session])
+    return () => { cancelled = true }
+  }, [session?.user?.id, hasName])
 
-  // --- single FOMO line: count users active today (from daily_entries) ---
+  // ----- one‑line FOMO (count daily_entries for today) -----
   useEffect(() => {
+    let cancelled = false
     async function fetchCount() {
-      const today = new Date().toISOString().slice(0, 10)
-      // count distinct users who have a daily_entries row today
-      // supabase-js v2: use head:true with count:'exact'
       const { count, error } = await supabase
         .from('daily_entries')
         .select('user_id', { count: 'exact', head: true })
-        .eq('entry_date', today)
-      if (!error) setTodayCount(count ?? 0)
+        .eq('entry_date', todayStr())
+      if (!cancelled && !error) setTodayCount(count ?? 0)
     }
     fetchCount()
+    return () => { cancelled = true }
   }, [])
 
-  // auto-scroll chat
+  // chat autoscroll
   useEffect(() => {
     const el = listRef.current
     if (el) el.scrollTop = el.scrollHeight
@@ -113,7 +160,7 @@ export default function Chat() {
       })
       const data = await r.json()
       setMessages([...next, { role: 'assistant', content: data.reply || '…' }])
-    } catch (err) {
+    } catch {
       setMessages([...next, { role: 'assistant', content: 'Error contacting Manifestation Genie.' }])
     } finally {
       setSending(false)
@@ -121,13 +168,14 @@ export default function Chat() {
     }
   }
 
-  // ---------- inline Name Step (Step 1) ----------
+  // ---------- Step 1: Name ----------
   function NameStep() {
     const [name, setName] = useState('')
     const [loading, setLoading] = useState(true)
     const [saving, setSaving] = useState(false)
 
     useEffect(() => {
+      let cancelled = false
       if (!session?.user) return
       ;(async () => {
         const { data } = await supabase
@@ -135,20 +183,25 @@ export default function Chat() {
           .select('full_name')
           .eq('id', session.user.id)
           .maybeSingle()
+        if (cancelled) return
         setName(data?.full_name || '')
         setLoading(false)
       })()
-    }, [session])
+      return () => { cancelled = true }
+    }, [session?.user?.id])
 
     async function save() {
-      if (!session?.user) return
+      if (!session?.user?.id) return
       setSaving(true)
       await supabase
         .from('profiles')
         .upsert({ id: session.user.id, full_name: name || null })
       setSaving(false)
       const ok = !!(name && name.trim())
-      setHasName(ok)
+      if (ok) {
+        setHasName(true)
+        localStorage.setItem(`mg_hasName_${session.user.id}`, 'true')
+      }
     }
 
     if (loading) return <div className="card">Loading…</div>
@@ -170,7 +223,7 @@ export default function Chat() {
     )
   }
 
-  // --- auth/allowlist gates ---
+  // ---------- auth/allowlist gates ----------
   if (!session) {
     return (
       <div className="wrap">
@@ -196,28 +249,33 @@ export default function Chat() {
     )
   }
 
+  // persist wizard completion when fired
+  function handleWizardDone() {
+    const uid = session?.user?.id
+    if (uid) {
+      localStorage.setItem(`mg_wizardDone_${uid}_${todayStr()}`, 'true')
+    }
+    setWizardDone(true)
+  }
+
   return (
     <div className="wrap">
-      {/* HEADER */}
       <header className="hero">
         <h1>Manifestation Genie</h1>
         <p className="sub">Your AI Assistant for Turning Goals into Reality</p>
         <p className="sub small">👋 Welcome back, {session.user.email}.</p>
       </header>
 
-      {/* STEP 1: NAME */}
       {!hasName && <NameStep />}
 
-      {/* STEP 2: WIZARD (chat unlocks after onDone) */}
       {hasName && !wizardDone && (
         <section className="card">
           <h2 className="panelTitle">Step 2 — Today’s Genie Flow</h2>
-          <GenieFlow session={session} onDone={() => setWizardDone(true)} />
+          <GenieFlow session={session} onDone={handleWizardDone} />
           <div className="microNote">Complete the flow to unlock the chat console.</div>
         </section>
       )}
 
-      {/* AFTER: CHAT */}
       {hasName && wizardDone && (
         <section className="card">
           <h2 className="panelTitle">Chat with the Genie</h2>
@@ -259,7 +317,6 @@ export default function Chat() {
         </section>
       )}
 
-      {/* SINGLE FOMO LINE */}
       <div className="fomoLine">
         {todayCount !== null && <>🔥 {todayCount} people used Manifestation Genie today</>}
       </div>
@@ -310,8 +367,7 @@ function Style() {
       .panelTitle { margin:0 0 10px 0; font-size:16px; font-weight:800; text-transform:uppercase; }
       .microNote { margin-top:8px; font-size:12px; color:#444; }
 
-      .textInput {
-        flex:1;
+      .textInput, .textArea {
         border:2px solid #000;
         border-radius:8px;
         padding:10px 12px;
@@ -320,17 +376,8 @@ function Style() {
         color:#000;
         outline:none;
       }
-
-      .textArea {
-        flex:1;
-        border:2px solid #000;
-        border-radius:8px;
-        padding:10px 12px;
-        font-size:14px;
-        background:#fff;
-        color:#000;
-        outline:none;
-      }
+      .textInput { width:100%; }
+      .textArea { flex:1; }
 
       .btn {
         background:#000;
@@ -338,7 +385,7 @@ function Style() {
         border:2px solid #000;
         border-radius:8px;
         padding:10px 16px;
-        font-weight:700;
+        font-weight:800;
         cursor:pointer;
       }
       .btn:disabled { opacity:.7; cursor:default; }
@@ -349,7 +396,7 @@ function Style() {
         border:2px solid #000;
         border-radius:8px;
         padding:8px 12px;
-        font-weight:700;
+        font-weight:800;
         cursor:pointer;
       }
 
