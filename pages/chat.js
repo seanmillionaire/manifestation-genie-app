@@ -1,5 +1,4 @@
-// pages/chat.js — Spacious Layout Edition (One-Liner Genie + Emojis)
-// NOTE: Genie responses are forced to single-line, email-copy style.
+// pages/chat.js — One-Liner, No-Fluff Genie (🧞‍♂️ / 🫵)
 import Questionnaire from '../components/Questionnaire'
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../src/supabaseClient'
@@ -8,17 +7,64 @@ import GenieFlow from '../components/GenieFlow'
 const todayStr = () => new Date().toISOString().slice(0,10)
 const HM_STORE_URL = 'https://hypnoticmeditations.ai'  // or your Payhip URL
 
-// -------- One-liner util: collapses whitespace, strips markdown, trims length -----
+// ---------- Tone tools: strip fluff → compress to a single practical line ----------
+function enforceTone(raw) {
+  if (!raw) return ''
+  let t = String(raw)
+
+  // 1) Remove emojis/sparkles and decorative symbols
+  t = t.replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}]/gu, '')
+
+  // 2) Lower noise words & hype
+  const KILL = [
+    'awesome','great','amazing','beautiful','magical','powerful','sparkling','excited',
+    'let’s','lets','imagine','visualize','picture','ready to','shall we','how about',
+    'no worries','don’t worry','i understand','you got this','journey','celebrate',
+    'manifest','vibes','energy','✨','⭐','🎉','👏','😉','🙂','😊'
+  ]
+  const REPLACE = [
+    [/^\s*hey[,!]\s*/i, ''],
+    [/\b(step\s*\d+:?)\s*/ig, ''],
+    [/\b(can you|could you|would you|would you like to|wanna)\b/gi, ''],
+    [/\b(let me|i can|i will)\b/gi, ''],
+    [/\b(i’ll|we’ll|we are going to|i am going to)\b/gi, ''],
+    [/\b(in a few moments|for a moment|right now)\b/gi, ''],
+    [/\b(one sentence|in one sentence)\b/gi, ''],
+    [/\b(quick|quickly|just)\b/gi, ''],
+    [/\b(please|kindly)\b/gi, ''],
+    [/[!]+/g, ''],
+    [/\s{2,}/g, ' '],
+  ]
+  for (const w of KILL) t = t.replace(new RegExp('\\b'+w.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'\\b','gi'), '')
+  for (const [re, sub] of REPLACE) t = t.replace(re, sub)
+
+  // 3) Convert fluffy starters into imperatives/questions
+  t = t.replace(/\b(let us|let’s|lets)\s+/gi, '')
+       .replace(/\bwe\s+paused\s+at\b/gi, 'Resume at')
+       .replace(/\bwant to continue now\??/gi, 'Continue?')
+       .replace(/\bdoes that feel better\??/gi, 'Better?')
+       .replace(/\bready\??/gi, 'Ready?')
+
+  // 4) Collapse whitespace
+  t = t.replace(/\s+/g, ' ').trim()
+
+  // 5) Prefer first concrete clause; trim length
+  return toOneLiner(t, 120)
+}
+
 function toOneLiner(text, max = 160) {
   if (!text) return ''
   let t = String(text).replace(/\s+/g, ' ').trim()
+  // strip markdown junk
   t = t.replace(/[*_`#>|-]/g, '').trim()
-  // prefer stopping at the first punctuation if long
+  // prefer first punctuation stop
   if (t.length > max) {
-    const stop = t.search(/[.!?—–;:]/)
+    const stop = t.search(/[.?;:]/)
     if (stop !== -1 && stop < max) t = t.slice(0, stop + 1)
     if (t.length > max) t = t.slice(0, max - 1) + '…'
   }
+  // remove trailing hype punctuation
+  t = t.replace(/[!]+$/,'').trim()
   return t
 }
 
@@ -66,7 +112,7 @@ export default function Chat() {
     })()
   }, [])
 
-  // auth listener (ignore token refresh)
+  // auth listener
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, nextSession) => {
       const cur = session?.user?.id
@@ -103,7 +149,7 @@ export default function Chat() {
     return () => { cancelled = true }
   }, [session?.user?.email])
 
-  // load profile (and mark loaded)
+  // load profile
   useEffect(() => {
     let cancelled = false
     ;(async () => {
@@ -115,7 +161,7 @@ export default function Chat() {
     return () => { cancelled = true }
   }, [session?.user?.id])
 
-  // name gate (only set TRUE; never flip back)
+  // name gate
   useEffect(() => {
     let cancelled = false
     ;(async () => {
@@ -171,12 +217,13 @@ export default function Chat() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           messages: next,
-          userName,              // comes from your Supabase profile or fallback
-          hmUrl: HM_STORE_URL,   // <- this is the Hypnotic Meditations store URL
+          userName,              // Supabase name/fallback
+          hmUrl: HM_STORE_URL,   // Store URL
+          // (Optional) You can also harden tone server-side by adding a system prompt there.
         }),
       })
 
-      // Try JSON first; fall back to text
+      // Try JSON; fall back to text
       let rawReply = ''
       try {
         const data = await r.json()
@@ -185,10 +232,10 @@ export default function Chat() {
         rawReply = await r.text()
       }
 
-      const oneLine = toOneLiner(rawReply || 'Done.')
+      const oneLine = enforceTone(rawReply || 'Done.')
       setMessages([...next, { role: 'assistant', content: oneLine }])
     } catch {
-      setMessages([...next, { role: 'assistant', content: toOneLiner('Error contacting Manifestation Genie.') }])
+      setMessages([...next, { role: 'assistant', content: enforceTone('Error. Try again.') }])
     } finally {
       setSending(false); inputRef.current?.focus()
     }
@@ -240,7 +287,7 @@ export default function Chat() {
     )
   }
 
-  // Greet after profile is loaded (force one-liner greeting too)
+  // Greet after profile is loaded (filtered)
   useEffect(() => {
     async function greet() {
       if (!session?.user?.id || !profileLoaded || bootGreeted) return
@@ -254,23 +301,23 @@ export default function Chat() {
       const steps = stepsRows || []
       const firstIncomplete = steps.find(s => !s.completed)
 
-      const hello = `👋 Welcome back, ${userName}. `
+      const hello = `Welcome back, ${userName}. `
       let body
       if (!hasName) {
-        body = `Let’s start with your name so the Genie can personalize everything.`
+        body = `Add your name to personalize.`
       } else if (!wizardDone) {
-        body = `Ready to pick up today’s quick setup? I’ll guide you one question at a time.`
+        body = `Resume today’s quick setup.`
       } else if (firstIncomplete) {
-        body = `We paused at Step ${firstIncomplete.step_order}: “${firstIncomplete.label}”. Want to continue now?`
+        body = `Resume at Step ${firstIncomplete.step_order}: “${firstIncomplete.label}”?`
       } else if (steps.length > 0) {
-        body = `Nice work earlier — you finished all of today’s steps. Want to reflect or start a new intent?`
+        body = `You finished today’s steps. Reflect or start a new intent?`
       } else if (intentRow?.intent) {
-        body = `Your intent is “${intentRow.intent}”. I can generate or refine a plan when you're ready.`
+        body = `Current intent: “${intentRow.intent}”. Generate a plan?`
       } else {
-        body = `Want me to kick off today’s flow for you?`
+        body = `Start today’s flow?`
       }
 
-      setMessages([{ role: 'assistant', content: toOneLiner(hello + body) }])
+      setMessages([{ role: 'assistant', content: enforceTone(hello + body) }])
       setBootGreeted(true)
     }
     greet()
@@ -331,18 +378,21 @@ export default function Chat() {
         <section className="card chatCard">
           <h2 className="panelTitle">Chat with the Genie</h2>
           <div className="list" ref={listRef}>
-            {messages.map((m, i) => (
-              <div key={i} className={`row ${m.role === 'user' ? 'me' : ''}`}>
-                {/* Avatars: 🫵 for You, 🧞‍♂️ for Genie */}
-                <div className="avatar">{m.role === 'user' ? '🫵' : '🧞‍♂️'}</div>
-                <div className={`bubble ${m.role === 'user' ? 'user' : ''}`}>
-                  <div className="tag">{m.role === 'user' ? 'You' : 'Manifestation Genie'}</div>
-                  <div className="msg">
-                    {m.role === 'assistant' ? toOneLiner(m.content) : m.content}
+            {messages.map((m, i) => {
+              const isUser = m.role === 'user'
+              const isGenie = m.role === 'assistant' || m.role === 'bot'
+              return (
+                <div key={i} className={`row ${isUser ? 'me' : ''}`}>
+                  <div className="avatar">{isUser ? '🫵' : (isGenie ? '🧞‍♂️' : '🤖')}</div>
+                  <div className={`bubble ${isUser ? 'user' : ''}`}>
+                    <div className="tag">{isUser ? 'You' : 'Manifestation Genie'}</div>
+                    <div className="msg">
+                      {isGenie ? enforceTone(m.content) : m.content}
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              )
+            })}
             {sending && (
               <div className="row">
                 <div className="avatar">🧞‍♂️</div>
@@ -402,38 +452,7 @@ function Style() {
       html, body, #__next { margin:0; padding:0; background:#fff; color:#000; min-height:100%; }
       * { box-sizing: border-box; }
 
-      /* ====== Layout spacing ====== */
       .wrap { max-width: 960px; margin: 64px auto 88px; padding: 0 24px; }
-/* === HARD RESET AVATAR SO EMOJI SHOWS === */
-.row .avatar,
-.row .avatar::before,
-.row .avatar::after {
-  background: none !important;
-  -webkit-mask: none !important;
-  mask: none !important;
-  content: none !important;   /* kill pseudo icons */
-}
-
-.row .avatar img,
-.row .avatar svg {
-  display: none !important;   /* kill injected images */
-}
-
-.row .avatar {
-  display: inline-flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  width: auto !important;
-  min-width: 28px !important;
-  height: auto !important;
-  margin-top: 2px !important;
-  font-size: 24px !important;
-  line-height: 1 !important;
-  /* force emoji-capable fonts */
-  font-family: "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji", system-ui, sans-serif !important;
-  text-indent: 0 !important;
-  overflow: visible !important;
-}
 
       .hero { text-align: center; margin-bottom: 40px; }
       .hero h1 { margin:0; font-size: 44px; font-weight: 900; color:#000; letter-spacing:.2px; }
@@ -497,7 +516,6 @@ function Style() {
         font-size:15px;
       }
 
-      /* ====== Chat area breathing room ====== */
       .list {
         max-height: 520px;
         overflow-y: auto;
@@ -506,7 +524,9 @@ function Style() {
       }
       .row { display:flex; gap:14px; margin:16px 8px; }
       .row.me { justify-content: flex-end; }
-      .avatar { font-size: 22px; line-height: 1; margin-top: 2px; }
+      .avatar { font-size: 22px; line-height: 1; margin-top: 2px;
+        font-family: "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji", system-ui, sans-serif !important;
+      }
 
       .bubble {
         max-width: 70ch;
