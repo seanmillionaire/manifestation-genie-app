@@ -6,7 +6,9 @@ function Button({ children, onClick, disabled, variant='primary', style }) {
   const base = {
     padding:'10px 14px', borderRadius:8, border:'2px solid #000',
     cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.6 : 1,
-    fontWeight:800, fontSize:14, background: variant==='ghost' ? '#fff' : '#000', color: variant==='ghost' ? '#000' : '#fff',
+    fontWeight:800, fontSize:14,
+    background: variant==='ghost' ? '#fff' : '#000',
+    color: variant==='ghost' ? '#000' : '#fff',
     ...style
   }
   return <button type="button" onClick={disabled ? undefined : onClick} style={base}>{children}</button>
@@ -16,11 +18,15 @@ function Field({ children }) {
   return <div style={{marginTop:10}}>{children}</div>
 }
 
+function todayStr() {
+  return new Date().toISOString().slice(0,10)
+}
+
 export default function GenieFlow({ session, onDone }) {
   const user = session?.user
   const [loading, setLoading] = useState(true)
   const [fullName, setFullName] = useState('')
-  const [today] = useState(() => new Date().toISOString().slice(0,10))
+  const [today] = useState(() => todayStr())
 
   const [mood, setMood] = useState(null)                 // 'sad'|'neutral'|'happy'
   const [didMeditation, setDidMeditation] = useState(null) // true|false
@@ -40,7 +46,8 @@ export default function GenieFlow({ session, onDone }) {
       if (!user) return
       setLoading(true)
 
-      const { data: profile } = await supabase.from('profiles').select('full_name').eq('id', user.id).maybeSingle()
+      const { data: profile } = await supabase
+        .from('profiles').select('full_name').eq('id', user.id).maybeSingle()
       if (mounted) setFullName(profile?.full_name || user.email?.split('@')[0] || 'Friend')
 
       const { data: entry } = await supabase
@@ -70,10 +77,16 @@ export default function GenieFlow({ session, onDone }) {
   }, [user, today])
 
   async function upsertEntry(fields) {
-    await supabase.from('daily_entries').upsert({ user_id:user.id, entry_date:today, ...fields }, { onConflict:'user_id,entry_date' })
+    await supabase.from('daily_entries').upsert(
+      { user_id:user.id, entry_date:today, ...fields },
+      { onConflict:'user_id,entry_date' }
+    )
   }
   async function upsertIntent(nextIntent, nextIdea) {
-    await supabase.from('daily_intents').upsert({ user_id:user.id, entry_date:today, intent:nextIntent, idea:nextIdea }, { onConflict:'user_id,entry_date' })
+    await supabase.from('daily_intents').upsert(
+      { user_id:user.id, entry_date:today, intent:nextIntent, idea:nextIdea },
+      { onConflict:'user_id,entry_date' }
+    )
   }
 
   const stepKeys = useMemo(() => {
@@ -246,7 +259,7 @@ export default function GenieFlow({ session, onDone }) {
 
       {/* nav buttons */}
       <div style={{marginTop:14, display:'flex', justifyContent:'space-between'}}>
-        <Button variant="ghost" onClick={back} style={{minWidth:96}}>Back</Button>
+        <Button variant="ghost" onClick={()=>{ if (idx>0) setIdx(idx-1) }} style={{minWidth:96}}>Back</Button>
         <Button onClick={doNext} disabled={!canNext || idx===total-1} style={{minWidth:96}}>Next</Button>
       </div>
     </div>
