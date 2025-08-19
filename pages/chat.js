@@ -165,7 +165,7 @@ export default function Chat() {
       {/* HEADER */}
       <header className="hero">
         <h1>Manifestation Genie</h1>
-        <p className="sub">Your AI Assistant for Turning Goals into Reality</p>
+        <p className="sub">Your Personal AI Assistant for Turning Goals into Reality</p>
         <p className="sub small">👋 Welcome back, {session.user.email}.</p>
       </header>
 
