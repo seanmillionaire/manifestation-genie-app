@@ -278,7 +278,7 @@ export default function Chat() {
     <div className="wrap">
       <header className="hero">
         <h1>Manifestation Genie</h1>
-        <p className="sub">Your AI Assistant for Turning Goals into Reality</p>
+        <p className="sub">Your Personal AI Assistant for Turning Goals into Reality</p>
         <p className="sub small">✨ Welcome back, {userName}.</p>
       </header>
 
@@ -334,7 +334,7 @@ export default function Chat() {
       )}
 
       <div className="fomoLine">
-        {todayCount !== null && <>🔥 {todayCount} people used Manifestation Genie today</>}
+       <p>🔥 108 people used Manifestation Genie today</p>
       </div>
 
       <div className="bottomRight">
