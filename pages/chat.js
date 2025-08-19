@@ -1,4 +1,4 @@
-// pages/chat.js — One‑Liner, Practical + Light‑Magic Genie with Goal Memory (auto‑scroll fixed)
+// pages/chat.js — One‑Liner, Practical + Light‑Magic Genie with Goal Memory (fixed-height console)
 import Questionnaire from '../components/Questionnaire'
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../src/supabaseClient'
@@ -86,7 +86,7 @@ export default function Chat() {
   const [messages, setMessages] = useState([])
   const [sending, setSending] = useState(false)
   const listRef = useRef(null)
-  const endRef = useRef(null)          // <<< NEW: bottom sentinel for auto‑scroll
+  const endRef = useRef(null)
   const inputRef = useRef(null)
 
   // greet control
@@ -97,18 +97,13 @@ export default function Chat() {
 
   const PAYHIP_URL = 'https://hypnoticmeditations.ai/b/U7Z5m'
 
-  // --- AUTO‑SCROLL: whenever messages/sending change, stick to bottom ---
-// --- AUTO‑SCROLL: scroll the chat container, not the page ---
-useEffect(() => {
-  const el = listRef.current
-  if (!el) return
-  // next frame so new DOM has laid out
-  const id = requestAnimationFrame(() => {
-    el.scrollTop = el.scrollHeight  // instant + precise
-  })
-  return () => cancelAnimationFrame(id)
-}, [messages, sending])
-
+  // --- AUTO‑SCROLL: scroll the chat container, not the page ---
+  useEffect(() => {
+    const el = listRef.current
+    if (!el) return
+    const id = requestAnimationFrame(() => { el.scrollTop = el.scrollHeight })
+    return () => cancelAnimationFrame(id)
+  }, [messages, sending])
 
   // session + persisted gates
   useEffect(() => {
@@ -380,7 +375,7 @@ useEffect(() => {
                 </div>
               </div>
             )}
-            <div ref={endRef} aria-hidden="true" /> {/* <<< NEW: scroll anchor */}
+            <div ref={endRef} aria-hidden="true" />
           </div>
 
           <form onSubmit={handleSend} className="composer">
@@ -483,15 +478,6 @@ function Style() {
       .hero h1 { margin:0; font-size: 44px; font-weight: 900; color:#000; letter-spacing:.2px; }
       .sub { margin: 10px auto 0; font-size: 18px; color:#111; max-width: 68ch; line-height: 1.6; }
       .sub.small { font-size: 16px; color:#444; }
-.chat-console {
-  height: 500px;          /* pick the size you want */
-  max-height: 500px;      /* ensures it never grows past this */
-  overflow-y: auto;       /* makes it scrollable */
-  padding: 1rem;          /* optional for spacing */
-  border: 1px solid #ccc; /* optional border */
-  background: #fff;       /* simple white background */
-}
-
 
       .card {
         background:#fff;
@@ -501,7 +487,13 @@ function Style() {
         padding:28px;
         margin-bottom:28px;
       }
-      .chatCard { padding: 28px 28px 22px; }
+
+      /* Make chat card a column so the fixed-height list + composer stack cleanly */
+      .chatCard { 
+        padding: 28px 28px 22px; 
+        display:flex; 
+        flex-direction:column;
+      }
 
       .panelTitle {
         margin:0 0 14px 0;
@@ -550,15 +542,18 @@ function Style() {
         font-size:15px;
       }
 
+      /* FIXED HEIGHT CHAT CONSOLE */
       .list {
-        max-height: 520px;
-        overflow-y: auto;
+        height: 520px;                 /* 🔒 fixed from first render */
+        min-height: 520px;             /* keep the box from shrinking */
+        overflow-y: auto;              /* scroll when content grows */
         margin-bottom: 16px;
         padding-right: 4px;
-        scroll-behavior: smooth; /* <<< NEW: smooth scroll container */
-          overscroll-behavior: contain;    /* stop bubbling to page */
-  scrollbar-gutter: stable both-edges; /* keeps layout steady */
+        scroll-behavior: smooth;
+        overscroll-behavior: contain;
+        scrollbar-gutter: stable both-edges;
       }
+
       .row { display:flex; gap:14px; margin:16px 8px; }
       .row.me { justify-content: flex-end; }
       .avatar { font-size: 22px; line-height: 1; margin-top: 2px;
@@ -580,7 +575,12 @@ function Style() {
       .tag { font-size: 12px; font-weight: 700; margin-bottom: 6px; opacity:.7; }
       .msg { white-space: pre-wrap; }
 
-      .composer { display:flex; gap:12px; align-items:flex-end; }
+      .composer { 
+        display:flex; 
+        gap:12px; 
+        align-items:flex-end; 
+        margin-top: 8px; 
+      }
 
       .dots { display:inline-flex; gap:8px; align-items:center; }
       .dots span { width:6px; height:6px; background:#000; border-radius:50%; opacity:.25; animation: blink 1.2s infinite ease-in-out; }
@@ -597,7 +597,7 @@ function Style() {
         .hero h1 { font-size: 34px; }
         .sub { font-size: 16px; }
         .panelTitle { font-size: 16px; }
-        .list { max-height: 420px; }
+        .list { height: 420px; min-height: 420px; }  /* smaller but still fixed on mobile */
         .bubble { max-width: 100%; }
       }
     `}</style>
