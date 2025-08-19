@@ -286,11 +286,16 @@ function LoaderScreen({ text }) {
 function Style() {
   return (
     <style jsx global>{`
-      body {
+      html, body {
         margin: 0;
-        font-family: Inter, system-ui, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
-        background: #ffffff;
+        padding: 0;
+        background: #ffffff !important; /* White everywhere */
         color: #000000;
+        height: 100%;
+      }
+
+      #__next, .wrap {
+        background: #ffffff !important;
       }
 
       .wrap {
