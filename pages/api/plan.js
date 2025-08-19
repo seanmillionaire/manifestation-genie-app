@@ -2,8 +2,6 @@
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
   const { intent = '', idea = '' } = req.body || {}
-
-  const i = (intent || '').toLowerCase()
   const d = (idea || '').toLowerCase()
 
   if (d.includes('fiverr') || d.includes('ugc')) {
@@ -20,15 +18,13 @@ export default async function handler(req, res) {
     })
   }
 
-  let steps = [
+  const steps = [
     { label: `Define one micro‑win aligned with “${intent || 'today’s goal'}.” (one sentence)` },
     { label: 'Identify 3 people/pages to model (search, screenshot best elements)' },
     { label: 'Draft a 5‑bullet action outline (≤15 minutes of work)' },
     { label: 'Execute now: ship the smallest publishable outcome' },
     { label: 'Log what you shipped + set a reminder for the next step tomorrow' }
   ]
-
-  if (d) steps.splice(1, 0, { label: `Anchor your idea: ${idea}` })
 
   return res.status(200).json({ steps })
 }
