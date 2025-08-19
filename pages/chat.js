@@ -545,7 +545,7 @@ function Style() {
       /* FIXED HEIGHT CHAT CONSOLE */
       .list {
         height: 420px;                 /* 🔒 fixed from first render */
-        min-height: 520px;             /* keep the box from shrinking */
+        min-height: 420px;             /* keep the box from shrinking */
         overflow-y: auto;              /* scroll when content grows */
         margin-bottom: 16px;
         padding-right: 4px;
