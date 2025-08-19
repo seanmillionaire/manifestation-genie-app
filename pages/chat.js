@@ -543,16 +543,18 @@ function Style() {
       }
 
       /* FIXED HEIGHT CHAT CONSOLE */
-      .list {
-        height: 400px;                 /* 🔒 fixed from first render */
-        min-height: 300px;             /* keep the box from shrinking */
-        overflow-y: auto;              /* scroll when content grows */
-        margin-bottom: 16px;
-        padding-right: 4px;
-        scroll-behavior: smooth;
-        overscroll-behavior: contain;
-        scrollbar-gutter: stable both-edges;
-      }
+.list {
+  height: 380px;          /* pick your number */
+  min-height: 380px; */ /* remove this or match height */
+  overflow-y: auto;
+  margin-bottom: 16px;
+  padding-right: 4px;
+  scroll-behavior: smooth;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable both-edges;
+  -webkit-overflow-scrolling: touch; /* smoother on iOS */
+}
+
 
       .row { display:flex; gap:14px; margin:16px 8px; }
       .row.me { justify-content: flex-end; }
@@ -597,7 +599,7 @@ function Style() {
         .hero h1 { font-size: 34px; }
         .sub { font-size: 16px; }
         .panelTitle { font-size: 16px; }
-        .list { height: 320px; min-height: 320px; }  /* smaller but still fixed on mobile */
+        .list { height: 300px; min-height: 300px; }  /* smaller but still fixed on mobile */
         .bubble { max-width: 100%; }
       }
     `}</style>
