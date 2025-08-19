@@ -592,12 +592,12 @@ function Style() {
 
       .bottomRight { display:flex; justify-content:flex-end; margin-top: 20px; }
 
-      @media (max-width: 460px) {
+      @media (max-width: 560px) {
         .wrap { margin: 40px auto 64px; padding: 0 16px; }
         .hero h1 { font-size: 34px; }
         .sub { font-size: 16px; }
         .panelTitle { font-size: 16px; }
-        .list { height: 420px; min-height: 420px; }  /* smaller but still fixed on mobile */
+        .list { height: 320px; min-height: 320px; }  /* smaller but still fixed on mobile */
         .bubble { max-width: 100%; }
       }
     `}</style>
