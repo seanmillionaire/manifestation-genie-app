@@ -1,4 +1,4 @@
-// pages/chat.js — One‑Liner, Practical + Light‑Magic Genie with Goal Memory
+// pages/chat.js — One‑Liner, Practical + Light‑Magic Genie with Goal Memory (auto‑scroll fixed)
 import Questionnaire from '../components/Questionnaire'
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../src/supabaseClient'
@@ -7,7 +7,6 @@ import GenieFlow from '../components/GenieFlow'
 const todayStr = () => new Date().toISOString().slice(0,10)
 const HM_STORE_URL = 'https://hypnoticmeditations.ai'  // or your Payhip URL
 
-// ---------- One-liner + tone (practical, non-cheesy) ----------
 // ---------- One‑liner + tone helpers (drop-in replacement) ----------
 function toOneLiner(text, max = 160) {
   if (!text) return ''
@@ -17,7 +16,6 @@ function toOneLiner(text, max = 160) {
     .replace(/\s+/g, ' ')
     .trim()
 
-  // If there's a colon, keep intro + a short slice after it
   const colon = t.indexOf(':')
   if (colon !== -1) {
     const head = t.slice(0, colon + 1).trim()
@@ -26,7 +24,6 @@ function toOneLiner(text, max = 160) {
     return keep.length > 0 ? keep : head
   }
 
-  // Else, keep up to two short sentences
   const parts = t
     .split(/([.?!])/)
     .reduce((acc, cur, i, arr) => { if (i % 2 === 0) acc.push(cur + (arr[i+1] || '')); return acc }, [])
@@ -43,41 +40,29 @@ function toOneLiner(text, max = 160) {
 function enforceTone(raw) {
   if (!raw) return ''
   let t = String(raw)
-
-  // strip decorative emoji (keep text, numbers, punctuation)
   t = t.replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}]/gu, '')
-
-  // de‑fluff (don’t touch concrete nouns/verbs)
   const kill = [
     'awesome','amazing','magical','celebrate','journey','no worries','you got this',
     'imagine','visualize','picture','ready to','shall we','how about'
   ]
   for (const w of kill) t = t.replace(new RegExp(`\\b${w.replace(/[.*+?^${}()|[\\]\\\\]/g,'\\$&')}\\b`,'gi'),'').trim()
-
-  // tighten phrasing
   t = t
     .replace(/\bwe paused at\b/gi, 'Resume at')
     .replace(/\bwant to continue now\??/gi, 'Continue?')
     .replace(/\b(let’s|lets)\s+/gi, '')
-
-  // tidy artifacts
-  t = t
     .replace(/\(\s*\)/g, '')
     .replace(/"\s*"/g, '')
     .replace(/“\s*”/g, '')
     .replace(/\s{2,}/g, ' ')
     .replace(/([?!]){2,}/g, '$1')
     .trim()
-
   return toOneLiner(t, 160)
 }
-
 
 // ---------- heuristics: detect if user's line looks like a goal ----------
 function looksLikeGoal(s) {
   if (!s) return false
   const t = s.trim()
-  // short declarative goals or numbers/money/followers/revenue/etc
   const hints = /(revenue|sales|customers|followers|subs|views|profit|close|appointments|leads|weight|launch|finish|pay off|debt|$|k\b|m\b)/i
   return t.length <= 140 && (/[a-z]/i.test(t)) && (/[.?!]$/.test(t) || hints.test(t))
 }
@@ -101,6 +86,7 @@ export default function Chat() {
   const [messages, setMessages] = useState([])
   const [sending, setSending] = useState(false)
   const listRef = useRef(null)
+  const endRef = useRef(null)          // <<< NEW: bottom sentinel for auto‑scroll
   const inputRef = useRef(null)
 
   // greet control
@@ -110,6 +96,15 @@ export default function Chat() {
   const [todayIntent, setTodayIntent] = useState(null)
 
   const PAYHIP_URL = 'https://hypnoticmeditations.ai/b/U7Z5m'
+
+  // --- AUTO‑SCROLL: whenever messages/sending change, stick to bottom ---
+  useEffect(() => {
+    // small RAF to ensure DOM painted before scrolling
+    const id = requestAnimationFrame(() => {
+      endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
+    })
+    return () => cancelAnimationFrame(id)
+  }, [messages, sending])
 
   // session + persisted gates
   useEffect(() => {
@@ -227,10 +222,6 @@ export default function Chat() {
     greet()
   }, [session?.user?.id, profileLoaded, userName, hasName, wizardDone, bootGreeted])
 
-  // fomo (unchanged)
-  // (you can keep/remove; not used in UI logic)
-  // ...
-
   // helpers to save/read today's intent
   async function saveTodayIntent(intent) {
     if (!session?.user?.id) return
@@ -258,7 +249,6 @@ export default function Chat() {
     e.target.reset()
     setSending(true)
 
-    // If no intent yet and the user message looks like a goal, store it
     let justSetIntent = false
     if (!todayIntent && looksLikeGoal(input)) {
       await saveTodayIntent(input)
@@ -273,11 +263,9 @@ export default function Chat() {
           messages: next,
           userName,
           hmUrl: HM_STORE_URL,
-          // Consider also guiding tone server-side, but client keeps the final say.
         }),
       })
 
-      // Try JSON; fall back to text
       let rawReply = ''
       try {
         const data = await r.json()
@@ -285,18 +273,16 @@ export default function Chat() {
       } catch {
         rawReply = await r.text()
       }
-      // >>> PATCH: if user said yes and we have an intent, skip the dry model opener
-const yesish = /^(y|ya|yes|yep|sure|ok|okay)$/i.test(input.trim())
-if (yesish && (todayIntent || input)) {
-  const goal = todayIntent || input
-  const line = `Locked: “${goal}”. First move: list the 3 highest‑leverage actions.`
-  setMessages([...next, { role: 'assistant', content: line }])
-  setSending(false); inputRef.current?.focus()
-  return
-}
 
+      const yesish = /^(y|ya|yes|yep|sure|ok|okay)$/i.test(input.trim())
+      if (yesish && (todayIntent || input)) {
+        const goal = todayIntent || input
+        const line = `Locked: “${goal}”. First move: list the 3 highest‑leverage actions.`
+        setMessages([...next, { role: 'assistant', content: line }])
+        setSending(false); inputRef.current?.focus()
+        return
+      }
 
-      // If we just captured a goal, override with a crisp confirmation
       let finalLine
       if (justSetIntent) {
         finalLine = `Locked: “${input}”. Continue with this plan?`
@@ -390,6 +376,7 @@ if (yesish && (todayIntent || input)) {
                 </div>
               </div>
             )}
+            <div ref={endRef} aria-hidden="true" /> {/* <<< NEW: scroll anchor */}
           </div>
 
           <form onSubmit={handleSend} className="composer">
@@ -555,6 +542,7 @@ function Style() {
         overflow-y: auto;
         margin-bottom: 16px;
         padding-right: 4px;
+        scroll-behavior: smooth; /* <<< NEW: smooth scroll container */
       }
       .row { display:flex; gap:14px; margin:16px 8px; }
       .row.me { justify-content: flex-end; }
