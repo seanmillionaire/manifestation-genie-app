@@ -404,6 +404,36 @@ function Style() {
 
       /* ====== Layout spacing ====== */
       .wrap { max-width: 960px; margin: 64px auto 88px; padding: 0 24px; }
+/* === HARD RESET AVATAR SO EMOJI SHOWS === */
+.row .avatar,
+.row .avatar::before,
+.row .avatar::after {
+  background: none !important;
+  -webkit-mask: none !important;
+  mask: none !important;
+  content: none !important;   /* kill pseudo icons */
+}
+
+.row .avatar img,
+.row .avatar svg {
+  display: none !important;   /* kill injected images */
+}
+
+.row .avatar {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: auto !important;
+  min-width: 28px !important;
+  height: auto !important;
+  margin-top: 2px !important;
+  font-size: 24px !important;
+  line-height: 1 !important;
+  /* force emoji-capable fonts */
+  font-family: "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji", system-ui, sans-serif !important;
+  text-indent: 0 !important;
+  overflow: visible !important;
+}
 
       .hero { text-align: center; margin-bottom: 40px; }
       .hero h1 { margin:0; font-size: 44px; font-weight: 900; color:#000; letter-spacing:.2px; }
