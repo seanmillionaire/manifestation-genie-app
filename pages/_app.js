@@ -43,6 +43,15 @@ export default function App({ Component, pageProps }) {
             font-size:14px;
             color:rgba(255,255,255,0.7);
             border-top:1px solid rgba(255,255,255,0.08);
+            line-height:1.6;
+          }
+          footer a{
+            color:var(--gold);
+            text-decoration:none;
+            font-weight:600;
+          }
+          footer a:hover{
+            text-decoration:underline;
           }
         `}</style>
       </Head>
@@ -51,7 +60,13 @@ export default function App({ Component, pageProps }) {
           <Component {...pageProps} />
         </main>
         <footer>
-          © {new Date().getFullYear()} Manifestation Genie. All rights reserved.
+          <div>© {new Date().getFullYear()} Manifestation Genie. All rights reserved.</div>
+          <div>
+            Powered by{' '}
+            <a href="https://hypnoticmeditations.ai" target="_blank" rel="noopener noreferrer">
+              HypnoticMeditations.ai
+            </a>
+          </div>
         </footer>
       </div>
     </>
