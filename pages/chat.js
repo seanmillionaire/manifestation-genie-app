@@ -5,6 +5,7 @@ import { supabase } from '../src/supabaseClient'
 import GenieFlow from '../components/GenieFlow'
 
 const todayStr = () => new Date().toISOString().slice(0,10)
+const HM_STORE_URL = 'https://hypnoticmeditations.ai'  // or your Payhip URL
 
 export default function Chat() {
   const [session, setSession] = useState(null)
