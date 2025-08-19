@@ -1,4 +1,5 @@
 // pages/chat.js — Spacious Layout Edition
+import Questionnaire from '../components/Questionnaire'
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../src/supabaseClient'
 import GenieFlow from '../components/GenieFlow'
