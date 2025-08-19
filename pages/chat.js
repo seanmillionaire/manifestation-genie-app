@@ -288,7 +288,11 @@ export default function Chat() {
       {hasName && !wizardDone && (
         <section className="card">
           <h2 className="panelTitle">Step 2 — Today’s Genie Flow</h2>
-          <GenieFlow session={session} onDone={handleWizardDone} />
+          <Questionnaire
+    session={session}
+    onDone={handleWizardDone}
+  />
+
           <div className="microNote">Complete the flow to unlock the chat console.</div>
         </section>
       )}
