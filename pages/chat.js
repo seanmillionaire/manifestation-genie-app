@@ -11,11 +11,12 @@ export default function Chat() {
   const [session, setSession] = useState(null)
   const [allowed, setAllowed] = useState(null) // null=checking
 
-  // profile (for greeting name)
+  // profile (greeting)
   const [profile, setProfile] = useState(null)
-  const userName = profile?.full_name || session?.user?.email || 'Friend'
+  const firstName = ((profile?.full_name || '').trim().split(' ')[0]) || null
+  const userName = firstName || session?.user?.email || 'Friend'
 
-  // gates persisted in localStorage (so focus changes don’t reset)
+  // gates persisted in localStorage (so focus/login changes don’t reset)
   const [hasName, setHasName] = useState(false)
   const [checkingName, setCheckingName] = useState(true)
   const [wizardDone, setWizardDone] = useState(false)
@@ -25,6 +26,9 @@ export default function Chat() {
   const [sending, setSending] = useState(false)
   const listRef = useRef(null)
   const inputRef = useRef(null)
+
+  // resume helpers
+  const [bootGreeted, setBootGreeted] = useState(false)
 
   // single FOMO line
   const [todayCount, setTodayCount] = useState(null)
@@ -36,7 +40,6 @@ export default function Chat() {
     const boot = async () => {
       const { data: { session } } = await supabase.auth.getSession()
       setSession(session || null)
-
       const uid = session?.user?.id
       const dateKey = todayStr()
       if (uid) {
@@ -59,14 +62,18 @@ export default function Chat() {
         setHasName(false)
         setWizardDone(false)
         setProfile(null)
+        setMessages([])
+        setBootGreeted(false)
         return
       }
       if (event === 'SIGNED_IN' && currentUid !== nextUid) {
         setSession(nextSession)
         const nameKey = `mg_hasName_${nextUid}`
         const wizKey  = `mg_wizardDone_${nextUid}_${todayStr()}`
-        if (localStorage.getItem(nameKey) === 'true') setHasName(true)
-        if (localStorage.getItem(wizKey)  === 'true') setWizardDone(true)
+        setHasName(localStorage.getItem(nameKey) === 'true')
+        setWizardDone(localStorage.getItem(wizKey)  === 'true')
+        setMessages([])
+        setBootGreeted(false)
       }
       // Ignore TOKEN_REFRESHED / USER_UPDATED
     })
@@ -225,13 +232,54 @@ export default function Chat() {
             placeholder="Your name (used by the Genie)"
             className="textInput"
           />
-          <button type="button" className="btn" onClick={save} disabled={saving || !name.trim()}>
+        <button type="button" className="btn" onClick={save} disabled={saving || !name.trim()}>
             {saving ? 'Saving…' : 'Save & Continue'}
           </button>
         </div>
       </section>
     )
   }
+
+  // ---------- Greet & Resume on every login ----------
+  useEffect(() => {
+    async function primeGreeting() {
+      if (!session?.user?.id) return
+      if (bootGreeted) return
+
+      // Always greet by name/email
+      let greeting = `👋 Welcome back, ${userName}. `
+
+      // Fetch today state to decide what to say
+      const today = todayStr()
+      const [{ data: intentRow }, { data: stepsRows }] = await Promise.all([
+        supabase.from('daily_intents').select('intent, idea').eq('user_id', session.user.id).eq('entry_date', today).maybeSingle(),
+        supabase.from('action_steps').select('step_order,label,completed').eq('user_id', session.user.id).eq('entry_date', today).order('step_order', { ascending: true })
+      ])
+
+      const steps = stepsRows || []
+      const firstIncomplete = steps.find(s => !s.completed)
+
+      let body
+      if (!hasName) {
+        body = `Let’s start with your name so the Genie can personalize everything.`
+      } else if (!wizardDone) {
+        body = `Ready to pick up today’s quick setup? I’ll guide you one question at a time.`
+      } else if (firstIncomplete) {
+        body = `We paused at Step ${firstIncomplete.step_order}: “${firstIncomplete.label}”. Want to continue now?`
+      } else if (steps.length > 0) {
+        body = `Nice work earlier — you finished all of today’s steps. Want to reflect or start a new intent?`
+      } else if (intentRow?.intent) {
+        body = `Your intent is “${intentRow.intent}”. I can generate or refine a plan when you're ready.`
+      } else {
+        body = `Want me to kick off today’s flow for you?`
+      }
+
+      setMessages([{ role: 'assistant', content: `${greeting}${body}` }])
+      setBootGreeted(true)
+    }
+    // We re‑prime whenever these change and haven’t greeted yet
+    primeGreeting()
+  }, [session?.user?.id, userName, hasName, wizardDone, bootGreeted])
 
   // ---------- auth/allowlist gates ----------
   if (!session) {
@@ -264,6 +312,8 @@ export default function Chat() {
     const uid = session?.user?.id
     if (uid) localStorage.setItem(`mg_wizardDone_${uid}_${todayStr()}`, 'true')
     setWizardDone(true)
+    // re‑prime the greeting after finishing setup, so chat has a resume message
+    setBootGreeted(false)
   }
 
   return (
@@ -271,7 +321,7 @@ export default function Chat() {
       <header className="hero">
         <h1>Manifestation Genie</h1>
         <p className="sub">Your AI Assistant for Turning Goals into Reality</p>
-        <p className="sub small">👋 Welcome back, {userName}.</p>
+        <p className="sub small">✨ Welcome back, {userName}.</p>
       </header>
 
       {!hasName && <NameStep />}
