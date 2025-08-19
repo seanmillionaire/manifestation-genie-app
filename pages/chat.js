@@ -22,16 +22,7 @@ export default function Chat() {
 
   // --- FOMO ticker ---
   const FOMO_MESSAGES = [
-    '🌍 4,327 people logged in to Manifestation Genie today.',
-    '🔥 14,201 actions completed this week inside Manifestation Genie.',
-    '🎯 James completed his 7‑day streak with Manifestation Genie.',
-    '💡 Maria in California finished today’s Manifestation Genie action step.',
-    '💰 Ashley celebrated paying off $1,000 using Manifestation Genie’s guidance.',
-    '🧘 427 users finished a mindfulness prompt in Manifestation Genie today.',
-    '🚀 David marked a 30‑day consistency streak in Manifestation Genie.',
-    '✨ 93% of new users completed at least 1 action in Manifestation Genie this week.',
-    '🎉 Sarah hit her first milestone: publishing her blog, tracked with Manifestation Genie.',
-    '🌟 17,482 people took action through Manifestation Genie this month.',
+    '🌍 4,327 people logged in to Manifestation Genie today.'
   ]
   const [fomoIdx, setFomoIdx] = useState(0)
   const fomoPaused = useRef(false)
