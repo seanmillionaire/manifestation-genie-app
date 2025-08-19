@@ -547,6 +547,8 @@ function Style() {
         margin-bottom: 16px;
         padding-right: 4px;
         scroll-behavior: smooth; /* <<< NEW: smooth scroll container */
+          overscroll-behavior: contain;    /* stop bubbling to page */
+  scrollbar-gutter: stable both-edges; /* keeps layout steady */
       }
       .row { display:flex; gap:14px; margin:16px 8px; }
       .row.me { justify-content: flex-end; }
