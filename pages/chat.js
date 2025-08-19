@@ -376,9 +376,10 @@ export default function Chat() {
               disabled={sending}
               className="textArea"
             />
-            <button type="submit" className="btn" disabled={sending}>
-              {sending ? 'Sending…' : 'Send'}
-            </button>
+<button type="submit" className="btn btn-primary" disabled={sending}>
+  {sending ? 'Sending…' : 'Send'}
+</button>
+
           </form>
         </section>
       )}
@@ -429,9 +430,9 @@ function NameStep({ session, setHasName, setProfile, setProfileLoaded }) {
       <h2 className="panelTitle">Step 1 — Your Name</h2>
       <div className="hStack">
         <input className="textInput" value={name} onChange={e=>setName(e.target.value)} placeholder="Your name" />
-        <button type="button" className="btn" onClick={save} disabled={saving || !name.trim()}>
-          {saving ? 'Saving…' : 'Save & Continue'}
-        </button>
+<button type="button" className="btn btn-primary" onClick={save} disabled={saving || !name.trim()}>
+  {saving ? 'Saving…' : 'Save & Continue'}
+</button>
       </div>
     </section>
   )
