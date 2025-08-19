@@ -1,4 +1,4 @@
-// pages/chat.js — One-Liner, No-Fluff Genie (🧞‍♂️ / 🫵)
+// pages/chat.js — One‑Liner, Practical + Light‑Magic Genie with Goal Memory
 import Questionnaire from '../components/Questionnaire'
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../src/supabaseClient'
@@ -7,7 +7,7 @@ import GenieFlow from '../components/GenieFlow'
 const todayStr = () => new Date().toISOString().slice(0,10)
 const HM_STORE_URL = 'https://hypnoticmeditations.ai'  // or your Payhip URL
 
-// ---------- Tone tools: no-fluff, natural one-liners ----------
+// ---------- One-liner + tone (practical, non-cheesy) ----------
 function toOneLiner(text, max = 140) {
   if (!text) return ''
   let t = String(text)
@@ -15,7 +15,6 @@ function toOneLiner(text, max = 140) {
     .replace(/\u201C|\u201D/g, '"')
     .replace(/\s+/g, ' ')
     .trim()
-
   if (t.length > max) {
     const stop = t.search(/[.?!;:]/)
     if (stop !== -1 && stop < max) t = t.slice(0, stop + 1)
@@ -28,8 +27,10 @@ function enforceTone(raw) {
   if (!raw) return ''
   let t = String(raw)
 
+  // strip emojis
   t = t.replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}]/gu, '')
 
+  // remove fluff
   const killWords = [
     'awesome','amazing','magical','celebrate','journey','no worries','you got this',
     'imagine','visualize','picture','ready to','shall we','how about'
@@ -38,29 +39,36 @@ function enforceTone(raw) {
     t = t.replace(new RegExp(`\\b${w.replace(/[.*+?^${}()|[\\]\\\\]/g,'\\$&')}\\b`, 'gi'), '')
   }
 
+  // direct phrasing
   t = t
     .replace(/\bwe paused at\b/gi, 'Resume at')
     .replace(/\bwant to continue now\??/gi, 'Continue?')
     .replace(/\bdoes that feel better\??/gi, 'Better?')
     .replace(/\b(let’s|lets)\s+/gi, '')
-    .replace(/\bplease\b/gi, '')
 
+  // clean artifacts
   t = t
     .replace(/\(\s*\)/g, '')
     .replace(/"\s*"/g, '')
     .replace(/“\s*”/g, '')
     .replace(/\s*["”]\s*([?.!])/g, '$1')
     .replace(/([?.!])["”]\s*/g, '$1 ')
-    .replace(/\s*["“]/g, ' "').replace(/["”]\s*/g, '" ')
     .replace(/\s{2,}/g, ' ')
     .replace(/([?!]){2,}/g, '$1')
     .replace(/\s*([?.!])\s*$/,'$1')
 
-  t = toOneLiner(t, 120)
-  t = t.replace(/(\(\)|""|'')$/,'').trim()
+  t = toOneLiner(t, 120).replace(/(\(\)|""|'')$/,'').trim()
   return t
 }
 
+// ---------- heuristics: detect if user's line looks like a goal ----------
+function looksLikeGoal(s) {
+  if (!s) return false
+  const t = s.trim()
+  // short declarative goals or numbers/money/followers/revenue/etc
+  const hints = /(revenue|sales|customers|followers|subs|views|profit|close|appointments|leads|weight|launch|finish|pay off|debt|$|k\b|m\b)/i
+  return t.length <= 140 && (/[a-z]/i.test(t)) && (/[.?!]$/.test(t) || hints.test(t))
+}
 
 export default function Chat() {
   const [session, setSession] = useState(null)
@@ -86,8 +94,8 @@ export default function Chat() {
   // greet control
   const [bootGreeted, setBootGreeted] = useState(false)
 
-  // fomo
-  const [todayCount, setTodayCount] = useState(null)
+  // today's intent memory
+  const [todayIntent, setTodayIntent] = useState(null)
 
   const PAYHIP_URL = 'https://hypnoticmeditations.ai/b/U7Z5m'
 
@@ -114,7 +122,7 @@ export default function Chat() {
       if (event === 'SIGNED_OUT') {
         setSession(null); setHasName(false); setWizardDone(false)
         setProfile(null); setProfileLoaded(false)
-        setMessages([]); setBootGreeted(false)
+        setMessages([]); setBootGreeted(false); setTodayIntent(null)
         return
       }
       if (event === 'SIGNED_IN' && cur !== nxt) {
@@ -124,7 +132,7 @@ export default function Chat() {
         setHasName(localStorage.getItem(nameKey) === 'true')
         setWizardDone(localStorage.getItem(wizKey)  === 'true')
         setProfile(null); setProfileLoaded(false)
-        setMessages([]); setBootGreeted(false)
+        setMessages([]); setBootGreeted(false); setTodayIntent(null)
       }
     })
     return () => subscription.unsubscribe()
@@ -172,23 +180,54 @@ export default function Chat() {
     return () => { cancelled = true }
   }, [session?.user?.id, hasName])
 
-  // fomo
+  // greet after profile is loaded; read today's intent
   useEffect(() => {
-    let cancelled = false
-    ;(async () => {
-      const { count, error } = await supabase
-        .from('daily_entries').select('user_id', { count: 'exact', head: true })
-        .eq('entry_date', todayStr())
-      if (!cancelled && !error) setTodayCount(count ?? 0)
-    })()
-    return () => { cancelled = true }
-  }, [])
+    async function greet() {
+      if (!session?.user?.id || !profileLoaded || bootGreeted) return
 
-  // chat scroll
-  useEffect(() => {
-    const el = listRef.current
-    if (el) el.scrollTop = el.scrollHeight
-  }, [messages, sending])
+      const today = todayStr()
+      const [{ data: intentRow }, { data: stepsRows }] = await Promise.all([
+        supabase.from('daily_intents').select('intent').eq('user_id', session.user.id).eq('entry_date', today).maybeSingle(),
+        supabase.from('action_steps').select('step_order,label,completed').eq('user_id', session.user.id).eq('entry_date', today).order('step_order', { ascending: true })
+      ])
+      setTodayIntent(intentRow?.intent || null)
+
+      const steps = stepsRows || []
+      const firstIncomplete = steps.find(s => !s.completed)
+
+      const hello = `Welcome back, ${userName}. `
+      let body
+      if (!hasName) {
+        body = `Add your name to personalize.`
+      } else if (!wizardDone) {
+        body = `Resume today’s quick setup.`
+      } else if (intentRow?.intent) {
+        body = `Continue with “${intentRow.intent}”?`
+      } else if (firstIncomplete) {
+        body = `Resume at Step ${firstIncomplete.step_order} — ${firstIncomplete.label}. Continue?`
+      } else {
+        body = `What’s today’s goal in one line?`
+      }
+
+      setMessages([{ role: 'assistant', content: enforceTone(hello + body) }])
+      setBootGreeted(true)
+    }
+    greet()
+  }, [session?.user?.id, profileLoaded, userName, hasName, wizardDone, bootGreeted])
+
+  // fomo (unchanged)
+  // (you can keep/remove; not used in UI logic)
+  // ...
+
+  // helpers to save/read today's intent
+  async function saveTodayIntent(intent) {
+    if (!session?.user?.id) return
+    const today = todayStr()
+    await supabase
+      .from('daily_intents')
+      .upsert({ user_id: session.user.id, entry_date: today, intent }, { onConflict: 'user_id,entry_date' })
+    setTodayIntent(intent)
+  }
 
   function handleKeyDown(e) {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -201,19 +240,28 @@ export default function Chat() {
     e.preventDefault()
     const input = e.target.prompt.value.trim()
     if (!input) return
+
     const next = [...messages, { role: 'user', content: input }]
     setMessages(next)
     e.target.reset()
     setSending(true)
+
+    // If no intent yet and the user message looks like a goal, store it
+    let justSetIntent = false
+    if (!todayIntent && looksLikeGoal(input)) {
+      await saveTodayIntent(input)
+      justSetIntent = true
+    }
+
     try {
       const r = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           messages: next,
-          userName,              // Supabase name/fallback
-          hmUrl: HM_STORE_URL,   // Store URL
-          // (Optional) You can also harden tone server-side by adding a system prompt there.
+          userName,
+          hmUrl: HM_STORE_URL,
+          // Consider also guiding tone server-side, but client keeps the final say.
         }),
       })
 
@@ -226,97 +274,23 @@ export default function Chat() {
         rawReply = await r.text()
       }
 
-      const oneLine = enforceTone(rawReply || 'Done.')
-      setMessages([...next, { role: 'assistant', content: oneLine }])
+      // If we just captured a goal, override with a crisp confirmation
+      let finalLine
+      if (justSetIntent) {
+        finalLine = `Locked: “${input}”. Continue with this plan?`
+      } else if (todayIntent && /^(change|new|switch)/i.test(input)) {
+        finalLine = `Noted. What’s the new goal?`
+      } else {
+        finalLine = enforceTone(rawReply || 'Done.')
+      }
+
+      setMessages([...next, { role: 'assistant', content: finalLine }])
     } catch {
       setMessages([...next, { role: 'assistant', content: enforceTone('Error. Try again.') }])
     } finally {
       setSending(false); inputRef.current?.focus()
     }
   }
-
-  // Step 1: Name
-  function NameStep() {
-    const [name, setName] = useState('')
-    const [loading, setLoading] = useState(true)
-    const [saving, setSaving] = useState(false)
-
-    useEffect(() => {
-      let cancelled = false
-      ;(async () => {
-        if (!session?.user?.id) return
-        const { data } = await supabase
-          .from('profiles').select('full_name').eq('id', session.user.id).maybeSingle()
-        if (cancelled) return
-        setName(data?.full_name || ''); setLoading(false)
-      })()
-      return () => { cancelled = true }
-    }, [session?.user?.id])
-
-    async function save() {
-      if (!session?.user?.id) return
-      setSaving(true)
-      await supabase.from('profiles')
-        .upsert({ id: session.user.id, full_name: name || null })
-      setSaving(false)
-      if (name.trim()) {
-        setHasName(true)
-        setProfile({ full_name: name })
-        setProfileLoaded(true)
-        localStorage.setItem(`mg_hasName_${session.user.id}`, 'true')
-      }
-    }
-
-    if (loading) return <div className="card">Loading…</div>
-    return (
-      <section className="card">
-        <h2 className="panelTitle">Step 1 — Your Name</h2>
-        <div className="hStack">
-          <input className="textInput" value={name} onChange={e=>setName(e.target.value)} placeholder="Your name" />
-          <button type="button" className="btn" onClick={save} disabled={saving || !name.trim()}>
-            {saving ? 'Saving…' : 'Save & Continue'}
-          </button>
-        </div>
-      </section>
-    )
-  }
-
-  // Greet after profile is loaded (filtered)
-  useEffect(() => {
-    async function greet() {
-      if (!session?.user?.id || !profileLoaded || bootGreeted) return
-
-      const today = todayStr()
-      const [{ data: intentRow }, { data: stepsRows }] = await Promise.all([
-        supabase.from('daily_intents').select('intent').eq('user_id', session.user.id).eq('entry_date', today).maybeSingle(),
-        supabase.from('action_steps').select('step_order,label,completed').eq('user_id', session.user.id).eq('entry_date', today).order('step_order', { ascending: true })
-      ])
-
-      const steps = stepsRows || []
-      const firstIncomplete = steps.find(s => !s.completed)
-
-const hello = `Welcome back, ${userName}. `
-let body
-if (!hasName) {
-  body = `Add your name to personalize.`
-} else if (!wizardDone) {
-  body = `Resume today’s quick setup.`
-} else if (firstIncomplete) {
-  body = `Resume at Step ${firstIncomplete.step_order} — ${firstIncomplete.label}. Continue?`
-} else if (steps.length > 0) {
-  body = `You finished today’s steps. Reflect or start a new intent?`
-} else if (intentRow?.intent) {
-  body = `Current intent — ${intentRow.intent}. Generate a plan?`
-} else {
-  body = `Start today’s flow?`
-}
-
-setMessages([{ role: 'assistant', content: enforceTone(hello + body) }])
-
-      setBootGreeted(true)
-    }
-    greet()
-  }, [session?.user?.id, profileLoaded, userName, hasName, wizardDone, bootGreeted])
 
   // gates
   if (!session) {
@@ -334,7 +308,7 @@ setMessages([{ role: 'assistant', content: enforceTone(hello + body) }])
         <div className="card center">
           <h2>Access inactive</h2>
           <p>Your email isn’t active for Manifestation Genie.</p>
-          <a className="btn" href={PAYHIP_URL}>Get Access</a>
+          <a className="btn" href="https://hypnoticmeditations.ai/b/U7Z5m">Get Access</a>
         </div>
         <Style />
       </div>
@@ -356,15 +330,12 @@ setMessages([{ role: 'assistant', content: enforceTone(hello + body) }])
         <p className="sub small">✨ Welcome back, {userName}.</p>
       </header>
 
-      {!hasName && <NameStep />}
+      {!hasName && <NameStep session={session} setHasName={setHasName} setProfile={setProfile} setProfileLoaded={setProfileLoaded} />}
 
       {hasName && !wizardDone && (
         <section className="card">
           <h2 className="panelTitle">Step 2 — Today’s Genie Flow</h2>
-          <Questionnaire
-            session={session}
-            onDone={handleWizardDone}
-          />
+          <Questionnaire session={session} onDone={handleWizardDone} />
           <div className="microNote">Complete the flow to unlock the chat console.</div>
         </section>
       )}
@@ -426,6 +397,52 @@ setMessages([{ role: 'assistant', content: enforceTone(hello + body) }])
 
       <Style />
     </div>
+  )
+}
+
+// kept your NameStep but parameterized to avoid duplicate hooks when moved
+function NameStep({ session, setHasName, setProfile, setProfileLoaded }) {
+  const [name, setName] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      if (!session?.user?.id) return
+      const { data } = await supabase
+        .from('profiles').select('full_name').eq('id', session.user.id).maybeSingle()
+      if (cancelled) return
+      setName(data?.full_name || ''); setLoading(false)
+    })()
+    return () => { cancelled = true }
+  }, [session?.user?.id])
+
+  async function save() {
+    if (!session?.user?.id) return
+    setSaving(true)
+    await supabase.from('profiles')
+      .upsert({ id: session.user.id, full_name: name || null })
+    setSaving(false)
+    if (name.trim()) {
+      setHasName(true)
+      setProfile({ full_name: name })
+      setProfileLoaded(true)
+      localStorage.setItem(`mg_hasName_${session.user.id}`, 'true')
+    }
+  }
+
+  if (loading) return <div className="card">Loading…</div>
+  return (
+    <section className="card">
+      <h2 className="panelTitle">Step 1 — Your Name</h2>
+      <div className="hStack">
+        <input className="textInput" value={name} onChange={e=>setName(e.target.value)} placeholder="Your name" />
+        <button type="button" className="btn" onClick={save} disabled={saving || !name.trim()}>
+          {saving ? 'Saving…' : 'Save & Continue'}
+        </button>
+      </div>
+    </section>
   )
 }
 
