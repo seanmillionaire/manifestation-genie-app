@@ -230,7 +230,7 @@ export default function Chat() {
       } else if (!wizardDone) {
         body = `Ready to pick up today’s quick setup? I’ll guide you one question at a time.`
       } else if (firstIncomplete) {
-        body = `We paused at Step ${firstIncomplete.step_order}:. Want to continue now?`
+        body = `We paused at Step ${firstIncomplete.step_order}: “${firstIncomplete.label}”. Want to continue now?`
       } else if (steps.length > 0) {
         body = `Nice work earlier — you finished all of today’s steps. Want to reflect or start a new intent?`
       } else if (intentRow?.intent) {
