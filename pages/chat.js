@@ -1,4 +1,5 @@
-// pages/chat.js — Spacious Layout Edition
+// pages/chat.js — Spacious Layout Edition (One-Liner Genie + Emojis)
+// NOTE: Genie responses are forced to single-line, email-copy style.
 import Questionnaire from '../components/Questionnaire'
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../src/supabaseClient'
@@ -6,6 +7,20 @@ import GenieFlow from '../components/GenieFlow'
 
 const todayStr = () => new Date().toISOString().slice(0,10)
 const HM_STORE_URL = 'https://hypnoticmeditations.ai'  // or your Payhip URL
+
+// -------- One-liner util: collapses whitespace, strips markdown, trims length -----
+function toOneLiner(text, max = 160) {
+  if (!text) return ''
+  let t = String(text).replace(/\s+/g, ' ').trim()
+  t = t.replace(/[*_`#>|-]/g, '').trim()
+  // prefer stopping at the first punctuation if long
+  if (t.length > max) {
+    const stop = t.search(/[.!?—–;:]/)
+    if (stop !== -1 && stop < max) t = t.slice(0, stop + 1)
+    if (t.length > max) t = t.slice(0, max - 1) + '…'
+  }
+  return t
+}
 
 export default function Chat() {
   const [session, setSession] = useState(null)
@@ -151,20 +166,29 @@ export default function Chat() {
     e.target.reset()
     setSending(true)
     try {
-const r = await fetch('/api/chat', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({
-    messages: next,
-    userName,              // comes from your Supabase profile or fallback
-    hmUrl: HM_STORE_URL,   // <- this is the Hypnotic Meditations store URL
-  }),
-})
+      const r = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messages: next,
+          userName,              // comes from your Supabase profile or fallback
+          hmUrl: HM_STORE_URL,   // <- this is the Hypnotic Meditations store URL
+        }),
+      })
 
-      const data = await r.json()
-      setMessages([...next, { role: 'assistant', content: data.reply || '…' }])
+      // Try JSON first; fall back to text
+      let rawReply = ''
+      try {
+        const data = await r.json()
+        rawReply = data?.reply ?? data?.message?.content ?? data?.content ?? data?.choices?.[0]?.message?.content ?? ''
+      } catch {
+        rawReply = await r.text()
+      }
+
+      const oneLine = toOneLiner(rawReply || 'Done.')
+      setMessages([...next, { role: 'assistant', content: oneLine }])
     } catch {
-      setMessages([...next, { role: 'assistant', content: 'Error contacting Manifestation Genie.' }])
+      setMessages([...next, { role: 'assistant', content: toOneLiner('Error contacting Manifestation Genie.') }])
     } finally {
       setSending(false); inputRef.current?.focus()
     }
@@ -216,7 +240,7 @@ const r = await fetch('/api/chat', {
     )
   }
 
-  // Greet after profile is loaded
+  // Greet after profile is loaded (force one-liner greeting too)
   useEffect(() => {
     async function greet() {
       if (!session?.user?.id || !profileLoaded || bootGreeted) return
@@ -246,7 +270,7 @@ const r = await fetch('/api/chat', {
         body = `Want me to kick off today’s flow for you?`
       }
 
-      setMessages([{ role: 'assistant', content: hello + body }])
+      setMessages([{ role: 'assistant', content: toOneLiner(hello + body) }])
       setBootGreeted(true)
     }
     greet()
@@ -296,10 +320,9 @@ const r = await fetch('/api/chat', {
         <section className="card">
           <h2 className="panelTitle">Step 2 — Today’s Genie Flow</h2>
           <Questionnaire
-    session={session}
-    onDone={handleWizardDone}
-  />
-
+            session={session}
+            onDone={handleWizardDone}
+          />
           <div className="microNote">Complete the flow to unlock the chat console.</div>
         </section>
       )}
@@ -310,10 +333,13 @@ const r = await fetch('/api/chat', {
           <div className="list" ref={listRef}>
             {messages.map((m, i) => (
               <div key={i} className={`row ${m.role === 'user' ? 'me' : ''}`}>
+                {/* Avatars: 🫵 for You, 🧞‍♂️ for Genie */}
                 <div className="avatar">{m.role === 'user' ? '🫵' : '🧞‍♂️'}</div>
                 <div className={`bubble ${m.role === 'user' ? 'user' : ''}`}>
                   <div className="tag">{m.role === 'user' ? 'You' : 'Manifestation Genie'}</div>
-                  <div className="msg">{m.content}</div>
+                  <div className="msg">
+                    {m.role === 'assistant' ? toOneLiner(m.content) : m.content}
+                  </div>
                 </div>
               </div>
             ))}
@@ -443,7 +469,7 @@ function Style() {
 
       /* ====== Chat area breathing room ====== */
       .list {
-        max-height: 520px;    /* taller chat window */
+        max-height: 520px;
         overflow-y: auto;
         margin-bottom: 16px;
         padding-right: 4px;
@@ -453,7 +479,7 @@ function Style() {
       .avatar { font-size: 22px; line-height: 1; margin-top: 2px; }
 
       .bubble {
-        max-width: 70ch;          /* limit line length for readability */
+        max-width: 70ch;
         padding: 14px 16px;
         border: 2px solid #000;
         border-radius: 14px;
@@ -479,7 +505,6 @@ function Style() {
 
       .bottomRight { display:flex; justify-content:flex-end; margin-top: 20px; }
 
-      /* Mobile tweaks for comfort */
       @media (max-width: 560px) {
         .wrap { margin: 40px auto 64px; padding: 0 16px; }
         .hero h1 { font-size: 34px; }
