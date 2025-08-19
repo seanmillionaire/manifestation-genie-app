@@ -7,24 +7,6 @@ import GenieFlow from '../components/GenieFlow'
 const todayStr = () => new Date().toISOString().slice(0,10)
 const HM_STORE_URL = 'https://hypnoticmeditations.ai'  // or your Payhip URL
 
-// ---------- Tone tools: strip fluff → compress to a single practical line ----------
-// ---------- Tone tools: no-fluff, natural one-liners ----------
-function toOneLiner(text, max = 140) {
-  if (!text) return ''
-  let t = String(text)
-    .replace(/\u2018|\u2019/g, "'")
-    .replace(/\u201C|\u201D/g, '"')
-    .replace(/\s+/g, ' ')
-    .trim()
-
-  if (t.length > max) {
-    const stop = t.search(/[.?!;:]/)
-    if (stop !== -1 && stop < max) t = t.slice(0, stop + 1)
-    if (t.length > max) t = t.slice(0, max - 1) + '…'
-  }
-  return t
-}
-
 // ---------- Tone tools: no-fluff, natural one-liners ----------
 function toOneLiner(text, max = 140) {
   if (!text) return ''
