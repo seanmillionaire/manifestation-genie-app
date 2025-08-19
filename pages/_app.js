@@ -14,7 +14,12 @@ export default function App({ Component, pageProps }) {
           rel="stylesheet"
         />
       </Head>
-      <Component {...pageProps} />
+<div className="pageWrap">
+        <Component {...pageProps} />
+        <footer>
+          © {new Date().getFullYear()} Manifestation Genie. All rights reserved.
+        </footer>
+      </div>
     </>
   )
 }
