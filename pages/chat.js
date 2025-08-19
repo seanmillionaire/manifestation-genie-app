@@ -1,4 +1,4 @@
-// pages/chat.js
+// pages/chat.js — Spacious Layout Edition
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../src/supabaseClient'
 import GenieFlow from '../components/GenieFlow'
@@ -198,7 +198,7 @@ export default function Chat() {
     return (
       <section className="card">
         <h2 className="panelTitle">Step 1 — Your Name</h2>
-        <div style={{ display:'flex', gap:8 }}>
+        <div className="hStack">
           <input className="textInput" value={name} onChange={e=>setName(e.target.value)} placeholder="Your name" />
           <button type="button" className="btn" onClick={save} disabled={saving || !name.trim()}>
             {saving ? 'Saving…' : 'Save & Continue'}
@@ -208,12 +208,10 @@ export default function Chat() {
     )
   }
 
-  // GREET AFTER PROFILE IS LOADED (so we can use first name)
+  // Greet after profile is loaded
   useEffect(() => {
     async function greet() {
-      if (!session?.user?.id) return
-      if (!profileLoaded) return
-      if (bootGreeted) return
+      if (!session?.user?.id || !profileLoaded || bootGreeted) return
 
       const today = todayStr()
       const [{ data: intentRow }, { data: stepsRows }] = await Promise.all([
@@ -273,7 +271,7 @@ export default function Chat() {
     const uid = session?.user?.id
     if (uid) localStorage.setItem(`mg_wizardDone_${uid}_${todayStr()}`, 'true')
     setWizardDone(true)
-    setBootGreeted(false) // re‑prime greeting post‑wizard
+    setBootGreeted(false)
   }
 
   return (
@@ -295,7 +293,7 @@ export default function Chat() {
       )}
 
       {hasName && wizardDone && (
-        <section className="card">
+        <section className="card chatCard">
           <h2 className="panelTitle">Chat with the Genie</h2>
           <div className="list" ref={listRef}>
             {messages.map((m, i) => (
@@ -323,7 +321,7 @@ export default function Chat() {
               ref={inputRef}
               name="prompt"
               placeholder="Type your message… (Shift+Enter for a newline)"
-              rows={2}
+              rows={3}
               onKeyDown={handleKeyDown}
               disabled={sending}
               className="textArea"
@@ -366,45 +364,118 @@ function Style() {
       html, body, #__next { margin:0; padding:0; background:#fff; color:#000; min-height:100%; }
       * { box-sizing: border-box; }
 
-      .wrap { max-width: 760px; margin: 36px auto 48px; padding: 0 16px; }
-      .hero { text-align: center; margin-bottom: 24px; }
-      .hero h1 { margin:0; font-size: 36px; font-weight: 900; color:#000; }
-      .sub { margin-top: 8px; font-size: 16px; color:#111; }
-      .sub.small { font-size: 14px; color:#444; }
+      /* ====== Layout spacing ====== */
+      .wrap { max-width: 960px; margin: 64px auto 88px; padding: 0 24px; }
 
-      .card { background:#fff; color:#000; border:2px solid #000; border-radius:12px; padding:20px; margin-bottom:20px; }
-      .panelTitle { margin:0 0 10px 0; font-size:16px; font-weight:800; text-transform:uppercase; }
-      .microNote { margin-top:8px; font-size:12px; color:#444; }
+      .hero { text-align: center; margin-bottom: 40px; }
+      .hero h1 { margin:0; font-size: 44px; font-weight: 900; color:#000; letter-spacing:.2px; }
+      .sub { margin: 10px auto 0; font-size: 18px; color:#111; max-width: 68ch; line-height: 1.6; }
+      .sub.small { font-size: 16px; color:#444; }
 
-      .textInput, .textArea { border:2px solid #000; border-radius:8px; padding:10px 12px; font-size:14px; background:#fff; color:#000; outline:none; }
+      .card {
+        background:#fff;
+        color:#000;
+        border:2px solid #000;
+        border-radius:16px;
+        padding:28px;
+        margin-bottom:28px;
+      }
+      .chatCard { padding: 28px 28px 22px; }
+
+      .panelTitle {
+        margin:0 0 14px 0;
+        font-size:18px;
+        font-weight:800;
+        text-transform:uppercase;
+        letter-spacing:.6px;
+      }
+      .microNote { margin-top:10px; font-size:13px; color:#444; }
+
+      .hStack { display:flex; gap:12px; align-items:center; }
+
+      .textInput, .textArea {
+        border:2px solid #000;
+        border-radius:12px;
+        padding:14px 16px;
+        font-size:16px;
+        background:#fff;
+        color:#000;
+        outline:none;
+        line-height:1.5;
+      }
       .textInput { width:100%; }
-      .textArea { flex:1; }
+      .textArea { flex:1; min-height: 84px; }
 
-      .btn { background:#000; color:#fff; border:2px solid #000; border-radius:8px; padding:10px 16px; font-weight:800; cursor:pointer; }
+      .btn {
+        background:#000;
+        color:#fff;
+        border:2px solid #000;
+        border-radius:12px;
+        padding:12px 18px;
+        font-weight:800;
+        cursor:pointer;
+        font-size:16px;
+      }
       .btn:disabled { opacity:.7; cursor:default; }
-      .ghost { background:#fff; color:#000; border:2px solid #000; border-radius:8px; padding:8px 12px; font-weight:800; cursor:pointer; }
 
-      .list { max-height: 320px; overflow-y: auto; margin-bottom: 12px; }
-      .row { display:flex; gap:10px; margin:12px 6px; }
+      .ghost {
+        background:#fff;
+        color:#000;
+        border:2px solid #000;
+        border-radius:12px;
+        padding:10px 14px;
+        font-weight:800;
+        cursor:pointer;
+        font-size:15px;
+      }
+
+      /* ====== Chat area breathing room ====== */
+      .list {
+        max-height: 520px;    /* taller chat window */
+        overflow-y: auto;
+        margin-bottom: 16px;
+        padding-right: 4px;
+      }
+      .row { display:flex; gap:14px; margin:16px 8px; }
       .row.me { justify-content: flex-end; }
-      .avatar { font-size: 20px; }
+      .avatar { font-size: 22px; line-height: 1; margin-top: 2px; }
 
-      .bubble { max-width: 75%; padding: 10px 12px; border: 2px solid #000; border-radius: 10px; background: #f6f6f6; color: #000; }
+      .bubble {
+        max-width: 70ch;          /* limit line length for readability */
+        padding: 14px 16px;
+        border: 2px solid #000;
+        border-radius: 14px;
+        background: #f7f7f7;
+        color: #000;
+        line-height: 1.6;
+        font-size: 16px;
+      }
       .bubble.user { background:#000; color:#fff; }
 
-      .tag { font-size: 12px; font-weight: 700; margin-bottom: 4px; opacity:.85; }
+      .tag { font-size: 12px; font-weight: 700; margin-bottom: 6px; opacity:.7; }
       .msg { white-space: pre-wrap; }
-      .composer { display:flex; gap:10px; align-items:flex-end; }
 
-      .dots { display:inline-flex; gap:6px; align-items:center; }
+      .composer { display:flex; gap:12px; align-items:flex-end; }
+
+      .dots { display:inline-flex; gap:8px; align-items:center; }
       .dots span { width:6px; height:6px; background:#000; border-radius:50%; opacity:.25; animation: blink 1.2s infinite ease-in-out; }
       .dots span:nth-child(2){ animation-delay:.15s }
       .dots span:nth-child(3){ animation-delay:.3s }
       @keyframes blink { 0%,80%,100%{opacity:.25} 40%{opacity:1} }
 
-      .fomoLine { text-align:center; font-weight:800; margin: 16px 0; }
-      .bottomRight { display:flex; justify-content:flex-end; }
-      .center { display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:40vh; text-align:center; }
+      .fomoLine { text-align:center; font-weight:800; margin: 28px 0 8px; font-size:15px; }
+
+      .bottomRight { display:flex; justify-content:flex-end; margin-top: 20px; }
+
+      /* Mobile tweaks for comfort */
+      @media (max-width: 560px) {
+        .wrap { margin: 40px auto 64px; padding: 0 16px; }
+        .hero h1 { font-size: 34px; }
+        .sub { font-size: 16px; }
+        .panelTitle { font-size: 16px; }
+        .list { max-height: 420px; }
+        .bubble { max-width: 100%; }
+      }
     `}</style>
   )
 }
