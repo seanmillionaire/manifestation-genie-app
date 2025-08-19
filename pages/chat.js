@@ -1,21 +1,16 @@
-// pages/chat.js — One‑Liner, Practical + Light‑Magic Genie with Goal Memory (fixed-height console)
+// pages/chat.js — One‑Liner, Practical + Light‑Magic Genie with Goal Memory (fixed-height console, cleaned)
 import Questionnaire from '../components/Questionnaire'
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../src/supabaseClient'
-import GenieFlow from '../components/GenieFlow'
 
 const todayStr = () => new Date().toISOString().slice(0,10)
 const HM_STORE_URL = 'https://hypnoticmeditations.ai'  // or your Payhip URL
+const PAYHIP_URL = 'https://hypnoticmeditations.ai/b/U7Z5m'
 
-// ---------- One‑liner + tone helpers (drop-in replacement) ----------
+// ---------- One‑liner + tone helpers ----------
 function toOneLiner(text, max = 160) {
   if (!text) return ''
-  let t = String(text)
-    .replace(/\u2018|\u2019/g, "'")
-    .replace(/\u201C|\u201D/g, '"')
-    .replace(/\s+/g, ' ')
-    .trim()
-
+  let t = String(text).replace(/\u2018|\u2019/g, "'").replace(/\u201C|\u201D/g, '"').replace(/\s+/g, ' ').trim()
   const colon = t.indexOf(':')
   if (colon !== -1) {
     const head = t.slice(0, colon + 1).trim()
@@ -23,16 +18,13 @@ function toOneLiner(text, max = 160) {
     let keep = (head + ' ' + tail).slice(0, max)
     return keep.length > 0 ? keep : head
   }
-
   const parts = t
     .split(/([.?!])/)
     .reduce((acc, cur, i, arr) => { if (i % 2 === 0) acc.push(cur + (arr[i+1] || '')); return acc }, [])
     .map(s => s.trim())
     .filter(Boolean)
-
   let keep = parts[0] || ''
   if (keep.length < 40 && parts[1]) keep = (keep + ' ' + parts[1]).trim()
-
   if (keep.length > max) keep = keep.slice(0, max - 1) + '…'
   return keep
 }
@@ -41,10 +33,7 @@ function enforceTone(raw) {
   if (!raw) return ''
   let t = String(raw)
   t = t.replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}]/gu, '')
-  const kill = [
-    'awesome','amazing','magical','celebrate','journey','no worries','you got this',
-    'imagine','visualize','picture','ready to','shall we','how about'
-  ]
+  const kill = ['awesome','amazing','magical','celebrate','journey','no worries','you got this','imagine','visualize','picture','ready to','shall we','how about']
   for (const w of kill) t = t.replace(new RegExp(`\\b${w.replace(/[.*+?^${}()|[\\]\\\\]/g,'\\$&')}\\b`,'gi'),'').trim()
   t = t
     .replace(/\bwe paused at\b/gi, 'Resume at')
@@ -59,7 +48,7 @@ function enforceTone(raw) {
   return toOneLiner(t, 160)
 }
 
-// ---------- heuristics: detect if user's line looks like a goal ----------
+// ---------- detect if user's line looks like a goal ----------
 function looksLikeGoal(s) {
   if (!s) return false
   const t = s.trim()
@@ -94,8 +83,6 @@ export default function Chat() {
 
   // today's intent memory
   const [todayIntent, setTodayIntent] = useState(null)
-
-  const PAYHIP_URL = 'https://hypnoticmeditations.ai/b/U7Z5m'
 
   // --- AUTO‑SCROLL: scroll the chat container, not the page ---
   useEffect(() => {
@@ -258,11 +245,7 @@ export default function Chat() {
       const r = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          messages: next,
-          userName,
-          hmUrl: HM_STORE_URL,
-        }),
+        body: JSON.stringify({ messages: next, userName, hmUrl: HM_STORE_URL }),
       })
 
       let rawReply = ''
@@ -315,7 +298,7 @@ export default function Chat() {
         <div className="card center">
           <h2>Access inactive</h2>
           <p>Your email isn’t active for Manifestation Genie.</p>
-          <a className="btn" href="https://hypnoticmeditations.ai/b/U7Z5m">Get Access</a>
+          <a className="btn" href={PAYHIP_URL}>Get Access</a>
         </div>
         <Style />
       </div>
@@ -359,9 +342,7 @@ export default function Chat() {
                   <div className="avatar">{isUser ? '🫵' : (isGenie ? '🧞‍♂️' : '🤖')}</div>
                   <div className={`bubble ${isUser ? 'user' : ''}`}>
                     <div className="tag">{isUser ? 'You' : 'Manifestation Genie'}</div>
-                    <div className="msg">
-                      {isGenie ? enforceTone(m.content) : m.content}
-                    </div>
+                    <div className="msg">{isGenie ? enforceTone(m.content) : m.content}</div>
                   </div>
                 </div>
               )
@@ -395,9 +376,7 @@ export default function Chat() {
         </section>
       )}
 
-      <div className="fomoLine">
-       <p>🔥 108 people used Manifestation Genie today</p>
-      </div>
+      <div className="fomoLine"><p>🔥 108 people used Manifestation Genie today</p></div>
 
       <div className="bottomRight">
         <button type="button" className="ghost" onClick={() => supabase.auth.signOut()}>Logout</button>
@@ -408,7 +387,6 @@ export default function Chat() {
   )
 }
 
-// kept your NameStep but parameterized to avoid duplicate hooks when moved
 function NameStep({ session, setHasName, setProfile, setProfileLoaded }) {
   const [name, setName] = useState('')
   const [loading, setLoading] = useState(true)
@@ -418,8 +396,7 @@ function NameStep({ session, setHasName, setProfile, setProfileLoaded }) {
     let cancelled = false
     ;(async () => {
       if (!session?.user?.id) return
-      const { data } = await supabase
-        .from('profiles').select('full_name').eq('id', session.user.id).maybeSingle()
+      const { data } = await supabase.from('profiles').select('full_name').eq('id', session.user.id).maybeSingle()
       if (cancelled) return
       setName(data?.full_name || ''); setLoading(false)
     })()
@@ -429,8 +406,7 @@ function NameStep({ session, setHasName, setProfile, setProfileLoaded }) {
   async function save() {
     if (!session?.user?.id) return
     setSaving(true)
-    await supabase.from('profiles')
-      .upsert({ id: session.user.id, full_name: name || null })
+    await supabase.from('profiles').upsert({ id: session.user.id, full_name: name || null })
     setSaving(false)
     if (name.trim()) {
       setHasName(true)
@@ -479,99 +455,53 @@ function Style() {
       .sub { margin: 10px auto 0; font-size: 18px; color:#111; max-width: 68ch; line-height: 1.6; }
       .sub.small { font-size: 16px; color:#444; }
 
-      .card {
-        background:#fff;
-        color:#000;
-        border:2px solid #000;
-        border-radius:16px;
-        padding:28px;
-        margin-bottom:28px;
-      }
+      .card { background:#fff; color:#000; border:2px solid #000; border-radius:16px; padding:28px; margin-bottom:28px; }
+      .center { display:flex; flex-direction:column; align-items:center; text-align:center; }
 
-      /* Make chat card a column so the fixed-height list + composer stack cleanly */
-      .chatCard { 
-        padding: 28px 28px 22px; 
-        display:flex; 
-        flex-direction:column;
-      }
+      /* stack fixed-height list + composer cleanly */
+      .chatCard { padding: 28px 28px 22px; display:flex; flex-direction:column; }
 
-      .panelTitle {
-        margin:0 0 14px 0;
-        font-size:18px;
-        font-weight:800;
-        text-transform:uppercase;
-        letter-spacing:.6px;
-      }
+      .panelTitle { margin:0 0 14px 0; font-size:18px; font-weight:800; text-transform:uppercase; letter-spacing:.6px; }
       .microNote { margin-top:10px; font-size:13px; color:#444; }
 
       .hStack { display:flex; gap:12px; align-items:center; }
 
       .textInput, .textArea {
-        border:2px solid #000;
-        border-radius:12px;
-        padding:14px 16px;
-        font-size:16px;
-        background:#fff;
-        color:#000;
-        outline:none;
-        line-height:1.5;
+        border:2px solid #000; border-radius:12px; padding:14px 16px; font-size:16px; background:#fff; color:#000; outline:none; line-height:1.5;
       }
       .textInput { width:100%; }
       .textArea { flex:1; min-height: 84px; }
 
-      .btn {
-        background:#000;
-        color:#fff;
-        border:2px solid #000;
-        border-radius:12px;
-        padding:12px 18px;
-        font-weight:800;
-        cursor:pointer;
-        font-size:16px;
-      }
+      .btn { background:#000; color:#fff; border:2px solid #000; border-radius:12px; padding:12px 18px; font-weight:800; cursor:pointer; font-size:16px; }
       .btn:disabled { opacity:.7; cursor:default; }
 
-      .ghost {
-        background:#fff;
-        color:#000;
-        border:2px solid #000;
-        border-radius:12px;
-        padding:10px 14px;
-        font-weight:800;
-        cursor:pointer;
-        font-size:15px;
+      .ghost { background:#fff; color:#000; border:2px solid #000; border-radius:12px; padding:10px 14px; font-weight:800; cursor:pointer; font-size:15px; }
+
+      /* FIXED HEIGHT CHAT CONSOLE (desktop) */
+      .list {
+        height: 380px;
+        overflow-y: auto;
+        margin-bottom: 16px;
+        padding-right: 4px;
+        scroll-behavior: smooth;
+        overscroll-behavior: contain;
+        scrollbar-gutter: stable both-edges;
+        -webkit-overflow-scrolling: touch;
       }
-
-
-
 
       .row { display:flex; gap:14px; margin:16px 8px; }
       .row.me { justify-content: flex-end; }
-      .avatar { font-size: 22px; line-height: 1; margin-top: 2px;
-        font-family: "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji", system-ui, sans-serif !important;
-      }
+      .avatar { font-size: 22px; line-height: 1; margin-top: 2px; font-family: "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji", system-ui, sans-serif !important; }
 
       .bubble {
-        max-width: 70ch;
-        padding: 14px 16px;
-        border: 2px solid #000;
-        border-radius: 14px;
-        background: #f7f7f7;
-        color: #000;
-        line-height: 1.6;
-        font-size: 16px;
+        max-width: 70ch; padding: 14px 16px; border: 2px solid #000; border-radius: 14px; background: #f7f7f7; color: #000; line-height: 1.6; font-size: 16px;
       }
       .bubble.user { background:#000; color:#fff; }
 
       .tag { font-size: 12px; font-weight: 700; margin-bottom: 6px; opacity:.7; }
       .msg { white-space: pre-wrap; }
 
-      .composer { 
-        display:flex; 
-        gap:12px; 
-        align-items:flex-end; 
-        margin-top: 8px; 
-      }
+      .composer { display:flex; gap:12px; align-items:flex-end; margin-top: 8px; }
 
       .dots { display:inline-flex; gap:8px; align-items:center; }
       .dots span { width:6px; height:6px; background:#000; border-radius:50%; opacity:.25; animation: blink 1.2s infinite ease-in-out; }
@@ -580,7 +510,6 @@ function Style() {
       @keyframes blink { 0%,80%,100%{opacity:.25} 40%{opacity:1} }
 
       .fomoLine { text-align:center; font-weight:800; margin: 28px 0 8px; font-size:15px; }
-
       .bottomRight { display:flex; justify-content:flex-end; margin-top: 20px; }
 
       @media (max-width: 560px) {
@@ -588,7 +517,7 @@ function Style() {
         .hero h1 { font-size: 34px; }
         .sub { font-size: 16px; }
         .panelTitle { font-size: 16px; }
-        .list { height: 300px; min-height: 300px; }  /* smaller but still fixed on mobile */
+        .list { height: 300px; } /* fixed on mobile too */
         .bubble { max-width: 100%; }
       }
     `}</style>
