@@ -310,7 +310,7 @@ const r = await fetch('/api/chat', {
           <div className="list" ref={listRef}>
             {messages.map((m, i) => (
               <div key={i} className={`row ${m.role === 'user' ? 'me' : ''}`}>
-                <div className="avatar">{m.role === 'user' ? '🫵' : '🔮'}</div>
+                <div className="avatar">{m.role === 'user' ? '🫵' : '🧞‍♂️'}</div>
                 <div className={`bubble ${m.role === 'user' ? 'user' : ''}`}>
                   <div className="tag">{m.role === 'user' ? 'You' : 'Manifestation Genie'}</div>
                   <div className="msg">{m.content}</div>
