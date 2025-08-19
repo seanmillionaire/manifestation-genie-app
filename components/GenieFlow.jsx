@@ -38,8 +38,7 @@ export default function GenieFlow({ session, onDone }) {
 
   const [idx, setIdx] = useState(0)
 
-  const greeting = useMemo(() => `✨ Hey ${fullName}, let’s set up today in under a minute.`, [fullName])
-
+  // Load profile name so Genie greets by name (not email)
   useEffect(() => {
     let mounted = true
     ;(async () => {
@@ -88,6 +87,8 @@ export default function GenieFlow({ session, onDone }) {
       { onConflict:'user_id,entry_date' }
     )
   }
+
+  const greeting = useMemo(() => `✨ Hey ${fullName}, let’s set up today in under a minute.`, [fullName])
 
   const stepKeys = useMemo(() => {
     const base = ['mood','med','maybeReason','intent','idea','plan']
