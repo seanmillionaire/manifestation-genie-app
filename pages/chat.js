@@ -195,7 +195,7 @@ export default function Chat() {
       const steps = stepsRows || []
       const firstIncomplete = steps.find(s => !s.completed)
 
-      const hello = `Welcome back, ${userName}. `
+      const hello = `✨ Welcome back, ${userName}. The portal is open. `
       let body
       if (!hasName) {
         body = `Add your name to personalize.`
@@ -204,7 +204,7 @@ export default function Chat() {
       } else if (intentRow?.intent) {
         body = `Continue with “${intentRow.intent}”?`
       } else if (firstIncomplete) {
-        body = `Resume at Step ${firstIncomplete.step_order} — ${firstIncomplete.label}. Continue?`
+        body = `Resume at Step ${firstIncomplete.step_order} — ${firstIncomplete.label}. Shall we continue…?`
       } else {
         body = `What’s today’s goal in one line?`
       }
@@ -322,10 +322,10 @@ export default function Chat() {
   return (
     <div className="wrap">
       <header className="hero">
-        <h1>Manifestation Genie</h1>
-        <p className="sub">Your Personal AI Assistant for Turning Goals into Reality</p>
-        <p className="sub small">✨ Welcome back, {userName}.</p>
-      </header>
+  <h1 className="brand-glow">Manifestation Genie</h1>
+  <p className="sub">Your Personal AI Assistant for Turning Goals into Reality</p>
+  <p className="sub small">✨ Welcome back, {userName}.</p>
+</header>
 
       {!hasName && <NameStep session={session} setHasName={setHasName} setProfile={setProfile} setProfileLoaded={setProfileLoaded} />}
 
