@@ -11,7 +11,11 @@ export default function Chat() {
   const [session, setSession] = useState(null)
   const [allowed, setAllowed] = useState(null) // null=checking
 
-  // ----- gates persisted in localStorage (stable across focus changes) -----
+  // profile (for greeting name)
+  const [profile, setProfile] = useState(null)
+  const userName = profile?.full_name || session?.user?.email || 'Friend'
+
+  // gates persisted in localStorage (so focus changes don’t reset)
   const [hasName, setHasName] = useState(false)
   const [checkingName, setCheckingName] = useState(true)
   const [wizardDone, setWizardDone] = useState(false)
@@ -25,9 +29,9 @@ export default function Chat() {
   // single FOMO line
   const [todayCount, setTodayCount] = useState(null)
 
-  const PAYHIP_URL = 'https://hypnoticmeditations.ai/b/U7Z5m' // change for prod
+  const PAYHIP_URL = 'https://hypnoticmeditations.ai/b/U7Z5m' // update for prod if needed
 
-  // ----- load persisted gates on mount -----
+  // -------- load session + persisted gates on mount --------
   useEffect(() => {
     const boot = async () => {
       const { data: { session } } = await supabase.auth.getSession()
@@ -36,70 +40,75 @@ export default function Chat() {
       const uid = session?.user?.id
       const dateKey = todayStr()
       if (uid) {
-        // Persisted name flag
         const nameKey = `mg_hasName_${uid}`
-        const persistedName = localStorage.getItem(nameKey)
-        if (persistedName === 'true') setHasName(true)
-
-        // Persisted wizard completion (per day)
-        const wizKey = `mg_wizardDone_${uid}_${dateKey}`
-        const persistedWiz = localStorage.getItem(wizKey)
-        if (persistedWiz === 'true') setWizardDone(true)
+        const wizKey  = `mg_wizardDone_${uid}_${dateKey}`
+        if (localStorage.getItem(nameKey) === 'true') setHasName(true)
+        if (localStorage.getItem(wizKey)  === 'true') setWizardDone(true)
       }
     }
     boot()
   }, [])
 
-  // ----- auth listener (IGNORE token refresh noise) -----
+  // -------- auth listener (ignore token refresh) --------
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, nextSession) => {
-      // Only react if the user actually changed (prevents “restart on focus”)
       const currentUid = session?.user?.id
       const nextUid = nextSession?.user?.id
       if (event === 'SIGNED_OUT') {
         setSession(null)
         setHasName(false)
         setWizardDone(false)
+        setProfile(null)
         return
       }
-      if (event === 'SIGNED_IN') {
-        if (currentUid !== nextUid) {
-          setSession(nextSession)
-          // reload persisted flags for the new user
-          const nameKey = `mg_hasName_${nextUid}`
-          const wizKey = `mg_wizardDone_${nextUid}_${todayStr()}`
-          if (localStorage.getItem(nameKey) === 'true') setHasName(true)
-          if (localStorage.getItem(wizKey) === 'true') setWizardDone(true)
-        }
+      if (event === 'SIGNED_IN' && currentUid !== nextUid) {
+        setSession(nextSession)
+        const nameKey = `mg_hasName_${nextUid}`
+        const wizKey  = `mg_wizardDone_${nextUid}_${todayStr()}`
+        if (localStorage.getItem(nameKey) === 'true') setHasName(true)
+        if (localStorage.getItem(wizKey)  === 'true') setWizardDone(true)
       }
-      // Ignore TOKEN_REFRESHED / USER_UPDATED / etc.
+      // Ignore TOKEN_REFRESHED / USER_UPDATED
     })
     return () => subscription.unsubscribe()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session?.user?.id])
 
-  // ----- allowlist (one shot per user/email) -----
+  // -------- allowlist --------
   useEffect(() => {
     let cancelled = false
     async function run() {
       if (!session?.user?.email) return
       const { data, error } = await supabase
-        .from('allowlist')
-        .select('status')
-        .eq('email', session.user.email)
-        .maybeSingle()
+        .from('allowlist').select('status')
+        .eq('email', session.user.email).maybeSingle()
       if (!cancelled) setAllowed(error ? false : data?.status === 'active')
     }
     run()
     return () => { cancelled = true }
   }, [session?.user?.email])
 
-  // ----- name gate: only set TRUE, never auto‑flip to false on focus -----
+  // -------- load profile full_name (used for greeting) --------
+  useEffect(() => {
+    let cancelled = false
+    async function fetchProfile() {
+      if (!session?.user?.id) return
+      const { data } = await supabase
+        .from('profiles')
+        .select('full_name')
+        .eq('id', session.user.id)
+        .maybeSingle()
+      if (!cancelled) setProfile(data || null)
+    }
+    fetchProfile()
+    return () => { cancelled = true }
+  }, [session?.user?.id])
+
+  // -------- name gate: only set TRUE, never auto‑flip to false --------
   useEffect(() => {
     let cancelled = false
     async function run() {
       if (!session?.user?.id) return
-      // if we already have it from localStorage, don't flip‑flop
       if (hasName) { setCheckingName(false); return }
       const { data } = await supabase
         .from('profiles')
@@ -116,7 +125,7 @@ export default function Chat() {
     return () => { cancelled = true }
   }, [session?.user?.id, hasName])
 
-  // ----- one‑line FOMO (count daily_entries for today) -----
+  // -------- one‑line FOMO (count daily_entries for today) --------
   useEffect(() => {
     let cancelled = false
     async function fetchCount() {
@@ -200,6 +209,7 @@ export default function Chat() {
       const ok = !!(name && name.trim())
       if (ok) {
         setHasName(true)
+        setProfile({ full_name: name }) // update greeting immediately
         localStorage.setItem(`mg_hasName_${session.user.id}`, 'true')
       }
     }
@@ -252,9 +262,7 @@ export default function Chat() {
   // persist wizard completion when fired
   function handleWizardDone() {
     const uid = session?.user?.id
-    if (uid) {
-      localStorage.setItem(`mg_wizardDone_${uid}_${todayStr()}`, 'true')
-    }
+    if (uid) localStorage.setItem(`mg_wizardDone_${uid}_${todayStr()}`, 'true')
     setWizardDone(true)
   }
 
@@ -263,7 +271,7 @@ export default function Chat() {
       <header className="hero">
         <h1>Manifestation Genie</h1>
         <p className="sub">Your AI Assistant for Turning Goals into Reality</p>
-        <p className="sub small">👋 Welcome back, {session.user.email}.</p>
+        <p className="sub small">👋 Welcome back, {userName}.</p>
       </header>
 
       {!hasName && <NameStep />}
@@ -429,6 +437,7 @@ function Style() {
       .fomoLine { text-align:center; font-weight:800; margin: 16px 0; }
 
       .bottomRight { display:flex; justify-content:flex-end; }
+      .center { display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:40vh; text-align:center; }
     `}</style>
   )
 }
