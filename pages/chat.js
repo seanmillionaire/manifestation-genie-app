@@ -4,25 +4,32 @@ import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../src/supabaseClient'
 
 const todayStr = () => new Date().toISOString().slice(0,10)
-const HM_STORE_URL = 'https://hypnoticmeditations.ai'  // or your Payhip URL
+const HM_STORE_URL = 'https://hypnoticmeditations.ai'
 const PAYHIP_URL = 'https://hypnoticmeditations.ai/b/U7Z5m'
 
 // ---------- One‑liner + tone helpers ----------
 function toOneLiner(text, max = 160) {
   if (!text) return ''
-  let t = String(text).replace(/\u2018|\u2019/g, "'").replace(/\u201C|\u201D/g, '"').replace(/\s+/g, ' ').trim()
+  let t = String(text)
+    .replace(/\u2018|\u2019/g, "'")
+    .replace(/\u201C|\u201D/g, '"')
+    .replace(/\s+/g, ' ')
+    .trim()
+
   const colon = t.indexOf(':')
   if (colon !== -1) {
     const head = t.slice(0, colon + 1).trim()
     const tail = t.slice(colon + 1).trim()
-    let keep = (head + ' ' + tail).slice(0, max)
+    const keep = (head + ' ' + tail).slice(0, max)
     return keep.length > 0 ? keep : head
   }
+
   const parts = t
     .split(/([.?!])/)
     .reduce((acc, cur, i, arr) => { if (i % 2 === 0) acc.push(cur + (arr[i+1] || '')); return acc }, [])
     .map(s => s.trim())
     .filter(Boolean)
+
   let keep = parts[0] || ''
   if (keep.length < 40 && parts[1]) keep = (keep + ' ' + parts[1]).trim()
   if (keep.length > max) keep = keep.slice(0, max - 1) + '…'
@@ -466,9 +473,7 @@ function Style() {
 
       .hStack { display:flex; gap:12px; align-items:center; }
 
-      .textInput, .textArea {
-        border:2px solid #000; border-radius:12px; padding:14px 16px; font-size:16px; background:#fff; color:#000; outline:none; line-height:1.5;
-      }
+      .textInput, .textArea { border:2px solid #000; border-radius:12px; padding:14px 16px; font-size:16px; background:#fff; color:#000; outline:none; line-height:1.5; }
       .textInput { width:100%; }
       .textArea { flex:1; min-height: 84px; }
 
@@ -493,9 +498,7 @@ function Style() {
       .row.me { justify-content: flex-end; }
       .avatar { font-size: 22px; line-height: 1; margin-top: 2px; font-family: "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji", system-ui, sans-serif !important; }
 
-      .bubble {
-        max-width: 70ch; padding: 14px 16px; border: 2px solid #000; border-radius: 14px; background: #f7f7f7; color: #000; line-height: 1.6; font-size: 16px;
-      }
+      .bubble { max-width: 70ch; padding: 14px 16px; border: 2px solid #000; border-radius: 14px; background: #f7f7f7; color: #000; line-height: 1.6; font-size: 16px; }
       .bubble.user { background:#000; color:#fff; }
 
       .tag { font-size: 12px; font-weight: 700; margin-bottom: 6px; opacity:.7; }
@@ -517,7 +520,7 @@ function Style() {
         .hero h1 { font-size: 34px; }
         .sub { font-size: 16px; }
         .panelTitle { font-size: 16px; }
-        .list { height: 300px; } /* fixed on mobile too */
+        .list { height: 300px; }
         .bubble { max-width: 100%; }
       }
     `}</style>
