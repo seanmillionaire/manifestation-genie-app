@@ -38,7 +38,7 @@ export default function GenieFlow({ session, onDone }) {
 
   const [idx, setIdx] = useState(0)
 
-  const greeting = useMemo(() => `✨ Hey ${fullName}, let’s set up today in under a minute.`, [fullName])
+  const greeting = useMemo(() => `✨ Hey ${userName}, let’s get set up for today.`)
 
   useEffect(() => {
     let mounted = true
