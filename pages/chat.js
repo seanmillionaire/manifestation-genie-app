@@ -98,13 +98,17 @@ export default function Chat() {
   const PAYHIP_URL = 'https://hypnoticmeditations.ai/b/U7Z5m'
 
   // --- AUTO‑SCROLL: whenever messages/sending change, stick to bottom ---
-  useEffect(() => {
-    // small RAF to ensure DOM painted before scrolling
-    const id = requestAnimationFrame(() => {
-      endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
-    })
-    return () => cancelAnimationFrame(id)
-  }, [messages, sending])
+// --- AUTO‑SCROLL: scroll the chat container, not the page ---
+useEffect(() => {
+  const el = listRef.current
+  if (!el) return
+  // next frame so new DOM has laid out
+  const id = requestAnimationFrame(() => {
+    el.scrollTop = el.scrollHeight  // instant + precise
+  })
+  return () => cancelAnimationFrame(id)
+}, [messages, sending])
+
 
   // session + persisted gates
   useEffect(() => {
