@@ -8,58 +8,70 @@ const todayStr = () => new Date().toISOString().slice(0,10)
 const HM_STORE_URL = 'https://hypnoticmeditations.ai'  // or your Payhip URL
 
 // ---------- One-liner + tone (practical, non-cheesy) ----------
-function toOneLiner(text, max = 140) {
+// ---------- One‑liner + tone helpers (drop-in replacement) ----------
+function toOneLiner(text, max = 160) {
   if (!text) return ''
   let t = String(text)
     .replace(/\u2018|\u2019/g, "'")
     .replace(/\u201C|\u201D/g, '"')
     .replace(/\s+/g, ' ')
     .trim()
-  if (t.length > max) {
-    const stop = t.search(/[.?!;:]/)
-    if (stop !== -1 && stop < max) t = t.slice(0, stop + 1)
-    if (t.length > max) t = t.slice(0, max - 1) + '…'
+
+  // If there's a colon, keep intro + a short slice after it
+  const colon = t.indexOf(':')
+  if (colon !== -1) {
+    const head = t.slice(0, colon + 1).trim()
+    const tail = t.slice(colon + 1).trim()
+    let keep = (head + ' ' + tail).slice(0, max)
+    return keep.length > 0 ? keep : head
   }
-  return t
+
+  // Else, keep up to two short sentences
+  const parts = t
+    .split(/([.?!])/)
+    .reduce((acc, cur, i, arr) => { if (i % 2 === 0) acc.push(cur + (arr[i+1] || '')); return acc }, [])
+    .map(s => s.trim())
+    .filter(Boolean)
+
+  let keep = parts[0] || ''
+  if (keep.length < 40 && parts[1]) keep = (keep + ' ' + parts[1]).trim()
+
+  if (keep.length > max) keep = keep.slice(0, max - 1) + '…'
+  return keep
 }
 
 function enforceTone(raw) {
   if (!raw) return ''
   let t = String(raw)
 
-  // strip emojis
+  // strip decorative emoji (keep text, numbers, punctuation)
   t = t.replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}]/gu, '')
 
-  // remove fluff
-  const killWords = [
+  // de‑fluff (don’t touch concrete nouns/verbs)
+  const kill = [
     'awesome','amazing','magical','celebrate','journey','no worries','you got this',
     'imagine','visualize','picture','ready to','shall we','how about'
   ]
-  for (const w of killWords) {
-    t = t.replace(new RegExp(`\\b${w.replace(/[.*+?^${}()|[\\]\\\\]/g,'\\$&')}\\b`, 'gi'), '')
-  }
+  for (const w of kill) t = t.replace(new RegExp(`\\b${w.replace(/[.*+?^${}()|[\\]\\\\]/g,'\\$&')}\\b`,'gi'),'').trim()
 
-  // direct phrasing
+  // tighten phrasing
   t = t
     .replace(/\bwe paused at\b/gi, 'Resume at')
     .replace(/\bwant to continue now\??/gi, 'Continue?')
-    .replace(/\bdoes that feel better\??/gi, 'Better?')
     .replace(/\b(let’s|lets)\s+/gi, '')
 
-  // clean artifacts
+  // tidy artifacts
   t = t
     .replace(/\(\s*\)/g, '')
     .replace(/"\s*"/g, '')
     .replace(/“\s*”/g, '')
-    .replace(/\s*["”]\s*([?.!])/g, '$1')
-    .replace(/([?.!])["”]\s*/g, '$1 ')
     .replace(/\s{2,}/g, ' ')
     .replace(/([?!]){2,}/g, '$1')
-    .replace(/\s*([?.!])\s*$/,'$1')
+    .trim()
 
-  t = toOneLiner(t, 120).replace(/(\(\)|""|'')$/,'').trim()
-  return t
+  return toOneLiner(t, 160)
 }
+
 
 // ---------- heuristics: detect if user's line looks like a goal ----------
 function looksLikeGoal(s) {
@@ -273,6 +285,16 @@ export default function Chat() {
       } catch {
         rawReply = await r.text()
       }
+      // >>> PATCH: if user said yes and we have an intent, skip the dry model opener
+const yesish = /^(y|ya|yes|yep|sure|ok|okay)$/i.test(input.trim())
+if (yesish && (todayIntent || input)) {
+  const goal = todayIntent || input
+  const line = `Locked: “${goal}”. First move: list the 3 highest‑leverage actions.`
+  setMessages([...next, { role: 'assistant', content: line }])
+  setSending(false); inputRef.current?.focus()
+  return
+}
+
 
       // If we just captured a goal, override with a crisp confirmation
       let finalLine
