@@ -151,10 +151,16 @@ export default function Chat() {
     e.target.reset()
     setSending(true)
     try {
-      const r = await fetch('/api/chat', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: next }),
-      })
+const r = await fetch('/api/chat', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    messages: next,
+    userName,              // comes from your Supabase profile or fallback
+    hmUrl: HM_STORE_URL,   // <- this is the Hypnotic Meditations store URL
+  }),
+})
+
       const data = await r.json()
       setMessages([...next, { role: 'assistant', content: data.reply || '…' }])
     } catch {
