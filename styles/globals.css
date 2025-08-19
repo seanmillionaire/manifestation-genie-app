@@ -1,68 +1,128 @@
-/* ===========================
-   Manifestation Genie — Global Styles
-   Source of truth for colors & base UI
-   =========================== */
-
-:root {
-  --midnight: #0D1B2A;  /* Backgrounds */
-  --white:    #FFFFFF;  /* Text */
-  --gold:     #FFD700;  /* Logo + primary buttons */
-  --green:    #00A36C;  /* Money + button hover */
-  --purple:   #5A189A;  /* Mystical accent */
+/* /styles/globals.css — Manifestation Genie global theme */
+:root{
+  --midnight:#0D1B2A;   /* Backgrounds */
+  --white:#FFFFFF;      /* Text */
+  --gold:#FFD700;       /* Logo + primary buttons */
+  --green:#00A36C;      /* Money + hover */
+  --purple:#5A189A;     /* Mystical accent */
 }
 
-/* Reset / base */
-* { box-sizing: border-box; }
-html, body, #__next { height: 100%; }
-body {
-  margin: 0;
-  background: var(--midnight);
-  color: var(--white);
-  font-family: system-ui, -apple-system, Segoe UI, Roboto, Inter, Arial, sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+*{box-sizing:border-box}
+html,body,#__next{height:100%}
+body{
+  margin:0;
+  background:var(--midnight);
+  color:var(--white);
+  font-family:'Poppins',system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif;
+  -webkit-font-smoothing:antialiased;
+  -moz-osx-font-smoothing:grayscale;
+  position:relative;
+  overflow-x:hidden;
 }
 
-/* Links */
-a { color: var(--gold); text-decoration: none; }
-a:hover { color: var(--green); }
-
-/* Buttons (shared) */
-.btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 12px 18px;
-  border-radius: 10px;
-  border: 0;
-  cursor: pointer;
-  font-weight: 700;
-  transition: transform .06s ease, background-color .12s ease, box-shadow .12s ease;
+/* ===== Sacred Geometry + Stardust (global, subtle) ===== */
+@keyframes mg-drift { 
+  0% { transform:translate3d(0,0,0) }
+  50%{ transform:translate3d(-2%, -1%, 0) }
+  100%{ transform:translate3d(0,0,0) }
 }
-.btn:active { transform: translateY(1px); }
-.btn-primary { background: var(--gold); color: #0D1B2A; }
-.btn-primary:hover { background: var(--green); color: #082117; }
+@keyframes mg-spin { 
+  0% { transform:rotate(0deg) }
+  100% { transform:rotate(360deg) }
+}
 
-/* Accent utilities */
-.accent-money { color: var(--green); }   /* Use for $/profit/ROI */
-.accent-magic { color: var(--purple); }  /* Use for mystical words */
+/* Geometry layer */
+body::before{
+  content:"";
+  position:fixed; inset:0; pointer-events:none; z-index:0;
+  background:
+    radial-gradient(60% 60% at 50% 40%, rgba(90,24,154,0.10), transparent 60%),
+    radial-gradient(40% 40% at 70% 70%, rgba(255,215,0,0.06), transparent 60%),
+    /* faint mandala spokes */
+    conic-gradient(from 0deg, rgba(255,255,255,0.03) 0 2deg, transparent 2deg 8deg) 50% 45%/480px 480px no-repeat;
+  mix-blend-mode:screen;
+  animation: mg-drift 22s ease-in-out infinite;
+}
 
-/* Card / panel */
-.card {
-  background: rgba(255,255,255,0.04);
-  border: 1px solid rgba(255,255,255,0.08);
-  border-radius: 14px;
-  padding: 16px;
+/* Stardust layer */
+body::after{
+  content:"";
+  position:fixed; inset:0; pointer-events:none; z-index:0;
+  background:
+    radial-gradient(2px 2px at 20% 30%, rgba(255,255,255,0.12), transparent 60%),
+    radial-gradient(2px 2px at 70% 60%, rgba(255,255,255,0.10), transparent 60%),
+    radial-gradient(1.5px 1.5px at 40% 80%, rgba(255,255,255,0.08), transparent 60%),
+    radial-gradient(1.5px 1.5px at 85% 25%, rgba(255,255,255,0.08), transparent 60%);
+  animation: mg-drift 36s ease-in-out infinite reverse;
+  opacity:.35;
+}
+
+/* ===== Links ===== */
+a{color:var(--gold); text-decoration:none}
+a:hover{color:var(--green)}
+
+/* ===== Buttons ===== */
+.btn{
+  display:inline-flex; align-items:center; justify-content:center;
+  padding:12px 18px; border-radius:10px; border:0; cursor:pointer;
+  font-weight:700; transition:transform .06s ease, background-color .12s ease, box-shadow .18s ease, filter .2s ease;
+}
+.btn:active{transform:translateY(1px)}
+.btn-primary{
+  background:var(--gold); color:#0D1B2A;
+  /* Aura */
+  box-shadow:0 0 0 0 rgba(255,215,0,0.0), 0 6px 16px rgba(0,0,0,0.25);
+  filter: drop-shadow(0 0 8px rgba(255,215,0,0.35));
+}
+.btn-primary:hover{
+  background:var(--green); color:#082117;
+  box-shadow:0 0 22px 4px rgba(0,163,108,0.28);
+  filter: drop-shadow(0 0 10px rgba(0,163,108,0.45));
+}
+
+/* ===== Accent utilities ===== */
+.accent-money{ color:var(--green) }
+.accent-magic{ color:var(--purple) }
+
+/* ===== Brand glow (use on titles like “Manifestation Genie”) ===== */
+@keyframes mg-aura {
+  0%,100%{ text-shadow:
+    0 0 10px rgba(255,215,0,0.30),
+    0 0 22px rgba(90,24,154,0.20); }
+  50%{ text-shadow:
+    0 0 14px rgba(255,215,0,0.45),
+    0 0 30px rgba(90,24,154,0.28); }
+}
+.brand-glow{
+  color:var(--gold);
+  animation: mg-aura 3.8s ease-in-out infinite;
+}
+
+/* ===== Cards / Panels ===== */
+.card{
+  background:rgba(255,255,255,0.04);
+  border:1px solid rgba(255,255,255,0.12);
+  border-radius:14px; padding:16px;
   backdrop-filter: blur(6px);
 }
 
-/* Inputs */
-input, textarea {
-  background: #0F2435;
-  color: var(--white);
-  border: 1px solid #1E3448;
-  padding: 12px 14px;
-  border-radius: 10px;
-  outline: none;
+/* ===== Inputs ===== */
+input, textarea{
+  background:#0F2435; color:var(--white); border:1px solid #1E3448;
+  padding:12px 14px; border-radius:10px; outline:none;
 }
-input:focus, textarea:focus { border-color: var(--gold); }
+input:focus, textarea:focus{ border-color:var(--gold) }
+
+/* ===== Optional logo aura wrapper ===== */
+.brand-aura{
+  position:relative; display:inline-flex; align-items:center; justify-content:center;
+}
+.brand-aura::before{
+  content:"";
+  position:absolute; inset:-14px; border-radius:50%;
+  background:radial-gradient(60% 60% at 50% 50%, rgba(255,215,0,0.20), transparent 70%),
+             radial-gradient(40% 40% at 60% 40%, rgba(90,24,154,0.22), transparent 70%);
+  filter: blur(10px);
+  animation: mg-aura 4.5s ease-in-out infinite;
+  z-index:-1;
+}
