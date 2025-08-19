@@ -452,37 +452,67 @@ function Loader({ text }) {
 function Style() {
   return (
     <style jsx global>{`
-      html, body, #__next { margin:0; padding:0; background:#fff; color:#000; min-height:100%; }
+      /* DO NOT override html/body here — globals.css is the source of truth now */
       * { box-sizing: border-box; }
 
       .wrap { max-width: 960px; margin: 64px auto 88px; padding: 0 24px; }
 
       .hero { text-align: center; margin-bottom: 40px; }
-      .hero h1 { margin:0; font-size: 44px; font-weight: 900; color:#000; letter-spacing:.2px; }
-      .sub { margin: 10px auto 0; font-size: 18px; color:#111; max-width: 68ch; line-height: 1.6; }
-      .sub.small { font-size: 16px; color:#444; }
+      .hero h1 { margin:0; font-size: 44px; font-weight: 900; color: var(--gold); letter-spacing:.2px; }
+      .sub { margin: 10px auto 0; font-size: 18px; color: rgba(255,255,255,0.9); max-width: 68ch; line-height: 1.6; }
+      .sub.small { font-size: 16px; color: rgba(255,255,255,0.7); }
 
-      .card { background:#fff; color:#000; border:2px solid #000; border-radius:16px; padding:28px; margin-bottom:28px; }
+      /* Card now matches dark theme */
+      .card {
+        background: rgba(255,255,255,0.04);
+        color: var(--white);
+        border: 1px solid rgba(255,255,255,0.12);
+        border-radius:16px;
+        padding:28px;
+        margin-bottom:28px;
+        backdrop-filter: blur(6px);
+      }
       .center { display:flex; flex-direction:column; align-items:center; text-align:center; }
 
-      /* stack fixed-height list + composer cleanly */
+      /* Fixed-height chat console */
       .chatCard { padding: 28px 28px 22px; display:flex; flex-direction:column; }
 
-      .panelTitle { margin:0 0 14px 0; font-size:18px; font-weight:800; text-transform:uppercase; letter-spacing:.6px; }
-      .microNote { margin-top:10px; font-size:13px; color:#444; }
+      .panelTitle { margin:0 0 14px 0; font-size:18px; font-weight:800; text-transform:uppercase; letter-spacing:.6px; color: var(--gold); }
+      .microNote { margin-top:10px; font-size:13px; color: rgba(255,255,255,0.65); }
 
       .hStack { display:flex; gap:12px; align-items:center; }
 
-      .textInput, .textArea { border:2px solid #000; border-radius:12px; padding:14px 16px; font-size:16px; background:#fff; color:#000; outline:none; line-height:1.5; }
+      /* Inputs on dark */
+      .textInput, .textArea {
+        border:1px solid #1E3448;
+        border-radius:12px;
+        padding:14px 16px;
+        font-size:16px;
+        background:#0F2435;
+        color: var(--white);
+        outline:none;
+        line-height:1.5;
+      }
       .textInput { width:100%; }
       .textArea { flex:1; min-height: 84px; }
+      .textInput:focus, .textArea:focus { border-color: var(--gold); }
 
-      .btn { background:#000; color:#fff; border:2px solid #000; border-radius:12px; padding:12px 18px; font-weight:800; cursor:pointer; font-size:16px; }
+      /* Buttons use global styles from globals.css; keep base for layout */
+      .btn { font-size:16px; }
       .btn:disabled { opacity:.7; cursor:default; }
+      .ghost {
+        background: transparent;
+        color: var(--white);
+        border:1px solid rgba(255,255,255,0.3);
+        border-radius:12px;
+        padding:10px 14px;
+        font-weight:800;
+        cursor:pointer;
+        font-size:15px;
+      }
+      .ghost:hover { border-color: var(--gold); color: var(--gold); }
 
-      .ghost { background:#fff; color:#000; border:2px solid #000; border-radius:12px; padding:10px 14px; font-weight:800; cursor:pointer; font-size:15px; }
-
-      /* FIXED HEIGHT CHAT CONSOLE (desktop) */
+      /* Chat bubbles on dark */
       .list {
         height: 380px;
         overflow-y: auto;
@@ -498,22 +528,42 @@ function Style() {
       .row.me { justify-content: flex-end; }
       .avatar { font-size: 22px; line-height: 1; margin-top: 2px; font-family: "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji", system-ui, sans-serif !important; }
 
-      .bubble { max-width: 70ch; padding: 14px 16px; border: 2px solid #000; border-radius: 14px; background: #f7f7f7; color: #000; line-height: 1.6; font-size: 16px; }
-      .bubble.user { background:#000; color:#fff; }
+      .bubble {
+        max-width: 70ch;
+        padding: 14px 16px;
+        border: 1px solid rgba(255,255,255,0.15);
+        border-radius: 14px;
+        background: rgba(255,255,255,0.06);
+        color: var(--white);
+        line-height: 1.6;
+        font-size: 16px;
+      }
+      .bubble.user {
+        background: var(--gold);
+        color: #0D1B2A;
+        border-color: var(--gold);
+      }
 
-      .tag { font-size: 12px; font-weight: 700; margin-bottom: 6px; opacity:.7; }
+      .tag { font-size: 12px; font-weight: 700; margin-bottom: 6px; opacity:.7; color: rgba(255,255,255,0.8); }
+      .row.me .tag { color: #0D1B2A; opacity:.85; }
+
       .msg { white-space: pre-wrap; }
 
       .composer { display:flex; gap:12px; align-items:flex-end; margin-top: 8px; }
 
+      /* Typing dots adopt theme */
       .dots { display:inline-flex; gap:8px; align-items:center; }
-      .dots span { width:6px; height:6px; background:#000; border-radius:50%; opacity:.25; animation: blink 1.2s infinite ease-in-out; }
+      .dots span { width:6px; height:6px; background: var(--gold); border-radius:50%; opacity:.35; animation: blink 1.2s infinite ease-in-out; }
       .dots span:nth-child(2){ animation-delay:.15s }
       .dots span:nth-child(3){ animation-delay:.3s }
       @keyframes blink { 0%,80%,100%{opacity:.25} 40%{opacity:1} }
 
-      .fomoLine { text-align:center; font-weight:800; margin: 28px 0 8px; font-size:15px; }
+      .fomoLine { text-align:center; font-weight:800; margin: 28px 0 8px; font-size:15px; color: rgba(255,255,255,0.8); }
       .bottomRight { display:flex; justify-content:flex-end; margin-top: 20px; }
+
+      /* Accent helpers */
+      .accent-money { color: var(--green); }
+      .accent-magic { color: var(--purple); }
 
       @media (max-width: 560px) {
         .wrap { margin: 40px auto 64px; padding: 0 16px; }
