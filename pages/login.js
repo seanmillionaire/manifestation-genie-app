@@ -31,7 +31,7 @@ export default function Login() {
     <div className="wrap">
       <header className="hero">
         <h1>Manifestation Genie</h1>
-        <p className="sub">Your AI Assistant for Turning Goals into Reality</p>
+        <p className="sub">Your Personal AI Assistant for Turning Goals into Reality</p>
       </header>
 
       <section className="card center">
