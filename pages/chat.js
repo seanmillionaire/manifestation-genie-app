@@ -453,33 +453,40 @@ function Loader({ text }) {
 function Style() {
   return (
     <style jsx global>{`
-      /* DO NOT override html/body here — globals.css is the source of truth now */
+      /* globals come from globals.css */
       * { box-sizing: border-box; }
 
-      .wrap { max-width: 960px; margin: 64px auto 88px; padding: 0 24px; }
+      .wrap { max-width: 960px; margin: 48px auto 72px; padding: 0 24px; }
 
-      .hero { text-align: center; margin-bottom: 40px; }
+      .hero { text-align: center; margin-bottom: 28px; }
       .hero h1 { margin:0; font-size: 44px; font-weight: 900; color: var(--gold); letter-spacing:.2px; }
       .sub { margin: 10px auto 0; font-size: 18px; color: rgba(255,255,255,0.9); max-width: 68ch; line-height: 1.6; }
       .sub.small { font-size: 16px; color: rgba(255,255,255,0.7); }
 
-      /* Card now matches dark theme */
+      /* Card — dark glass */
       .card {
         background: rgba(255,255,255,0.04);
         color: var(--white);
         border: 1px solid rgba(255,255,255,0.12);
         border-radius:16px;
-        padding:28px;
-        margin-bottom:28px;
+        padding:22px;
+        margin-bottom:22px;
         backdrop-filter: blur(6px);
       }
       .center { display:flex; flex-direction:column; align-items:center; text-align:center; }
 
-      /* Fixed-height chat console */
-      .chatCard { padding: 28px 28px 22px; display:flex; flex-direction:column; }
+      /* --- Chat container sizing (fixed but not huge) --- */
+      .chatCard {
+        padding: 22px;
+        display: flex;
+        flex-direction: column;
+        /* key: keep it contained on laptop screens */
+        max-height: 70vh;
+        min-height: 360px;
+      }
 
-      .panelTitle { margin:0 0 14px 0; font-size:18px; font-weight:800; text-transform:uppercase; letter-spacing:.6px; color: var(--gold); }
-      .microNote { margin-top:10px; font-size:13px; color: rgba(255,255,255,0.65); }
+      .panelTitle { margin:0 0 12px 0; font-size:18px; font-weight:800; text-transform:uppercase; letter-spacing:.6px; color: var(--gold); }
+      .microNote { margin-top:8px; font-size:13px; color: rgba(255,255,255,0.65); }
 
       .hStack { display:flex; gap:12px; align-items:center; }
 
@@ -498,7 +505,7 @@ function Style() {
       .textArea { flex:1; min-height: 84px; }
       .textInput:focus, .textArea:focus { border-color: var(--gold); }
 
-      /* Buttons use global styles from globals.css; keep base for layout */
+      /* Buttons (layout only; colors from globals.css) */
       .btn { font-size:16px; }
       .btn:disabled { opacity:.7; cursor:default; }
       .ghost {
@@ -513,19 +520,19 @@ function Style() {
       }
       .ghost:hover { border-color: var(--gold); color: var(--gold); }
 
-      /* Chat bubbles on dark */
+      /* --- Chat list scroll behavior --- */
       .list {
-        height: 380px;
+        flex: 1;                 /* fill remaining space in .chatCard */
         overflow-y: auto;
-        margin-bottom: 16px;
-        padding-right: 4px;
+        margin-bottom: 12px;
+        padding-right: 6px;
         scroll-behavior: smooth;
         overscroll-behavior: contain;
         scrollbar-gutter: stable both-edges;
         -webkit-overflow-scrolling: touch;
       }
 
-      .row { display:flex; gap:14px; margin:16px 8px; }
+      .row { display:flex; gap:14px; margin:12px 8px; }
       .row.me { justify-content: flex-end; }
       .avatar { font-size: 22px; line-height: 1; margin-top: 2px; font-family: "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji", system-ui, sans-serif !important; }
 
@@ -550,29 +557,29 @@ function Style() {
 
       .msg { white-space: pre-wrap; }
 
-      .composer { display:flex; gap:12px; align-items:flex-end; margin-top: 8px; }
+      .composer { display:flex; gap:12px; align-items:flex-end; margin-top: 4px; }
 
-      /* Typing dots adopt theme */
+      /* Typing dots */
       .dots { display:inline-flex; gap:8px; align-items:center; }
       .dots span { width:6px; height:6px; background: var(--gold); border-radius:50%; opacity:.35; animation: blink 1.2s infinite ease-in-out; }
       .dots span:nth-child(2){ animation-delay:.15s }
       .dots span:nth-child(3){ animation-delay:.3s }
       @keyframes blink { 0%,80%,100%{opacity:.25} 40%{opacity:1} }
 
-      .fomoLine { text-align:center; font-weight:800; margin: 28px 0 8px; font-size:15px; color: rgba(255,255,255,0.8); }
-      .bottomRight { display:flex; justify-content:flex-end; margin-top: 20px; }
+      .fomoLine { text-align:center; font-weight:800; margin: 20px 0 6px; font-size:15px; color: rgba(255,255,255,0.8); }
+      .bottomRight { display:flex; justify-content:flex-end; margin-top: 16px; }
 
       /* Accent helpers */
       .accent-money { color: var(--green); }
       .accent-magic { color: var(--purple); }
 
+      /* Mobile tuning */
       @media (max-width: 560px) {
-        .wrap { margin: 40px auto 64px; padding: 0 16px; }
+        .wrap { margin: 32px auto 56px; padding: 0 16px; }
         .hero h1 { font-size: 34px; }
         .sub { font-size: 16px; }
         .panelTitle { font-size: 16px; }
-        .list { height: 300px; }
-        .bubble { max-width: 100%; }
+        .chatCard { max-height: 60vh; min-height: 300px; }
       }
     `}</style>
   )
