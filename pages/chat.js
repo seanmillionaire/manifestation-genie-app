@@ -16,24 +16,6 @@ export default function Chat() {
   const [checkingName, setCheckingName] = useState(true)
   const [wizardDone, setWizardDone] = useState(false)
 
-const [profile, setProfile] = useState(null)
-
-useEffect(() => {
-  const fetchProfile = async () => {
-    if (!session?.user?.id) return
-    const { data, error } = await supabase
-      .from("profiles")
-      .select("full_name")
-      .eq("id", session.user.id)
-      .single()
-    if (data) setProfile(data)
-  }
-  fetchProfile()
-}, [session])
-
-const userName = profile?.full_name || session?.user?.email || "Friend"
-
-  
   // chat
   const [messages, setMessages] = useState([])
   const [sending, setSending] = useState(false)
