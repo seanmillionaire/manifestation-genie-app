@@ -3,20 +3,19 @@ import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../src/supabaseClient'
 import GenieFlow from '../components/GenieFlow'
 
-function todayStr() {
-  return new Date().toISOString().slice(0,10)
-}
+const todayStr = () => new Date().toISOString().slice(0,10)
 
 export default function Chat() {
   const [session, setSession] = useState(null)
-  const [allowed, setAllowed] = useState(null) // null=checking
+  const [allowed, setAllowed] = useState(null)
 
-  // profile (greeting)
+  // profile
   const [profile, setProfile] = useState(null)
+  const [profileLoaded, setProfileLoaded] = useState(false)
   const firstName = ((profile?.full_name || '').trim().split(' ')[0]) || null
   const userName = firstName || session?.user?.email || 'Friend'
 
-  // gates persisted in localStorage (so focus/login changes don’t reset)
+  // gates
   const [hasName, setHasName] = useState(false)
   const [checkingName, setCheckingName] = useState(true)
   const [wizardDone, setWizardDone] = useState(false)
@@ -27,126 +26,108 @@ export default function Chat() {
   const listRef = useRef(null)
   const inputRef = useRef(null)
 
-  // resume helpers
+  // greet control
   const [bootGreeted, setBootGreeted] = useState(false)
 
-  // single FOMO line
+  // fomo
   const [todayCount, setTodayCount] = useState(null)
 
-  const PAYHIP_URL = 'https://hypnoticmeditations.ai/b/U7Z5m' // update for prod if needed
+  const PAYHIP_URL = 'https://hypnoticmeditations.ai/b/U7Z5m'
 
-  // -------- load session + persisted gates on mount --------
+  // session + persisted gates
   useEffect(() => {
-    const boot = async () => {
+    (async () => {
       const { data: { session } } = await supabase.auth.getSession()
       setSession(session || null)
       const uid = session?.user?.id
-      const dateKey = todayStr()
       if (uid) {
         const nameKey = `mg_hasName_${uid}`
-        const wizKey  = `mg_wizardDone_${uid}_${dateKey}`
+        const wizKey  = `mg_wizardDone_${uid}_${todayStr()}`
         if (localStorage.getItem(nameKey) === 'true') setHasName(true)
         if (localStorage.getItem(wizKey)  === 'true') setWizardDone(true)
       }
-    }
-    boot()
+    })()
   }, [])
 
-  // -------- auth listener (ignore token refresh) --------
+  // auth listener (ignore token refresh)
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, nextSession) => {
-      const currentUid = session?.user?.id
-      const nextUid = nextSession?.user?.id
+      const cur = session?.user?.id
+      const nxt = nextSession?.user?.id
       if (event === 'SIGNED_OUT') {
-        setSession(null)
-        setHasName(false)
-        setWizardDone(false)
-        setProfile(null)
-        setMessages([])
-        setBootGreeted(false)
+        setSession(null); setHasName(false); setWizardDone(false)
+        setProfile(null); setProfileLoaded(false)
+        setMessages([]); setBootGreeted(false)
         return
       }
-      if (event === 'SIGNED_IN' && currentUid !== nextUid) {
+      if (event === 'SIGNED_IN' && cur !== nxt) {
         setSession(nextSession)
-        const nameKey = `mg_hasName_${nextUid}`
-        const wizKey  = `mg_wizardDone_${nextUid}_${todayStr()}`
+        const nameKey = `mg_hasName_${nxt}`
+        const wizKey  = `mg_wizardDone_${nxt}_${todayStr()}`
         setHasName(localStorage.getItem(nameKey) === 'true')
         setWizardDone(localStorage.getItem(wizKey)  === 'true')
-        setMessages([])
-        setBootGreeted(false)
+        setProfile(null); setProfileLoaded(false)
+        setMessages([]); setBootGreeted(false)
       }
-      // Ignore TOKEN_REFRESHED / USER_UPDATED
     })
     return () => subscription.unsubscribe()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session?.user?.id])
 
-  // -------- allowlist --------
+  // allowlist
   useEffect(() => {
     let cancelled = false
-    async function run() {
+    ;(async () => {
       if (!session?.user?.email) return
       const { data, error } = await supabase
-        .from('allowlist').select('status')
-        .eq('email', session.user.email).maybeSingle()
+        .from('allowlist').select('status').eq('email', session.user.email).maybeSingle()
       if (!cancelled) setAllowed(error ? false : data?.status === 'active')
-    }
-    run()
+    })()
     return () => { cancelled = true }
   }, [session?.user?.email])
 
-  // -------- load profile full_name (used for greeting) --------
+  // load profile (and mark loaded)
   useEffect(() => {
     let cancelled = false
-    async function fetchProfile() {
+    ;(async () => {
       if (!session?.user?.id) return
       const { data } = await supabase
-        .from('profiles')
-        .select('full_name')
-        .eq('id', session.user.id)
-        .maybeSingle()
-      if (!cancelled) setProfile(data || null)
-    }
-    fetchProfile()
+        .from('profiles').select('full_name').eq('id', session.user.id).maybeSingle()
+      if (!cancelled) { setProfile(data || null); setProfileLoaded(true) }
+    })()
     return () => { cancelled = true }
   }, [session?.user?.id])
 
-  // -------- name gate: only set TRUE, never auto‑flip to false --------
+  // name gate (only set TRUE; never flip back)
   useEffect(() => {
     let cancelled = false
-    async function run() {
+    ;(async () => {
       if (!session?.user?.id) return
       if (hasName) { setCheckingName(false); return }
       const { data } = await supabase
-        .from('profiles')
-        .select('full_name')
-        .eq('id', session.user.id)
-        .maybeSingle()
+        .from('profiles').select('full_name').eq('id', session.user.id).maybeSingle()
       if (cancelled) return
-      const ok = !!(data?.full_name && data.full_name.trim().length > 0)
+      const ok = !!(data?.full_name && data.full_name.trim())
       setHasName(ok)
       if (ok) localStorage.setItem(`mg_hasName_${session.user.id}`, 'true')
       setCheckingName(false)
-    }
-    run()
+    })()
     return () => { cancelled = true }
   }, [session?.user?.id, hasName])
 
-  // -------- one‑line FOMO (count daily_entries for today) --------
+  // fomo
   useEffect(() => {
     let cancelled = false
-    async function fetchCount() {
+    ;(async () => {
       const { count, error } = await supabase
-        .from('daily_entries')
-        .select('user_id', { count: 'exact', head: true })
+        .from('daily_entries').select('user_id', { count: 'exact', head: true })
         .eq('entry_date', todayStr())
       if (!cancelled && !error) setTodayCount(count ?? 0)
-    }
-    fetchCount()
+    })()
     return () => { cancelled = true }
   }, [])
 
-  // chat autoscroll
+  // chat scroll
   useEffect(() => {
     const el = listRef.current
     if (el) el.scrollTop = el.scrollHeight
@@ -166,12 +147,10 @@ export default function Chat() {
     const next = [...messages, { role: 'user', content: input }]
     setMessages(next)
     e.target.reset()
-
     setSending(true)
     try {
       const r = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ messages: next }),
       })
       const data = await r.json()
@@ -179,12 +158,11 @@ export default function Chat() {
     } catch {
       setMessages([...next, { role: 'assistant', content: 'Error contacting Manifestation Genie.' }])
     } finally {
-      setSending(false)
-      inputRef.current?.focus()
+      setSending(false); inputRef.current?.focus()
     }
   }
 
-  // ---------- Step 1: Name ----------
+  // Step 1: Name
   function NameStep() {
     const [name, setName] = useState('')
     const [loading, setLoading] = useState(true)
@@ -192,16 +170,12 @@ export default function Chat() {
 
     useEffect(() => {
       let cancelled = false
-      if (!session?.user) return
       ;(async () => {
+        if (!session?.user?.id) return
         const { data } = await supabase
-          .from('profiles')
-          .select('full_name')
-          .eq('id', session.user.id)
-          .maybeSingle()
+          .from('profiles').select('full_name').eq('id', session.user.id).maybeSingle()
         if (cancelled) return
-        setName(data?.full_name || '')
-        setLoading(false)
+        setName(data?.full_name || ''); setLoading(false)
       })()
       return () => { cancelled = true }
     }, [session?.user?.id])
@@ -209,14 +183,13 @@ export default function Chat() {
     async function save() {
       if (!session?.user?.id) return
       setSaving(true)
-      await supabase
-        .from('profiles')
+      await supabase.from('profiles')
         .upsert({ id: session.user.id, full_name: name || null })
       setSaving(false)
-      const ok = !!(name && name.trim())
-      if (ok) {
+      if (name.trim()) {
         setHasName(true)
-        setProfile({ full_name: name }) // update greeting immediately
+        setProfile({ full_name: name })
+        setProfileLoaded(true)
         localStorage.setItem(`mg_hasName_${session.user.id}`, 'true')
       }
     }
@@ -225,14 +198,9 @@ export default function Chat() {
     return (
       <section className="card">
         <h2 className="panelTitle">Step 1 — Your Name</h2>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="Your name (used by the Genie)"
-            className="textInput"
-          />
-        <button type="button" className="btn" onClick={save} disabled={saving || !name.trim()}>
+        <div style={{ display:'flex', gap:8 }}>
+          <input className="textInput" value={name} onChange={e=>setName(e.target.value)} placeholder="Your name" />
+          <button type="button" className="btn" onClick={save} disabled={saving || !name.trim()}>
             {saving ? 'Saving…' : 'Save & Continue'}
           </button>
         </div>
@@ -240,25 +208,23 @@ export default function Chat() {
     )
   }
 
-  // ---------- Greet & Resume on every login ----------
+  // GREET AFTER PROFILE IS LOADED (so we can use first name)
   useEffect(() => {
-    async function primeGreeting() {
+    async function greet() {
       if (!session?.user?.id) return
+      if (!profileLoaded) return
       if (bootGreeted) return
 
-      // Always greet by name/email
-      let greeting = `👋 Welcome back, ${userName}. `
-
-      // Fetch today state to decide what to say
       const today = todayStr()
       const [{ data: intentRow }, { data: stepsRows }] = await Promise.all([
-        supabase.from('daily_intents').select('intent, idea').eq('user_id', session.user.id).eq('entry_date', today).maybeSingle(),
+        supabase.from('daily_intents').select('intent').eq('user_id', session.user.id).eq('entry_date', today).maybeSingle(),
         supabase.from('action_steps').select('step_order,label,completed').eq('user_id', session.user.id).eq('entry_date', today).order('step_order', { ascending: true })
       ])
 
       const steps = stepsRows || []
       const firstIncomplete = steps.find(s => !s.completed)
 
+      const hello = `👋 Welcome back, ${userName}. `
       let body
       if (!hasName) {
         body = `Let’s start with your name so the Genie can personalize everything.`
@@ -274,21 +240,17 @@ export default function Chat() {
         body = `Want me to kick off today’s flow for you?`
       }
 
-      setMessages([{ role: 'assistant', content: `${greeting}${body}` }])
+      setMessages([{ role: 'assistant', content: hello + body }])
       setBootGreeted(true)
     }
-    // We re‑prime whenever these change and haven’t greeted yet
-    primeGreeting()
-  }, [session?.user?.id, userName, hasName, wizardDone, bootGreeted])
+    greet()
+  }, [session?.user?.id, profileLoaded, userName, hasName, wizardDone, bootGreeted])
 
-  // ---------- auth/allowlist gates ----------
+  // gates
   if (!session) {
     return (
       <div className="wrap">
-        <div className="card center">
-          <p>Not logged in.</p>
-          <a className="btn" href="/login">Go to Login</a>
-        </div>
+        <div className="card center"><p>Not logged in.</p><a className="btn" href="/login">Go to Login</a></div>
         <Style />
       </div>
     )
@@ -307,13 +269,11 @@ export default function Chat() {
     )
   }
 
-  // persist wizard completion when fired
   function handleWizardDone() {
     const uid = session?.user?.id
     if (uid) localStorage.setItem(`mg_wizardDone_${uid}_${todayStr()}`, 'true')
     setWizardDone(true)
-    // re‑prime the greeting after finishing setup, so chat has a resume message
-    setBootGreeted(false)
+    setBootGreeted(false) // re‑prime greeting post‑wizard
   }
 
   return (
@@ -407,75 +367,33 @@ function Style() {
       * { box-sizing: border-box; }
 
       .wrap { max-width: 760px; margin: 36px auto 48px; padding: 0 16px; }
-
       .hero { text-align: center; margin-bottom: 24px; }
       .hero h1 { margin:0; font-size: 36px; font-weight: 900; color:#000; }
       .sub { margin-top: 8px; font-size: 16px; color:#111; }
       .sub.small { font-size: 14px; color:#444; }
 
-      .card {
-        background:#fff;
-        color:#000;
-        border:2px solid #000;
-        border-radius:12px;
-        padding:20px;
-        margin-bottom:20px;
-      }
-
+      .card { background:#fff; color:#000; border:2px solid #000; border-radius:12px; padding:20px; margin-bottom:20px; }
       .panelTitle { margin:0 0 10px 0; font-size:16px; font-weight:800; text-transform:uppercase; }
       .microNote { margin-top:8px; font-size:12px; color:#444; }
 
-      .textInput, .textArea {
-        border:2px solid #000;
-        border-radius:8px;
-        padding:10px 12px;
-        font-size:14px;
-        background:#fff;
-        color:#000;
-        outline:none;
-      }
+      .textInput, .textArea { border:2px solid #000; border-radius:8px; padding:10px 12px; font-size:14px; background:#fff; color:#000; outline:none; }
       .textInput { width:100%; }
       .textArea { flex:1; }
 
-      .btn {
-        background:#000;
-        color:#fff;
-        border:2px solid #000;
-        border-radius:8px;
-        padding:10px 16px;
-        font-weight:800;
-        cursor:pointer;
-      }
+      .btn { background:#000; color:#fff; border:2px solid #000; border-radius:8px; padding:10px 16px; font-weight:800; cursor:pointer; }
       .btn:disabled { opacity:.7; cursor:default; }
-
-      .ghost {
-        background:#fff;
-        color:#000;
-        border:2px solid #000;
-        border-radius:8px;
-        padding:8px 12px;
-        font-weight:800;
-        cursor:pointer;
-      }
+      .ghost { background:#fff; color:#000; border:2px solid #000; border-radius:8px; padding:8px 12px; font-weight:800; cursor:pointer; }
 
       .list { max-height: 320px; overflow-y: auto; margin-bottom: 12px; }
       .row { display:flex; gap:10px; margin:12px 6px; }
       .row.me { justify-content: flex-end; }
       .avatar { font-size: 20px; }
 
-      .bubble {
-        max-width: 75%;
-        padding: 10px 12px;
-        border: 2px solid #000;
-        border-radius: 10px;
-        background: #f6f6f6;
-        color: #000;
-      }
+      .bubble { max-width: 75%; padding: 10px 12px; border: 2px solid #000; border-radius: 10px; background: #f6f6f6; color: #000; }
       .bubble.user { background:#000; color:#fff; }
 
       .tag { font-size: 12px; font-weight: 700; margin-bottom: 4px; opacity:.85; }
       .msg { white-space: pre-wrap; }
-
       .composer { display:flex; gap:10px; align-items:flex-end; }
 
       .dots { display:inline-flex; gap:6px; align-items:center; }
@@ -485,7 +403,6 @@ function Style() {
       @keyframes blink { 0%,80%,100%{opacity:.25} 40%{opacity:1} }
 
       .fomoLine { text-align:center; font-weight:800; margin: 16px 0; }
-
       .bottomRight { display:flex; justify-content:flex-end; }
       .center { display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:40vh; text-align:center; }
     `}</style>
