@@ -545,7 +545,6 @@ function Style() {
       /* FIXED HEIGHT CHAT CONSOLE */
 .list {
   height: 380px;          /* pick your number */
-  min-height: 380px; */ /* remove this or match height */
   overflow-y: auto;
   margin-bottom: 16px;
   padding-right: 4px;
