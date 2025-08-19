@@ -195,7 +195,7 @@ export default function Chat() {
       const steps = stepsRows || []
       const firstIncomplete = steps.find(s => !s.completed)
 
-      const hello = `✨ Welcome back, ${userName}. The portal is open. `
+      const hello = `✨ Welcome back, ${userName}. The portal is open. Are you ready to manifest? `
       let body
       if (!hasName) {
         body = `Add your name to personalize.`
