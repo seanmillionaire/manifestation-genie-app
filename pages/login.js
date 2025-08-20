@@ -30,15 +30,12 @@ export default function Login() {
   return (
     <div className="wrap">
       <header className="hero">
-<div className="flex items-center justify-center space-x-3 mb-6">
+<div className="flex flex-col items-center mb-6">
   <img
     src="https://storage.googleapis.com/mixo-sites/images/file-3ee255ce-ebaa-41de-96f6-a1233499cf70.png"
     alt="Manifestation Genie Logo"
-    className="h-14 w-auto"
+    className="h-12 w-auto mb-3"
   />
-  <h1 className="text-4xl font-extrabold text-white">
-    Manifestation Genie
-  </h1>
 </div>
 
 <p className="text-lg text-gray-300 mb-8 text-center">
