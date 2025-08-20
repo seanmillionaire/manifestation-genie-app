@@ -358,7 +358,12 @@ export default function Chat() {
   return (
     <div className="wrap">
       <header className="hero">
-        <h1 className="brand-glow">Manifestation Genie</h1>
+        <img
+    src="https://storage.googleapis.com/mixo-sites/images/file-3ee255ce-ebaa-41de-96f6-a1233499cf70.png"
+    alt="Manifestation Genie Logo"
+    style={{ height: "60px", width: "auto" }}
+    className="mb-3"
+  />
         <p className="sub">Your Personal AI Assistant for Turning Goals into Reality</p>
         <p className="sub small">✨ Welcome back, {userName}.</p>
       </header>
