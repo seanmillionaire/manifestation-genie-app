@@ -512,6 +512,240 @@ function Style() {
   return (
     <style jsx global>{`
       /* globals come from globals.css */
+
+      
+/* ---- Questionnaire dark theme overrides (scoped) ---- */
+.wizardCard { overflow: hidden; }
+
+.wizardScope :global(*) {
+  font-family: inherit;
+}
+
+/* kill any light backgrounds the component sets */
+.wizardScope :global(.card),
+.wizardScope :global(.panel),
+.wizardScope :global(.box),
+.wizardScope :global(.container),
+.wizardScope :global(.section) {
+  background: rgba(255,255,255,0.04) !important;
+  border: 1px solid rgba(255,255,255,0.12) !important;
+  color: var(--white) !important;
+  border-radius: 12px !important;
+}
+
+/* plain areas that might be white */
+.wizardScope :global(.content),
+.wizardScope :global(.body),
+.wizardScope :global(.inner) {
+  background: transparent !important;
+  color: var(--white) !important;
+}
+
+/* headings + labels */
+.wizardScope :global(h1),
+.wizardScope :global(h2),
+.wizardScope :global(h3),
+.wizardScope :global(.title),
+.wizardScope :global(label) {
+  color: var(--white) !important;
+}
+
+/* inputs */
+.wizardScope :global(input),
+.wizardScope :global(textarea),
+.wizardScope :global(select) {
+  background:#0F2435 !important;
+  color: var(--white) !important;
+  border:1px solid #1E3448 !important;
+  border-radius: 12px !important;
+  padding: 12px 14px !important;
+  outline: none !important;
+}
+.wizardScope :global(input:focus),
+.wizardScope :global(textarea:focus),
+.wizardScope :global(select:focus) {
+  border-color: var(--gold) !important;
+}
+
+/* big option pills (if your questionnaire uses them) */
+.wizardScope :global(.pill),
+.wizardScope :global(.option),
+.wizardScope :global(.choice) {
+  background: rgba(255,255,255,0.06) !important;
+  border: 1px solid rgba(255,255,255,0.15) !important;
+  color: var(--white) !important;
+  border-radius: 14px !important;
+}
+
+/* primary / next buttons */
+.wizardScope :global(button),
+.wizardScope :global(.btn) {
+  font-weight: 800 !important;
+  border-radius: 12px !important;
+}
+.wizardScope :global(button.next),
+.wizardScope :global(.btn-primary),
+.wizardScope :global(button[type="submit"]) {
+  background: var(--gold) !important;
+  color: #0D1B2A !important;
+  border: 0 !important;
+  box-shadow: 0 6px 16px rgba(0,0,0,0.25) !important;
+  filter: drop-shadow(0 0 8px rgba(255,215,0,0.35)) !important;
+}
+.wizardScope :global(button.next:hover),
+.wizardScope :global(.btn-primary:hover),
+.wizardScope :global(button[type="submit"]:hover) {
+  background: var(--green) !important;
+  color: #082117 !important;
+}
+
+/* secondary / back buttons */
+.wizardScope :global(button.back),
+.wizardScope :global(.btn-secondary),
+.wizardScope :global(.ghost) {
+  background: transparent !important;
+  color: var(--white) !important;
+  border:1px solid rgba(255,255,255,0.3) !important;
+}
+.wizardScope :global(button[disabled]),
+.wizardScope :global(.disabled) {
+  opacity:.6 !important;
+  cursor: default !important;
+}
+
+/* step counter / small meta */
+.wizardScope :global(.meta),
+.wizardScope :global(.subtitle),
+.wizardScope :global(.help),
+.wizardScope :global(.hint) {
+  color: rgba(255,255,255,0.7) !important;
+}
+/* ===== Questionnaire dark theme (strong scope) ===== */
+.wizardCard { overflow:hidden; }
+
+.wizardScope :global(*) { font-family: inherit; }
+
+/* Nuke typical light containers */
+.wizardScope :global(.card),
+.wizardScope :global(.panel),
+.wizardScope :global(.box),
+.wizardScope :global(.container),
+.wizardScope :global(.section),
+.wizardScope :global(.step),
+.wizardScope :global(.question),
+.wizardScope :global(.content),
+.wizardScope :global(.inner),
+.wizardScope :global([class*="Card"]),
+.wizardScope :global([class*="Panel"]),
+.wizardScope :global([class*="Container"]) {
+  background: rgba(255,255,255,0.04) !important;
+  border: 1px solid rgba(255,255,255,0.12) !important;
+  color: var(--white) !important;
+  border-radius: 12px !important;
+}
+
+/* Catch common inline/utility backgrounds */
+.wizardScope :global([style*="background:#fff"]),
+.wizardScope :global([style*="background: #fff"]),
+.wizardScope :global([style*="background:white"]),
+.wizardScope :global([class*="bg-white"]),
+.wizardScope :global([class*="bg-gray-50"]) {
+  background: transparent !important;
+  color: var(--white) !important;
+}
+
+/* Headings / labels */
+.wizardScope :global(h1), 
+.wizardScope :global(h2), 
+.wizardScope :global(h3),
+.wizardScope :global(.title), 
+.wizardScope :global(label) {
+  color: var(--white) !important;
+}
+
+/* Body text / small meta */
+.wizardScope :global(p), 
+.wizardScope :global(.subtitle), 
+.wizardScope :global(.help), 
+.wizardScope :global(.hint), 
+.wizardScope :global(.meta) {
+  color: rgba(255,255,255,0.85) !important;
+}
+
+/* Inputs */
+.wizardScope :global(input),
+.wizardScope :global(textarea),
+.wizardScope :global(select) {
+  background:#0F2435 !important;
+  color: var(--white) !important;
+  border:1px solid #1E3448 !important;
+  border-radius: 12px !important;
+  padding: 12px 14px !important;
+  outline: none !important;
+}
+.wizardScope :global(input:focus),
+.wizardScope :global(textarea:focus),
+.wizardScope :global(select:focus) {
+  border-color: var(--gold) !important;
+}
+
+/* Choice pills / options */
+.wizardScope :global(.pill),
+.wizardScope :global(.option),
+.wizardScope :global(.choice),
+.wizardScope :global([class*="option"]),
+.wizardScope :global([class*="Choice"]) {
+  background: rgba(255,255,255,0.06) !important;
+  border: 1px solid rgba(255,255,255,0.15) !important;
+  color: var(--white) !important;
+  border-radius: 14px !important;
+}
+
+/* Primary / Next buttons */
+.wizardScope :global(button),
+.wizardScope :global(.btn) {
+  font-weight: 800 !important;
+  border-radius: 12px !important;
+}
+.wizardScope :global(button.next),
+.wizardScope :global(.btn-primary),
+.wizardScope :global(button[type="submit"]),
+.wizardScope :global([class*="primary"]) {
+  background: var(--gold) !important;
+  color: #0D1B2A !important;
+  border: 0 !important;
+  box-shadow: 0 6px 16px rgba(0,0,0,0.25) !important;
+  filter: drop-shadow(0 0 8px rgba(255,215,0,0.35)) !important;
+}
+.wizardScope :global(button.next:hover),
+.wizardScope :global(.btn-primary:hover),
+.wizardScope :global(button[type="submit"]:hover),
+.wizardScope :global([class*="primary"]:hover) {
+  background: var(--green) !important;
+  color: #082117 !important;
+}
+
+/* Secondary / Back */
+.wizardScope :global(button.back),
+.wizardScope :global(.btn-secondary),
+.wizardScope :global(.ghost),
+.wizardScope :global([class*="secondary"]) {
+  background: transparent !important;
+  color: var(--white) !important;
+  border:1px solid rgba(255,255,255,0.3) !important;
+}
+.wizardScope :global(button[disabled]),
+.wizardScope :global(.disabled) {
+  opacity:.6 !important; cursor: default !important;
+}
+
+/* Remove stray white borders */
+.wizardScope :global(hr),
+.wizardScope :global(.divider) {
+  border-color: rgba(255,255,255,0.12) !important;
+  background: rgba(255,255,255,0.12) !important;
+}
+
       * { box-sizing: border-box; }
 
       .wrap { max-width: 960px; margin: 48px auto 72px; padding: 0 24px; }
@@ -636,113 +870,6 @@ function Style() {
       /* Accent helpers */
       .accent-money { color: var(--green); }
       .accent-magic { color: var(--purple); }
-
-/* ---- Questionnaire dark theme overrides (scoped) ---- */
-.wizardCard { overflow: hidden; }
-
-.wizardScope :global(*) {
-  font-family: inherit;
-}
-
-/* kill any light backgrounds the component sets */
-.wizardScope :global(.card),
-.wizardScope :global(.panel),
-.wizardScope :global(.box),
-.wizardScope :global(.container),
-.wizardScope :global(.section) {
-  background: rgba(255,255,255,0.04) !important;
-  border: 1px solid rgba(255,255,255,0.12) !important;
-  color: var(--white) !important;
-  border-radius: 12px !important;
-}
-
-/* plain areas that might be white */
-.wizardScope :global(.content),
-.wizardScope :global(.body),
-.wizardScope :global(.inner) {
-  background: transparent !important;
-  color: var(--white) !important;
-}
-
-/* headings + labels */
-.wizardScope :global(h1),
-.wizardScope :global(h2),
-.wizardScope :global(h3),
-.wizardScope :global(.title),
-.wizardScope :global(label) {
-  color: var(--white) !important;
-}
-
-/* inputs */
-.wizardScope :global(input),
-.wizardScope :global(textarea),
-.wizardScope :global(select) {
-  background:#0F2435 !important;
-  color: var(--white) !important;
-  border:1px solid #1E3448 !important;
-  border-radius: 12px !important;
-  padding: 12px 14px !important;
-  outline: none !important;
-}
-.wizardScope :global(input:focus),
-.wizardScope :global(textarea:focus),
-.wizardScope :global(select:focus) {
-  border-color: var(--gold) !important;
-}
-
-/* big option pills (if your questionnaire uses them) */
-.wizardScope :global(.pill),
-.wizardScope :global(.option),
-.wizardScope :global(.choice) {
-  background: rgba(255,255,255,0.06) !important;
-  border: 1px solid rgba(255,255,255,0.15) !important;
-  color: var(--white) !important;
-  border-radius: 14px !important;
-}
-
-/* primary / next buttons */
-.wizardScope :global(button),
-.wizardScope :global(.btn) {
-  font-weight: 800 !important;
-  border-radius: 12px !important;
-}
-.wizardScope :global(button.next),
-.wizardScope :global(.btn-primary),
-.wizardScope :global(button[type="submit"]) {
-  background: var(--gold) !important;
-  color: #0D1B2A !important;
-  border: 0 !important;
-  box-shadow: 0 6px 16px rgba(0,0,0,0.25) !important;
-  filter: drop-shadow(0 0 8px rgba(255,215,0,0.35)) !important;
-}
-.wizardScope :global(button.next:hover),
-.wizardScope :global(.btn-primary:hover),
-.wizardScope :global(button[type="submit"]:hover) {
-  background: var(--green) !important;
-  color: #082117 !important;
-}
-
-/* secondary / back buttons */
-.wizardScope :global(button.back),
-.wizardScope :global(.btn-secondary),
-.wizardScope :global(.ghost) {
-  background: transparent !important;
-  color: var(--white) !important;
-  border:1px solid rgba(255,255,255,0.3) !important;
-}
-.wizardScope :global(button[disabled]),
-.wizardScope :global(.disabled) {
-  opacity:.6 !important;
-  cursor: default !important;
-}
-
-/* step counter / small meta */
-.wizardScope :global(.meta),
-.wizardScope :global(.subtitle),
-.wizardScope :global(.help),
-.wizardScope :global(.hint) {
-  color: rgba(255,255,255,0.7) !important;
-}
 
       /* Mobile tuning */
       @media (max-width: 560px) {
