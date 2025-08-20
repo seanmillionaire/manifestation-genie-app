@@ -512,6 +512,101 @@ function Style() {
   return (
     <style jsx global>{`
       /* globals come from globals.css */
+/* === HARD OVERRIDE so the questionnaire matches the dark theme === */
+
+/* Make the scope itself dark glass so transparent children look correct */
+.wizardCard { overflow: hidden; }
+.wizardScope {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 12px;
+  padding: 12px;
+}
+
+/* 1) Nuke light backgrounds on ALL descendants */
+.wizardScope :global(*) {
+  background: transparent !important;
+  background-color: transparent !important;
+  color: var(--white) !important;
+  border-color: rgba(255,255,255,0.15) !important;
+  font-family: inherit !important;
+}
+
+/* 2) Put back good backgrounds for the pieces we want */
+.wizardScope :global(input),
+.wizardScope :global(textarea),
+.wizardScope :global(select) {
+  background: #0F2435 !important;
+  color: var(--white) !important;
+  border: 1px solid #1E3448 !important;
+  border-radius: 12px !important;
+  padding: 12px 14px !important;
+}
+.wizardScope :global(input:focus),
+.wizardScope :global(textarea:focus),
+.wizardScope :global(select:focus) {
+  border-color: var(--gold) !important;
+}
+
+.wizardScope :global(.pill),
+.wizardScope :global(.option),
+.wizardScope :global(.choice),
+.wizardScope :global([class*="option"]),
+.wizardScope :global([class*="Choice"]) {
+  background: rgba(255,255,255,0.06) !important;
+  border: 1px solid rgba(255,255,255,0.15) !important;
+  color: var(--white) !important;
+  border-radius: 14px !important;
+}
+
+/* Primary buttons → Gold, hover Green */
+.wizardScope :global(button),
+.wizardScope :global(.btn) {
+  font-weight: 800 !important;
+  border-radius: 12px !important;
+}
+.wizardScope :global(.btn-primary),
+.wizardScope :global(button[type="submit"]),
+.wizardScope :global([class*="primary"]) {
+  background: var(--gold) !important;
+  color: #0D1B2A !important;
+  border: 0 !important;
+  box-shadow: 0 6px 16px rgba(0,0,0,0.25) !important;
+  filter: drop-shadow(0 0 8px rgba(255,215,0,0.35)) !important;
+}
+.wizardScope :global(.btn-primary:hover),
+.wizardScope :global(button[type="submit"]:hover),
+.wizardScope :global([class*="primary"]:hover) {
+  background: var(--green) !important;
+  color: #082117 !important;
+}
+
+/* Secondary buttons */
+.wizardScope :global(.btn-secondary),
+.wizardScope :global(.ghost),
+.wizardScope :global([class*="secondary"]),
+.wizardScope :global(button.back) {
+  background: transparent !important;
+  color: var(--white) !important;
+  border: 1px solid rgba(255,255,255,0.3) !important;
+}
+
+/* Don’t accidentally tint media */
+.wizardScope :global(img),
+.wizardScope :global(video),
+.wizardScope :global(svg),
+.wizardScope :global(canvas) {
+  background: transparent !important;
+  border-color: transparent !important;
+}
+
+/* Step counters / helper text */
+.wizardScope :global(.meta),
+.wizardScope :global(.subtitle),
+.wizardScope :global(.help),
+.wizardScope :global(.hint) {
+  color: rgba(255,255,255,0.8) !important;
+}
 
       
 /* ---- Questionnaire dark theme overrides (scoped) ---- */
