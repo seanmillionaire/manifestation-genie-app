@@ -91,6 +91,28 @@ export default function Chat() {
   // today's intent memory
   const [todayIntent, setTodayIntent] = useState(null)
 
+  // --- NEW: restart / continue choice banner ---
+  const [showReturnChoice, setShowReturnChoice] = useState(false)
+  function continueToday() {
+    setShowReturnChoice(false)
+    setMessages(m => [
+      ...m,
+      { role: 'assistant', content: enforceTone("Continuing today’s path. What’s the next move?") }
+    ])
+  }
+  async function restartQuestionnaire() {
+    const uid = session?.user?.id
+    if (!uid) return
+    localStorage.removeItem(`mg_wizardDone_${uid}_${todayStr()}`) // reopen Step 2 for today
+    setWizardDone(false)
+    setTodayIntent(null)
+    setShowReturnChoice(false)
+    setMessages(m => [
+      ...m,
+      { role: 'assistant', content: enforceTone('Starting fresh. Step 2 — Today’s Genie Flow is ready.') }
+    ])
+  }
+
   // --- AUTO‑SCROLL: scroll the chat container, not the page ---
   useEffect(() => {
     const el = listRef.current
@@ -211,6 +233,7 @@ export default function Chat() {
 
       setMessages([{ role: 'assistant', content: enforceTone(hello + body) }])
       setBootGreeted(true)
+      setShowReturnChoice(true) // <-- show Restart vs Continue bar
     }
     greet()
   }, [session?.user?.id, profileLoaded, userName, hasName, wizardDone, bootGreeted])
@@ -236,6 +259,19 @@ export default function Chat() {
     e.preventDefault()
     const input = e.target.prompt.value.trim()
     if (!input) return
+
+    // quick voice commands for the choice
+    const cmd = input.toLowerCase()
+    if (/(^|\b)(restart|start over|reset setup|begin again)(\b|$)/i.test(cmd)) {
+      await restartQuestionnaire()
+      e.target.reset()
+      return
+    }
+    if (/(^|\b)(continue|resume|carry on|proceed)(\b|$)/i.test(cmd)) {
+      continueToday()
+      e.target.reset()
+      return
+    }
 
     const next = [...messages, { role: 'user', content: input }]
     setMessages(next)
@@ -322,10 +358,30 @@ export default function Chat() {
   return (
     <div className="wrap">
       <header className="hero">
-  <h1 className="brand-glow">Manifestation Genie</h1>
-  <p className="sub">Your Personal AI Assistant for Turning Goals into Reality</p>
-  <p className="sub small">✨ Welcome back, {userName}.</p>
-</header>
+        <h1 className="brand-glow">Manifestation Genie</h1>
+        <p className="sub">Your Personal AI Assistant for Turning Goals into Reality</p>
+        <p className="sub small">✨ Welcome back, {userName}.</p>
+      </header>
+
+      {/* --- Restart vs Continue bar --- */}
+      {showReturnChoice && hasName && (
+        <section className="card choiceBar">
+          <div className="choiceRow">
+            <div className="choiceCopy">
+              <strong>How shall we proceed?</strong>
+              <span className="hint">Restart today’s questionnaire, or continue your path for today.</span>
+            </div>
+            <div className="choiceActions">
+              <button type="button" className="ghost" onClick={restartQuestionnaire}>
+                Restart Setup
+              </button>
+              <button type="button" className="btn btn-primary" onClick={continueToday}>
+                Continue Today
+              </button>
+            </div>
+          </div>
+        </section>
+      )}
 
       {!hasName && <NameStep session={session} setHasName={setHasName} setProfile={setProfile} setProfileLoaded={setProfileLoaded} />}
 
@@ -376,10 +432,9 @@ export default function Chat() {
               disabled={sending}
               className="textArea"
             />
-<button type="submit" className="btn btn-primary" disabled={sending}>
-  {sending ? 'Sending…' : 'Send'}
-</button>
-
+            <button type="submit" className="btn btn-primary" disabled={sending}>
+              {sending ? 'Sending…' : 'Send'}
+            </button>
           </form>
         </section>
       )}
@@ -430,9 +485,9 @@ function NameStep({ session, setHasName, setProfile, setProfileLoaded }) {
       <h2 className="panelTitle">Step 1 — Your Name</h2>
       <div className="hStack">
         <input className="textInput" value={name} onChange={e=>setName(e.target.value)} placeholder="Your name" />
-<button type="button" className="btn btn-primary" onClick={save} disabled={saving || !name.trim()}>
-  {saving ? 'Saving…' : 'Save & Continue'}
-</button>
+        <button type="button" className="btn btn-primary" onClick={save} disabled={saving || !name.trim()}>
+          {saving ? 'Saving…' : 'Save & Continue'}
+        </button>
       </div>
     </section>
   )
@@ -475,12 +530,18 @@ function Style() {
       }
       .center { display:flex; flex-direction:column; align-items:center; text-align:center; }
 
+      /* --- Return choice bar --- */
+      .choiceBar { padding: 14px 16px; margin-top: 16px; }
+      .choiceRow { display:flex; align-items:center; justify-content:space-between; gap:14px; flex-wrap:wrap; }
+      .choiceCopy { display:flex; flex-direction:column; gap:4px; }
+      .choiceCopy .hint { font-size:13px; color: rgba(255,255,255,0.7); }
+      .choiceActions { display:flex; gap:10px; }
+
       /* --- Chat container sizing (fixed but not huge) --- */
       .chatCard {
         padding: 22px;
         display: flex;
         flex-direction: column;
-        /* key: keep it contained on laptop screens */
         max-height: 70vh;
         min-height: 360px;
       }
@@ -522,7 +583,7 @@ function Style() {
 
       /* --- Chat list scroll behavior --- */
       .list {
-        flex: 1;                 /* fill remaining space in .chatCard */
+        flex: 1;
         overflow-y: auto;
         margin-bottom: 12px;
         padding-right: 6px;
