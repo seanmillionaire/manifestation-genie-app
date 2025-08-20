@@ -34,7 +34,8 @@ export default function Login() {
   <img
     src="https://storage.googleapis.com/mixo-sites/images/file-3ee255ce-ebaa-41de-96f6-a1233499cf70.png"
     alt="Manifestation Genie Logo"
-    className="h-12 w-auto mb-3"
+    style={{ height: "60px", width: "auto" }}
+    className="mb-3"
   />
 </div>
 
