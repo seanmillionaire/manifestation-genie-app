@@ -228,7 +228,7 @@ export default function Questionnaire({ session, onDone }) {
     medQ:  `Did you listen to your Hypnotic Meditation today?`,
     medNoFollow: `All good. What got in the way? (Press Enter to continue)`,
     medEmpathy: `I hear you. No stress. Today’s not over. One track, one shift — that’s all it takes.`,
-    goalQ: `Cool. Now tell me—what’s one thing you want to bring into reality today?`,
+    goalQ: `Great. Now tell me—what’s the #1 thing you want to manifest today?`,
     goalExamples: `Examples: “$100 today” / “Go for a walk” / “Meet someone new” (Press Enter to continue)`,
     clarifyQ: `Can you be more clear? The clearer the target, the easier the Genie can help. (Press Enter to continue)`,
     clarifyHints: `e.g., “make $100 on Fiverr” or “30‑minute walk”.`,
