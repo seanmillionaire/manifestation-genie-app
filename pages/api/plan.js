@@ -1,23 +1,26 @@
-// pages/api/plan.js — Personalized 3-step plan (category-aware + strict JSON)
-// Requires OPENAI_API_KEY in your env. Falls back to deterministic templates if the model is vague.
+// pages/api/plan.js — Personalized 3‑step plan (strict JSON + smart fallback)
+// Expects body: { focus, detail, mood, didMeditation, name }
+// Returns: { steps: [{ label: string, url: string|null }, ...] }
 
 import OpenAI from 'openai'
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY
+})
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
 
   const {
-    focus = '',           // "Financial freedom" | "Better health" | "Loving relationships" | "Spiritual connection" | "Other"
-    detail = '',          // user's clarified target text
-    mood = null,          // 'good' | 'okay' | 'low'
-    didMeditation = null, // boolean
+    focus = '',
+    detail = '',
+    mood = null,            // 'good' | 'okay' | 'low' (optional)
+    didMeditation = null,   // true | false | null (optional)
     name = 'Friend'
   } = req.body || {}
 
-  // --- Heuristic helpers for stronger personalization ---
-  const guessUrl = (txt='') => {
+  // ---------- Helpers ----------
+  const guessUrl = (txt = '') => {
     const t = txt.toLowerCase()
     if (t.includes('fiverr')) return 'https://www.fiverr.com'
     if (t.includes('upwork')) return 'https://www.upwork.com'
@@ -29,115 +32,112 @@ export default async function handler(req, res) {
     if (t.includes('youtube')) return 'https://studio.youtube.com'
     if (t.includes('instagram') || t.includes('ig')) return 'https://www.instagram.com'
     if (t.includes('tiktok')) return 'https://www.tiktok.com'
-    if (t.includes('journal')) return 'https://docs.new'
+    if (t.includes('journal') || t.includes('notes')) return 'https://docs.new'
+    if (t.includes('calendar')) return 'https://calendar.google.com'
     return null
   }
 
   const fallbackTemplates = (focusKey, detailText) => {
-    const d = detailText || ''
+    const d = (detailText || '').trim()
     const url = guessUrl(d)
     switch ((focusKey || '').toLowerCase()) {
       case 'financial freedom':
         return [
-          { label: `Pick one revenue move that fits “${d || 'today'}” and open the tool you’ll use`, url: url || null },
-          { label: `Do one concrete action toward “${d || 'today’s cash goal'}” (e.g., publish 1 listing / pitch 5 leads / DM 3 prospects)`, url: null },
-          { label: `Log what happened + schedule the next micro‑step (timebox 15–20 min)`, url: 'https://calendar.google.com' }
+          { label: `Open the exact money tool for “${d || 'today'}” (e.g., Etsy/Fiverr)`, url: url },
+          { label: `Do 1 revenue action: ${d ? d : 'publish 1 listing / pitch 5 leads / DM 3 prospects'}`, url: null },
+          { label: `Record result + schedule the next 15‑min money move`, url: 'https://calendar.google.com' }
         ]
       case 'better health':
         return [
-          { label: `Prepare your health action for “${d || 'today'}” (water bottle, shoes, app open)`, url: null },
-          { label: `Do the action now: ${d ? d : '20–30 min movement or track one meal'}`, url: null },
-          { label: `Record it (notes or app), then stack a tiny follow‑up (set tomorrow’s cue)`, url: null }
+          { label: `Prep your health action (fill bottle, shoes on, app open)`, url: null },
+          { label: d ? `Do it now: ${d}` : `Do 20–30 min of movement or track one meal`, url: null },
+          { label: `Log it (app/notes) + set tomorrow’s cue`, url: null }
         ]
       case 'loving relationships':
         return [
-          { label: `Choose the person(s) for “${d || 'today’s connection'}”`, url: null },
-          { label: `Send / say one tangible gesture (message, call, plan, appreciation) specific to “${d || 'them'}”`, url: null },
-          { label: `Capture the response + set the next touchpoint`, url: null }
+          { label: `Pick who to connect with for “${d || 'today’s connection'}”`, url: null },
+          { label: `Send/say one meaningful message or plan (specific to “${d || 'them'}”)`, url: null },
+          { label: `Note the response + plan the next touchpoint`, url: null }
         ]
       case 'spiritual connection':
         return [
-          { label: `Set your space for “${d || 'practice'}” (2‑minute prep)`, url: null },
-          { label: `Do the practice: ${d ? d : '7–10 min breathwork / stillness / gratitude walk'}`, url: null },
-          { label: `Write one sentence of insight and choose the next cue`, url: 'https://docs.new' }
+          { label: `Set your space for “${d || 'practice'}” (2‑min setup)`, url: null },
+          { label: d ? `Practice now: ${d}` : `Do 7–10 min breathwork / stillness / gratitude walk`, url: null },
+          { label: `Write one insight + choose tomorrow’s cue`, url: 'https://docs.new' }
         ]
       default:
         return [
-          { label: `Open the exact workspace/tool for “${d || 'your task'}”`, url: url || null },
-          { label: `Ship one visible unit toward “${d || 'the outcome'}” (define DONE in 20–30 min)`, url: null },
-          { label: `Document the result + schedule the next unit`, url: 'https://calendar.google.com' }
+          { label: `Open the workspace for “${d || 'your task'}”`, url: url },
+          { label: `Ship one visible unit toward “${d || 'the outcome'}” (≤20–30 min)`, url: null },
+          { label: `Document result + schedule the next unit`, url: 'https://calendar.google.com' }
         ]
     }
   }
 
-  // Build rich context for the model
-  const context = {
+  // ---------- Model prompt ----------
+  const system = [
+    'You are Manifestation Genie, a practical coach.',
+    'Create a laser‑specific 3‑step plan for TODAY only.',
+    'Each step MUST reference the user’s goal (category and/or detail).',
+    'Steps must be concrete, measurable, and doable within 30–40 minutes total.',
+    'Use action verbs, numbers, and timeboxes. Avoid generic fluff.',
+    'If the goal is vague, the first step may be a 5‑minute micro‑clarification.',
+    'Return STRICT JSON as: {"steps":[{"label":string,"url":string|null},...]} with exactly 3 steps.'
+  ].join(' ')
+
+  const userMsg = {
     name,
     focus,
     detail,
     mood,
-    didMeditation
+    didMeditation,
+    note: 'If the detail suggests a known tool (Etsy, Fiverr, YouTube Studio, Instagram, etc.), include its URL on that step.'
   }
 
-  const system = [
-    "You are Manifestation Genie, a practical coach. Produce a laser‑specific 3‑step plan.",
-    "Every step MUST reference the user’s actual goal (category and detail).",
-    "Steps must be concrete, measurable, and doable within 30–40 minutes total.",
-    "Prefer verbs, counts, and timeboxes. Avoid generic fluff.",
-    "If the goal is vague, propose a micro clarification step as Step 1, tailored to the user’s wording.",
-    "Return strict JSON with exactly 3 steps: { steps: [{label, url|null}, ...] }."
-  ].join(' ')
-
-  const userMsg = [
-    `User: ${JSON.stringify(context, null, 2)}`,
-    "Return JSON only. Use a helpful link if an obvious tool is mentioned (Fiverr, YouTube Studio, etc.)."
-  ].join('\n')
-
+  // ---------- Call model ----------
   let steps = null
-
   try {
     const resp = await openai.chat.completions.create({
       model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+      temperature: 0.5,
       response_format: { type: 'json_object' },
       messages: [
         { role: 'system', content: system },
-        { role: 'user', content: userMsg }
-      ],
-      temperature: 0.5
+        { role: 'user', content: JSON.stringify(userMsg, null, 2) }
+      ]
     })
 
     const raw = resp?.choices?.[0]?.message?.content || '{}'
     const parsed = JSON.parse(raw)
     const arr = Array.isArray(parsed?.steps) ? parsed.steps : []
 
-    // Coerce & de-genericize
-    steps = arr
-      .map((s, i) => ({
-        label: String(s?.label || '').trim(),
-        url: s?.url ? String(s.url) : null
-      }))
+    // Coerce and validate
+    const keyText = `${(focus || '').toLowerCase()} ${(detail || '').toLowerCase()}`
+    const mentionsGoal = (txt) => {
+      const t = (txt || '').toLowerCase()
+      // allow mentioning either focus or detail
+      return focus ? t.includes((focus || '').toLowerCase()) || t.includes((detail || '').toLowerCase()) : true
+    }
+
+    const clean = arr
+      .map(s => ({ label: String(s?.label || '').trim(), url: s?.url ? String(s.url) : null }))
       .filter(s => s.label)
 
-    // Ensure each step mentions focus/detail at least implicitly
-    const keyText = (focus || '') + ' ' + (detail || '')
-    const looksGeneric = (txt) => {
-      const t = (txt || '').toLowerCase()
-      return !t.includes((focus || '').toLowerCase()) && !t.includes((detail || '').toLowerCase())
-    }
-    if (steps.length !== 3 || steps.some(s => looksGeneric(s.label))) {
-      steps = null // trigger fallback
+    if (clean.length === 3 && clean.every(s => mentionsGoal(s.label))) {
+      steps = clean
     }
   } catch (e) {
-    // swallow and fallback
+    // swallow; we’ll fallback
   }
 
+  // ---------- Fallback if model is vague or failed ----------
   if (!steps) {
     steps = fallbackTemplates(focus, detail)
   }
 
-  // Final sanity: exactly 3
-  steps = (steps || []).slice(0, 3).map((s, i) => ({
-    label: s.label || `Step ${i+1}`,
+  // Final shape (exactly 3)
+  steps = steps.slice(0, 3).map((s, i) => ({
+    label: s.label || `Step ${i + 1}`,
     url: s.url || null
   }))
 
