@@ -1,4 +1,5 @@
-// pages/chat.js — One‑Liner, Practical + Light‑Magic Genie with Goal Memory (fixed-height console, cleaned)
+// pages/chat.js — Clean, single-path flow (no Restart/Continue fork)
+// One‑Liner, Practical + Light‑Magic Genie with Goal Memory (fixed-height console, cleaned)
 import Questionnaire from '../components/Questionnaire'
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../src/supabaseClient'
@@ -91,10 +92,8 @@ export default function Chat() {
   // today's intent memory
   const [todayIntent, setTodayIntent] = useState(null)
 
-  // --- NEW: restart / continue choice banner ---
-  const [showReturnChoice, setShowReturnChoice] = useState(false)
+  // --- (kept) voice-only helpers: allow users to type "restart" / "continue" if they want ---
   function continueToday() {
-    setShowReturnChoice(false)
     setMessages(m => [
       ...m,
       { role: 'assistant', content: enforceTone("Continuing today’s path. What’s the next move?") }
@@ -106,7 +105,6 @@ export default function Chat() {
     localStorage.removeItem(`mg_wizardDone_${uid}_${todayStr()}`) // reopen Step 2 for today
     setWizardDone(false)
     setTodayIntent(null)
-    setShowReturnChoice(false)
     setMessages(m => [
       ...m,
       { role: 'assistant', content: enforceTone('Starting fresh. Step 2 — Today’s Genie Flow is ready.') }
@@ -202,7 +200,7 @@ export default function Chat() {
     return () => { cancelled = true }
   }, [session?.user?.id, hasName])
 
-  // greet after profile is loaded; read today's intent
+  // greet after profile is loaded; read today's intent (no fork, just gentle welcome)
   useEffect(() => {
     async function greet() {
       if (!session?.user?.id || !profileLoaded || bootGreeted) return
@@ -217,23 +215,22 @@ export default function Chat() {
       const steps = stepsRows || []
       const firstIncomplete = steps.find(s => !s.completed)
 
-      const hello = `✨ Welcome back, ${userName}. The portal is open. Are you ready to manifest? `
+      const hello = `✨ Welcome back, ${userName}.`
       let body
       if (!hasName) {
         body = `Add your name to personalize.`
       } else if (!wizardDone) {
-        body = `Resume today’s quick setup.`
+        body = `Begin today’s quick check‑in.`
       } else if (intentRow?.intent) {
-        body = `Continue with “${intentRow.intent}”?`
+        body = `Locked goal: “${intentRow.intent}”. Continue?`
       } else if (firstIncomplete) {
-        body = `Resume at Step ${firstIncomplete.step_order} — ${firstIncomplete.label}. Shall we continue…?`
+        body = `Resume Step ${firstIncomplete.step_order} — ${firstIncomplete.label}.`
       } else {
         body = `What’s today’s goal in one line?`
       }
 
-      setMessages([{ role: 'assistant', content: enforceTone(hello + body) }])
+      setMessages([{ role: 'assistant', content: enforceTone(`${hello} ${body}`) }])
       setBootGreeted(true)
-      setShowReturnChoice(true) // <-- show Restart vs Continue bar
     }
     greet()
   }, [session?.user?.id, profileLoaded, userName, hasName, wizardDone, bootGreeted])
@@ -260,7 +257,7 @@ export default function Chat() {
     const input = e.target.prompt.value.trim()
     if (!input) return
 
-    // quick voice commands for the choice
+    // hidden quick commands (keep power users happy)
     const cmd = input.toLowerCase()
     if (/(^|\b)(restart|start over|reset setup|begin again)(\b|$)/i.test(cmd)) {
       await restartQuestionnaire()
@@ -359,48 +356,30 @@ export default function Chat() {
     <div className="wrap">
       <header className="hero">
         <img
-    src="https://storage.googleapis.com/mixo-sites/images/file-3ee255ce-ebaa-41de-96f6-a1233499cf70.png"
-    alt="Manifestation Genie Logo"
-    style={{ height: "60px", width: "auto" }}
-    className="mb-3"
-  />
+          src="https://storage.googleapis.com/mixo-sites/images/file-3ee255ce-ebaa-41de-96f6-a1233499cf70.png"
+          alt="Manifestation Genie Logo"
+          style={{ height: "60px", width: "auto" }}
+          className="mb-3"
+        />
         <p className="sub">Your Personal AI Assistant for Turning Goals into Reality</p>
         <p className="sub small">✨ Welcome back, {userName}.</p>
       </header>
 
-      {/* --- Restart vs Continue bar --- */}
-      {showReturnChoice && hasName && (
-        <section className="card choiceBar">
-          <div className="choiceRow">
-            <div className="choiceCopy">
-              <strong>How shall we proceed?</strong>
-              <span className="hint">Restart today’s questionnaire, or continue your path for today.</span>
-            </div>
-            <div className="choiceActions">
-              <button type="button" className="ghost" onClick={restartQuestionnaire}>
-                Restart Setup
-              </button>
-              <button type="button" className="btn btn-primary" onClick={continueToday}>
-                Continue Today
-              </button>
-            </div>
+      {/* Step 1 — Name (only if missing) */}
+      {!hasName && <NameStep session={session} setHasName={setHasName} setProfile={setProfile} setProfileLoaded={setProfileLoaded} />}
+
+      {/* Step 2 — Today’s Genie Flow (auto-start, no fork) */}
+      {hasName && !wizardDone && (
+        <section className="card wizardCard">
+          <h2 className="panelTitle">Step 2 — Today’s Genie Flow</h2>
+          <div className="wizardScope">
+            <Questionnaire session={session} onDone={handleWizardDone} />
           </div>
+          <div className="microNote">Complete the flow to unlock the chat console.</div>
         </section>
       )}
 
-      {!hasName && <NameStep session={session} setHasName={setHasName} setProfile={setProfile} setProfileLoaded={setProfileLoaded} />}
-
-{hasName && !wizardDone && (
-  <section className="card wizardCard">
-    <h2 className="panelTitle">Step 2 — Today’s Genie Flow</h2>
-    <div className="wizardScope">
-      <Questionnaire session={session} onDone={handleWizardDone} />
-    </div>
-    <div className="microNote">Complete the flow to unlock the chat console.</div>
-  </section>
-)}
-
-
+      {/* Chat console after the flow */}
       {hasName && wizardDone && (
         <section className="card chatCard">
           <h2 className="panelTitle">Chat with the Genie</h2>
@@ -517,337 +496,96 @@ function Style() {
   return (
     <style jsx global>{`
       /* globals come from globals.css */
-/* === HARD OVERRIDE so the questionnaire matches the dark theme === */
+      /* === HARD OVERRIDE so the questionnaire matches the dark theme === */
 
-/* Make the scope itself dark glass so transparent children look correct */
-.wizardCard { overflow: hidden; }
-.wizardScope {
-  background: rgba(255,255,255,0.04);
-  border: 1px solid rgba(255,255,255,0.12);
-  border-radius: 12px;
-  padding: 12px;
-}
+      .wizardCard { overflow: hidden; }
+      .wizardScope {
+        background: rgba(255,255,255,0.04);
+        border: 1px solid rgba(255,255,255,0.12);
+        border-radius: 12px;
+        padding: 12px;
+      }
 
-/* 1) Nuke light backgrounds on ALL descendants */
-.wizardScope :global(*) {
-  background: transparent !important;
-  background-color: transparent !important;
-  color: var(--white) !important;
-  border-color: rgba(255,255,255,0.15) !important;
-  font-family: inherit !important;
-}
+      .wizardScope :global(*) {
+        background: transparent !important;
+        background-color: transparent !important;
+        color: var(--white) !important;
+        border-color: rgba(255,255,255,0.15) !important;
+        font-family: inherit !important;
+      }
 
-/* 2) Put back good backgrounds for the pieces we want */
-.wizardScope :global(input),
-.wizardScope :global(textarea),
-.wizardScope :global(select) {
-  background: #0F2435 !important;
-  color: var(--white) !important;
-  border: 1px solid #1E3448 !important;
-  border-radius: 12px !important;
-  padding: 12px 14px !important;
-}
-.wizardScope :global(input:focus),
-.wizardScope :global(textarea:focus),
-.wizardScope :global(select:focus) {
-  border-color: var(--gold) !important;
-}
+      .wizardScope :global(input),
+      .wizardScope :global(textarea),
+      .wizardScope :global(select) {
+        background: #0F2435 !important;
+        color: var(--white) !important;
+        border: 1px solid #1E3448 !important;
+        border-radius: 12px !important;
+        padding: 12px 14px !important;
+      }
+      .wizardScope :global(input:focus),
+      .wizardScope :global(textarea:focus),
+      .wizardScope :global(select:focus) {
+        border-color: var(--gold) !important;
+      }
 
-.wizardScope :global(.pill),
-.wizardScope :global(.option),
-.wizardScope :global(.choice),
-.wizardScope :global([class*="option"]),
-.wizardScope :global([class*="Choice"]) {
-  background: rgba(255,255,255,0.06) !important;
-  border: 1px solid rgba(255,255,255,0.15) !important;
-  color: var(--white) !important;
-  border-radius: 14px !important;
-}
+      .wizardScope :global(.pill),
+      .wizardScope :global(.option),
+      .wizardScope :global(.choice),
+      .wizardScope :global([class*="option"]),
+      .wizardScope :global([class*="Choice"]) {
+        background: rgba(255,255,255,0.06) !important;
+        border: 1px solid rgba(255,255,255,0.15) !important;
+        color: var(--white) !important;
+        border-radius: 14px !important;
+      }
 
-/* Primary buttons → Gold, hover Green */
-.wizardScope :global(button),
-.wizardScope :global(.btn) {
-  font-weight: 800 !important;
-  border-radius: 12px !important;
-}
-.wizardScope :global(.btn-primary),
-.wizardScope :global(button[type="submit"]),
-.wizardScope :global([class*="primary"]) {
-  background: var(--gold) !important;
-  color: #0D1B2A !important;
-  border: 0 !important;
-  box-shadow: 0 6px 16px rgba(0,0,0,0.25) !important;
-  filter: drop-shadow(0 0 8px rgba(255,215,0,0.35)) !important;
-}
-.wizardScope :global(.btn-primary:hover),
-.wizardScope :global(button[type="submit"]:hover),
-.wizardScope :global([class*="primary"]:hover) {
-  background: var(--green) !important;
-  color: #082117 !important;
-}
+      .wizardScope :global(button),
+      .wizardScope :global(.btn) {
+        font-weight: 800 !important;
+        border-radius: 12px !important;
+      }
+      .wizardScope :global(.btn-primary),
+      .wizardScope :global(button[type="submit"]),
+      .wizardScope :global([class*="primary"]) {
+        background: var(--gold) !important;
+        color: #0D1B2A !important;
+        border: 0 !important;
+        box-shadow: 0 6px 16px rgba(0,0,0,0.25) !important;
+        filter: drop-shadow(0 0 8px rgba(255,215,0,0.35)) !important;
+      }
+      .wizardScope :global(.btn-primary:hover),
+      .wizardScope :global(button[type="submit"]:hover),
+      .wizardScope :global([class*="primary"]:hover) {
+        background: var(--green) !important;
+        color: #082117 !important;
+      }
 
-/* Secondary buttons */
-.wizardScope :global(.btn-secondary),
-.wizardScope :global(.ghost),
-.wizardScope :global([class*="secondary"]),
-.wizardScope :global(button.back) {
-  background: transparent !important;
-  color: var(--white) !important;
-  border: 1px solid rgba(255,255,255,0.3) !important;
-}
+      .wizardScope :global(.btn-secondary),
+      .wizardScope :global(.ghost),
+      .wizardScope :global([class*="secondary"]),
+      .wizardScope :global(button.back) {
+        background: transparent !important;
+        color: var(--white) !important;
+        border: 1px solid rgba(255,255,255,0.3) !important;
+      }
 
-/* Don’t accidentally tint media */
-.wizardScope :global(img),
-.wizardScope :global(video),
-.wizardScope :global(svg),
-.wizardScope :global(canvas) {
-  background: transparent !important;
-  border-color: transparent !important;
-}
+      .wizardScope :global(img),
+      .wizardScope :global(video),
+      .wizardScope :global(svg),
+      .wizardScope :global(canvas) {
+        background: transparent !important;
+        border-color: transparent !important;
+      }
 
-/* Step counters / helper text */
-.wizardScope :global(.meta),
-.wizardScope :global(.subtitle),
-.wizardScope :global(.help),
-.wizardScope :global(.hint) {
-  color: rgba(255,255,255,0.8) !important;
-}
-
-      
-/* ---- Questionnaire dark theme overrides (scoped) ---- */
-.wizardCard { overflow: hidden; }
-
-.wizardScope :global(*) {
-  font-family: inherit;
-}
-
-/* kill any light backgrounds the component sets */
-.wizardScope :global(.card),
-.wizardScope :global(.panel),
-.wizardScope :global(.box),
-.wizardScope :global(.container),
-.wizardScope :global(.section) {
-  background: rgba(255,255,255,0.04) !important;
-  border: 1px solid rgba(255,255,255,0.12) !important;
-  color: var(--white) !important;
-  border-radius: 12px !important;
-}
-
-/* plain areas that might be white */
-.wizardScope :global(.content),
-.wizardScope :global(.body),
-.wizardScope :global(.inner) {
-  background: transparent !important;
-  color: var(--white) !important;
-}
-
-/* headings + labels */
-.wizardScope :global(h1),
-.wizardScope :global(h2),
-.wizardScope :global(h3),
-.wizardScope :global(.title),
-.wizardScope :global(label) {
-  color: var(--white) !important;
-}
-
-/* inputs */
-.wizardScope :global(input),
-.wizardScope :global(textarea),
-.wizardScope :global(select) {
-  background:#0F2435 !important;
-  color: var(--white) !important;
-  border:1px solid #1E3448 !important;
-  border-radius: 12px !important;
-  padding: 12px 14px !important;
-  outline: none !important;
-}
-.wizardScope :global(input:focus),
-.wizardScope :global(textarea:focus),
-.wizardScope :global(select:focus) {
-  border-color: var(--gold) !important;
-}
-
-/* big option pills (if your questionnaire uses them) */
-.wizardScope :global(.pill),
-.wizardScope :global(.option),
-.wizardScope :global(.choice) {
-  background: rgba(255,255,255,0.06) !important;
-  border: 1px solid rgba(255,255,255,0.15) !important;
-  color: var(--white) !important;
-  border-radius: 14px !important;
-}
-
-/* primary / next buttons */
-.wizardScope :global(button),
-.wizardScope :global(.btn) {
-  font-weight: 800 !important;
-  border-radius: 12px !important;
-}
-.wizardScope :global(button.next),
-.wizardScope :global(.btn-primary),
-.wizardScope :global(button[type="submit"]) {
-  background: var(--gold) !important;
-  color: #0D1B2A !important;
-  border: 0 !important;
-  box-shadow: 0 6px 16px rgba(0,0,0,0.25) !important;
-  filter: drop-shadow(0 0 8px rgba(255,215,0,0.35)) !important;
-}
-.wizardScope :global(button.next:hover),
-.wizardScope :global(.btn-primary:hover),
-.wizardScope :global(button[type="submit"]:hover) {
-  background: var(--green) !important;
-  color: #082117 !important;
-}
-
-/* secondary / back buttons */
-.wizardScope :global(button.back),
-.wizardScope :global(.btn-secondary),
-.wizardScope :global(.ghost) {
-  background: transparent !important;
-  color: var(--white) !important;
-  border:1px solid rgba(255,255,255,0.3) !important;
-}
-.wizardScope :global(button[disabled]),
-.wizardScope :global(.disabled) {
-  opacity:.6 !important;
-  cursor: default !important;
-}
-
-/* step counter / small meta */
-.wizardScope :global(.meta),
-.wizardScope :global(.subtitle),
-.wizardScope :global(.help),
-.wizardScope :global(.hint) {
-  color: rgba(255,255,255,0.7) !important;
-}
-/* ===== Questionnaire dark theme (strong scope) ===== */
-.wizardCard { overflow:hidden; }
-
-.wizardScope :global(*) { font-family: inherit; }
-
-/* Nuke typical light containers */
-.wizardScope :global(.card),
-.wizardScope :global(.panel),
-.wizardScope :global(.box),
-.wizardScope :global(.container),
-.wizardScope :global(.section),
-.wizardScope :global(.step),
-.wizardScope :global(.question),
-.wizardScope :global(.content),
-.wizardScope :global(.inner),
-.wizardScope :global([class*="Card"]),
-.wizardScope :global([class*="Panel"]),
-.wizardScope :global([class*="Container"]) {
-  background: rgba(255,255,255,0.04) !important;
-  border: 1px solid rgba(255,255,255,0.12) !important;
-  color: var(--white) !important;
-  border-radius: 12px !important;
-}
-
-/* Catch common inline/utility backgrounds */
-.wizardScope :global([style*="background:#fff"]),
-.wizardScope :global([style*="background: #fff"]),
-.wizardScope :global([style*="background:white"]),
-.wizardScope :global([class*="bg-white"]),
-.wizardScope :global([class*="bg-gray-50"]) {
-  background: transparent !important;
-  color: var(--white) !important;
-}
-
-/* Headings / labels */
-.wizardScope :global(h1), 
-.wizardScope :global(h2), 
-.wizardScope :global(h3),
-.wizardScope :global(.title), 
-.wizardScope :global(label) {
-  color: var(--white) !important;
-}
-
-/* Body text / small meta */
-.wizardScope :global(p), 
-.wizardScope :global(.subtitle), 
-.wizardScope :global(.help), 
-.wizardScope :global(.hint), 
-.wizardScope :global(.meta) {
-  color: rgba(255,255,255,0.85) !important;
-}
-
-/* Inputs */
-.wizardScope :global(input),
-.wizardScope :global(textarea),
-.wizardScope :global(select) {
-  background:#0F2435 !important;
-  color: var(--white) !important;
-  border:1px solid #1E3448 !important;
-  border-radius: 12px !important;
-  padding: 12px 14px !important;
-  outline: none !important;
-}
-.wizardScope :global(input:focus),
-.wizardScope :global(textarea:focus),
-.wizardScope :global(select:focus) {
-  border-color: var(--gold) !important;
-}
-
-/* Choice pills / options */
-.wizardScope :global(.pill),
-.wizardScope :global(.option),
-.wizardScope :global(.choice),
-.wizardScope :global([class*="option"]),
-.wizardScope :global([class*="Choice"]) {
-  background: rgba(255,255,255,0.06) !important;
-  border: 1px solid rgba(255,255,255,0.15) !important;
-  color: var(--white) !important;
-  border-radius: 14px !important;
-}
-
-/* Primary / Next buttons */
-.wizardScope :global(button),
-.wizardScope :global(.btn) {
-  font-weight: 800 !important;
-  border-radius: 12px !important;
-}
-.wizardScope :global(button.next),
-.wizardScope :global(.btn-primary),
-.wizardScope :global(button[type="submit"]),
-.wizardScope :global([class*="primary"]) {
-  background: var(--gold) !important;
-  color: #0D1B2A !important;
-  border: 0 !important;
-  box-shadow: 0 6px 16px rgba(0,0,0,0.25) !important;
-  filter: drop-shadow(0 0 8px rgba(255,215,0,0.35)) !important;
-}
-.wizardScope :global(button.next:hover),
-.wizardScope :global(.btn-primary:hover),
-.wizardScope :global(button[type="submit"]:hover),
-.wizardScope :global([class*="primary"]:hover) {
-  background: var(--green) !important;
-  color: #082117 !important;
-}
-
-/* Secondary / Back */
-.wizardScope :global(button.back),
-.wizardScope :global(.btn-secondary),
-.wizardScope :global(.ghost),
-.wizardScope :global([class*="secondary"]) {
-  background: transparent !important;
-  color: var(--white) !important;
-  border:1px solid rgba(255,255,255,0.3) !important;
-}
-.wizardScope :global(button[disabled]),
-.wizardScope :global(.disabled) {
-  opacity:.6 !important; cursor: default !important;
-}
-
-/* Remove stray white borders */
-.wizardScope :global(hr),
-.wizardScope :global(.divider) {
-  border-color: rgba(255,255,255,0.12) !important;
-  background: rgba(255,255,255,0.12) !important;
-}
+      .wizardScope :global(.meta),
+      .wizardScope :global(.subtitle),
+      .wizardScope :global(.help),
+      .wizardScope :global(.hint) {
+        color: rgba(255,255,255,0.8) !important;
+      }
 
       * { box-sizing: border-box; }
-
       .wrap { max-width: 960px; margin: 48px auto 72px; padding: 0 24px; }
 
       .hero { text-align: center; margin-bottom: 28px; }
@@ -855,7 +593,6 @@ function Style() {
       .sub { margin: 10px auto 0; font-size: 18px; color: rgba(255,255,255,0.9); max-width: 68ch; line-height: 1.6; }
       .sub.small { font-size: 16px; color: rgba(255,255,255,0.7); }
 
-      /* Card — dark glass */
       .card {
         background: rgba(255,255,255,0.04);
         color: var(--white);
@@ -867,14 +604,6 @@ function Style() {
       }
       .center { display:flex; flex-direction:column; align-items:center; text-align:center; }
 
-      /* --- Return choice bar --- */
-      .choiceBar { padding: 14px 16px; margin-top: 16px; }
-      .choiceRow { display:flex; align-items:center; justify-content:space-between; gap:14px; flex-wrap:wrap; }
-      .choiceCopy { display:flex; flex-direction:column; gap:4px; }
-      .choiceCopy .hint { font-size:13px; color: rgba(255,255,255,0.7); }
-      .choiceActions { display:flex; gap:10px; }
-
-      /* --- Chat container sizing (fixed but not huge) --- */
       .chatCard {
         padding: 22px;
         display: flex;
@@ -888,7 +617,6 @@ function Style() {
 
       .hStack { display:flex; gap:12px; align-items:center; }
 
-      /* Inputs on dark */
       .textInput, .textArea {
         border:1px solid #1E3448;
         border-radius:12px;
@@ -903,7 +631,6 @@ function Style() {
       .textArea { flex:1; min-height: 84px; }
       .textInput:focus, .textArea:focus { border-color: var(--gold); }
 
-      /* Buttons (layout only; colors from globals.css) */
       .btn { font-size:16px; }
       .btn:disabled { opacity:.7; cursor:default; }
       .ghost {
@@ -918,14 +645,13 @@ function Style() {
       }
       .ghost:hover { border-color: var(--gold); color: var(--gold); }
 
-      /* --- Chat list scroll behavior --- */
       .list {
         flex: 1;
         overflow-y: auto;
         margin-bottom: 12px;
         padding-right: 6px;
         scroll-behavior: smooth;
-        overscroll-behavior: contain;
+        overscroll-beavior: contain;
         scrollbar-gutter: stable both-edges;
         -webkit-overflow-scrolling: touch;
       }
@@ -957,7 +683,6 @@ function Style() {
 
       .composer { display:flex; gap:12px; align-items:flex-end; margin-top: 4px; }
 
-      /* Typing dots */
       .dots { display:inline-flex; gap:8px; align-items:center; }
       .dots span { width:6px; height:6px; background: var(--gold); border-radius:50%; opacity:.35; animation: blink 1.2s infinite ease-in-out; }
       .dots span:nth-child(2){ animation-delay:.15s }
@@ -967,11 +692,6 @@ function Style() {
       .fomoLine { text-align:center; font-weight:800; margin: 20px 0 6px; font-size:15px; color: rgba(255,255,255,0.8); }
       .bottomRight { display:flex; justify-content:flex-end; margin-top: 16px; }
 
-      /* Accent helpers */
-      .accent-money { color: var(--green); }
-      .accent-magic { color: var(--purple); }
-
-      /* Mobile tuning */
       @media (max-width: 560px) {
         .wrap { margin: 32px auto 56px; padding: 0 16px; }
         .hero h1 { font-size: 34px; }
