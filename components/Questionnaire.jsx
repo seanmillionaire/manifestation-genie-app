@@ -1,4 +1,5 @@
-// components/Questionnaire.jsx — Click-to-Advance Flow (no Next/Back)
+// components/Questionnaire.jsx — Click-to-Advance Flow (Focus Area → Clarify)
+// Implements: focus-area list, reinforced clarity step, no Next/Back
 import { useEffect, useMemo, useState, useRef } from 'react'
 import { supabase } from '../src/supabaseClient'
 
@@ -27,21 +28,20 @@ export default function Questionnaire({ session, onDone }) {
   const [today] = useState(() => todayStr())
 
   // Flow state
-  const [mood, setMood] = useState(null)                 // 'good' | 'okay' | 'low'
-  const [didMeditation, setDidMeditation] = useState(null) // true|false
+  const [mood, setMood] = useState(null)                      // 'good' | 'okay' | 'low'
+  const [didMeditation, setDidMeditation] = useState(null)    // true|false
   const [noMeditationReason, setNoMeditationReason] = useState('')
-  const [intent, setIntent] = useState('')               // the “one thing”
-  const [idea, setIdea] = useState('')                   // clarified variant (optional)
-  const [steps, setSteps] = useState([])                 // generated action steps
+  const [focus, setFocus] = useState('')                      // chosen category (intent)
+  const [detail, setDetail] = useState('')                    // clarified target (idea)
+  const [steps, setSteps] = useState([])                      // generated action steps
   const [generating, setGenerating] = useState(false)
 
   // Step index
   const [idx, setIdx] = useState(0)
 
-  // refs for inputs (to allow Enter-to-advance)
+  // refs for inputs (Enter-to-advance)
   const reasonRef = useRef(null)
-  const goalRef = useRef(null)
-  const clarifyRef = useRef(null)
+  const detailRef = useRef(null)
 
   // Load profile + any today rows to resume
   useEffect(() => {
@@ -64,19 +64,17 @@ export default function Questionnaire({ session, onDone }) {
         .eq('user_id', user.id).eq('entry_date', today).maybeSingle()
       if (mounted && entry) {
         setMood(entry.mood || null)
-        setDidMeditation(
-          typeof entry.did_meditation === 'boolean' ? entry.did_meditation : null
-        )
+        setDidMeditation(typeof entry.did_meditation === 'boolean' ? entry.did_meditation : null)
         setNoMeditationReason(entry.no_meditation_reason || '')
       }
 
-      // Intent/Idea
+      // Intent/Idea (we map intent -> focus, idea -> detail)
       const { data: dIntent } = await supabase
         .from('daily_intents').select('intent,idea')
         .eq('user_id', user.id).eq('entry_date', today).maybeSingle()
       if (mounted && dIntent) {
-        setIntent(dIntent.intent || '')
-        setIdea(dIntent.idea || '')
+        setFocus(dIntent.intent || '')
+        setDetail(dIntent.idea || '')
       }
 
       // Steps
@@ -97,9 +95,9 @@ export default function Questionnaire({ session, onDone }) {
     return () => { mounted = false }
   }, [user, today])
 
-  // Flow map: mood → meditation → (reason if not) → goal → clarify → plan → finish
+  // Flow map: mood → meditation → (reason if not) → focus → clarify → plan → finish
   const stepKeys = useMemo(() => {
-    const base = ['mood', 'meditation', 'maybeReason', 'goal', 'clarify', 'plan', 'finish']
+    const base = ['mood', 'meditation', 'maybeReason', 'focus', 'clarify', 'plan', 'finish']
     return didMeditation === false ? base : base.filter(s => s !== 'maybeReason')
   }, [didMeditation])
 
@@ -133,9 +131,9 @@ export default function Questionnaire({ session, onDone }) {
       did_meditation: val,
       no_meditation_reason: val ? null : (noMeditationReason || null)
     })
-    // jump: if "No", go to maybeReason; if "Yes", skip to goal
+    // jump: if "No", go to maybeReason; if "Yes", skip to focus
     if (val === true) {
-      jumpTo('goal')
+      jumpTo('focus')
     } else {
       jumpTo('maybeReason')
     }
@@ -143,20 +141,21 @@ export default function Questionnaire({ session, onDone }) {
 
   async function saveReasonAndAdvance() {
     await upsertEntry({ no_meditation_reason: noMeditationReason || null })
-    advance()
+    jumpTo('focus')
   }
 
-  async function saveGoalAndAdvance() {
-    const clean = intent.trim()
-    if (!clean) return
-    await upsertIntent(clean, idea)
-    advance()
+  async function chooseFocus(val) {
+    setFocus(val)
+    await upsertIntent(val, detail) // store category as intent
+    jumpTo('clarify')
   }
 
   async function saveClarifyAndAdvance() {
-    await upsertIntent(intent.trim(), idea.trim())
-    if (steps.length === 0 && intent.trim()) {
-      await generatePlan(true) // true = shouldAdvanceToPlan
+    const clean = detail.trim()
+    // store/refresh both: keep category as intent; detail as idea
+    await upsertIntent(focus, clean)
+    if (steps.length === 0 && (focus || clean)) {
+      await generatePlan(true) // true = advance to plan after generating
     } else {
       advance()
     }
@@ -171,14 +170,31 @@ export default function Questionnaire({ session, onDone }) {
     if (nextIndex >= 0) setIdx(nextIndex)
   }
 
+  function examplesForFocus(val) {
+    switch ((val || '').toLowerCase()) {
+      case 'financial freedom':
+        return 'e.g., “$100 today”, “Close 1 client”, “List 3 items on Etsy”.'
+      case 'better health':
+        return 'e.g., “30‑min walk”, “Track meals today”, “Drink 3L water”.'
+      case 'loving relationships':
+        return 'e.g., “Call mom 10 min”, “Plan a date”, “Send 3 appreciation texts”.'
+      case 'spiritual connection':
+        return 'e.g., “7‑min breathwork”, “Journal 1 page”, “Sunset gratitude walk”.'
+      default:
+        return 'e.g., “Finish landing page hero”, “Read 10 pages”, “Declutter desk”.'
+    }
+  }
+
   async function generatePlan(shouldAdvanceToPlan = false) {
-    if (!intent.trim()) return
+    // Send both the chosen focus category and the clarified detail
+    const payload = { intent: focus, idea: detail }
+    if (!payload.intent && !payload.idea) return
     setGenerating(true)
     try {
       const r = await fetch('/api/plan', {
         method:'POST',
         headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ intent, idea })
+        body: JSON.stringify(payload)
       })
       const json = await r.json()
       const planSteps = Array.isArray(json?.steps) ? json.steps : []
@@ -228,20 +244,27 @@ export default function Questionnaire({ session, onDone }) {
     medQ:  `Did you listen to your Hypnotic Meditation today?`,
     medNoFollow: `All good. What got in the way? (Press Enter to continue)`,
     medEmpathy: `I hear you. No stress. Today’s not over. One track, one shift — that’s all it takes.`,
-    goalQ: `Great. Now tell me what’s the #1 thing you want to manifest today?`,
-    goalExamples: `Examples: “$100 today” / “Go for a walk” / “Meet someone new” (Press Enter to continue)`,
-    clarifyQ: `Can you be more clear? The clearer the target, the easier the Genie can help. (Press Enter to continue)`,
-    clarifyHints: `e.g., “make $100 on Fiverr” or “30‑minute walk”.`,
+
+    focusQ: `What would you like to focus on manifesting today?`,
+    choices: [
+      'Financial freedom',
+      'Better health',
+      'Loving relationships',
+      'Spiritual connection',
+      'Other'
+    ],
+
+    clarifyIntro: (val) => `Great — you chose “${val}”. Now let’s get more clarity on your goal so you hit the target.`,
+    clarifyHint: (val) => examplesForFocus(val),
+
     planIntro: `Alright ${name}, here’s your 3‑step plan for today:`,
     planNudge: `When you do this, you’re stacking today’s win on top of your bigger vision.`,
     finishFinal: `✨ That’s your map for today, ${name}. Small wins → big shifts. You ready to roll?`,
   }
 
   useEffect(() => {
-    // Auto-focus input when step changes
     if (key === 'maybeReason') reasonRef.current?.focus()
-    if (key === 'goal') goalRef.current?.focus()
-    if (key === 'clarify') clarifyRef.current?.focus()
+    if (key === 'clarify') detailRef.current?.focus()
   }, [key])
 
   if (loading) return <div>Loading…</div>
@@ -258,7 +281,7 @@ export default function Questionnaire({ session, onDone }) {
       {key === 'mood' && (
         <>
           <div style={{fontSize:20, fontWeight:900, marginBottom:8}}>{copy.moodQ}</div>
-          <div style={{display:'flex', gap:10}}>
+          <div style={{display:'flex', gap:10, flexWrap:'wrap'}}>
             <Button onClick={()=>chooseMood('good')}>😀 Good</Button>
             <Button onClick={()=>chooseMood('okay')}>😐 Okay</Button>
             <Button onClick={()=>chooseMood('low')}>😔 Low</Button>
@@ -269,7 +292,7 @@ export default function Questionnaire({ session, onDone }) {
       {key === 'meditation' && (
         <>
           <div style={{fontSize:20, fontWeight:900, marginBottom:8}}>{copy.medQ}</div>
-          <div style={{display:'flex', gap:10}}>
+          <div style={{display:'flex', gap:10, flexWrap:'wrap'}}>
             <Button onClick={()=>chooseMeditation(true)}>✅ Yes</Button>
             <Button onClick={()=>chooseMeditation(false)}>❌ Not yet</Button>
           </div>
@@ -297,45 +320,31 @@ export default function Questionnaire({ session, onDone }) {
         </>
       )}
 
-      {key === 'goal' && (
+      {key === 'focus' && (
         <>
-          <div style={{fontSize:20, fontWeight:900, marginBottom:6}}>{copy.goalQ}</div>
-          <Field>
-            <input
-              ref={goalRef}
-              value={intent}
-              onChange={e=>setIntent(e.target.value)}
-              onKeyDown={(e)=>{ if(e.key==='Enter'){ e.preventDefault(); saveGoalAndAdvance() } }}
-              className="textInput"
-              placeholder='e.g., "Make $100 today"'
-            />
-          </Field>
-          <Field>
-            <div style={{fontSize:14, color:'#444'}}>{copy.goalExamples}</div>
-          </Field>
+          <div style={{fontSize:20, fontWeight:900, marginBottom:8}}>{copy.focusQ}</div>
+          <div style={{display:'flex', gap:10, flexWrap:'wrap'}}>
+            {copy.choices.map((c) => (
+              <Button key={c} onClick={()=>chooseFocus(c)}>{c}</Button>
+            ))}
+          </div>
         </>
       )}
 
       {key === 'clarify' && (
         <>
-          <div style={{fontSize:20, fontWeight:900, marginBottom:6}}>{copy.clarifyQ}</div>
+          <div style={{fontSize:20, fontWeight:900, marginBottom:6}}>
+            {copy.clarifyIntro(focus || 'your focus')}
+          </div>
           <Field>
             <input
-              ref={clarifyRef}
-              value={idea}
-              onChange={e=>setIdea(e.target.value)}
+              ref={detailRef}
+              value={detail}
+              onChange={e=>setDetail(e.target.value)}
               onKeyDown={(e)=>{ if(e.key==='Enter'){ e.preventDefault(); saveClarifyAndAdvance() } }}
               className="textInput"
-              placeholder='e.g., "Make $100 on Fiverr"'
+              placeholder={copy.clarifyHint(focus)}
             />
-          </Field>
-          <Field>
-            <div style={{fontSize:14, color:'#444'}}>{copy.clarifyHints}</div>
-          </Field>
-          <Field>
-            <Button onClick={()=>generatePlan(true)} disabled={generating || !intent.trim()}>
-              {generating ? 'Summoning plan…' : 'Generate 3‑step plan'}
-            </Button>
           </Field>
         </>
       )}
@@ -363,7 +372,6 @@ export default function Questionnaire({ session, onDone }) {
             </ol>
           )}
           <div style={{fontSize:14, color:'#444', marginBottom:12}}>{copy.planNudge}</div>
-          {/* Single forward CTA to go finish */}
           <Button onClick={()=>jumpTo('finish')} style={{minWidth:180}}>Lock it in</Button>
         </>
       )}
