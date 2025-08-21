@@ -265,6 +265,19 @@ export default function Questionnaire({ session, user: userProp, onDone }) {
         <div style={{fontSize:13}}>Step {Math.min(idx+1, total)} of {total}</div>
       </div>
 
+      {/* MAIN SECTION HEADLINE */}
+      <h2
+        style={{
+          fontSize: 22,
+          fontWeight: 800,
+          margin: '0 0 16px',
+          textAlign: 'center',
+          color: '#fff'
+        }}
+      >
+        Start Today’s Manifestation
+      </h2>
+
       {/* steps */}
       {key === 'mood' && (
         <>
