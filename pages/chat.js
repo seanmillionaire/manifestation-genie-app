@@ -397,7 +397,7 @@ export default function Chat() {
     <div className="wizardScope">
       <Questionnaire session={session} onDone={handleWizardDone} />
     </div>
-    <div className="microNote">Complete this to unlock the chat.</div>
+    <div className="microNote"></div>
   </section>
 )}
 
