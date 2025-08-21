@@ -257,7 +257,7 @@ export default function Questionnaire({ session, onDone }) {
     clarifyIntro: (val) => `Great — you chose “${val}”. Now let’s get more clarity on your goal so you hit the target.`,
     clarifyHint: (val) => examplesForFocus(val),
 
-    planIntro: `Alright ${name}, here’s your 3‑step plan for today:`,
+    planIntro: `Perfect. ${name}, here’s your 3‑step plan for today:`,
     planNudge: `When you do this, you’re stacking today’s win on top of your bigger vision.`,
     finishFinal: `✨ That’s your map for today, ${name}. Small wins → big shifts. You ready to roll?`,
   }
