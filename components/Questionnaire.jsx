@@ -225,7 +225,7 @@ export default function Questionnaire({ session, onDone }) {
   // Copy (final tone)
   const copy = {
     moodQ: `Hey ${name} 👋 … quick check‑in. How’s your vibe today?`,
-    medQ:  `Did you listen to your Hypnotic Meditation yet?`,
+    medQ:  `Did you listen to your Hypnotic Meditation today?`,
     medNoFollow: `All good. What got in the way? (Press Enter to continue)`,
     medEmpathy: `I hear you. No stress. Today’s not over. One track, one shift — that’s all it takes.`,
     goalQ: `Cool. Now tell me—what’s one thing you want to bring into reality today?`,
