@@ -258,7 +258,7 @@ export default function Questionnaire({ session, user: userProp, onDone }) {
   )
 
   return (
-    <div style={{ background:'#fff', color:'#000' }}>
+    <div>
       {/* header with progress */}
       <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16}}>
         <div style={{fontWeight:900, fontSize:18}}>🧞 Manifestation Genie</div>
