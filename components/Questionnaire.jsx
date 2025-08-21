@@ -344,7 +344,13 @@ async function generatePlan(shouldAdvanceToPlan = false) {
 
       {key === 'plan' && (
         <>
-          <div style={{fontSize:20, fontWeight:900, marginBottom:8}}>{copy.planIntro}</div>
+          <div style={{fontSize:20, fontWeight:900, marginBottom:8}}>
+  {copy.planIntro}
+  <div style={{fontSize:14, opacity:.8, marginTop:4}}>
+    Focus: <strong>{focus || '—'}</strong>{detail ? ` — “${detail}”` : ''}
+  </div>
+</div>
+
           {steps.length === 0 ? (
             <div>No steps yet. Click “Generate 3‑step plan”.</div>
           ) : (
@@ -365,7 +371,7 @@ async function generatePlan(shouldAdvanceToPlan = false) {
             </ol>
           )}
           <div style={{fontSize:14, color:'#444', marginBottom:12}}>{copy.planNudge}</div>
-          <Button onClick={()=>jumpTo('finish')} style={{minWidth:180}}>Lock it in</Button>
+        
         </>
       )}
 
