@@ -78,8 +78,6 @@ export default function Login() {
               We sent a magic sign‑in link to <b>{email}</b>. Open it on this device to continue.
             </p>
             <div className="actions" style={{ marginTop: 18 }}>
-              <a href="/login" className="ghost">Use a different email</a>
-              <a href="/chat" className="btn btn-primary">Back to app</a>
             </div>
           </>
         )}
