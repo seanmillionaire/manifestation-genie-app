@@ -185,47 +185,40 @@ export default function Questionnaire({ session, onDone }) {
     }
   }
 
-  async function generatePlan(shouldAdvanceToPlan = false) {
-    // Send both the chosen focus category and the clarified detail
-    const payload = { intent: focus, idea: detail }
-    if (!payload.intent && !payload.idea) return
-    setGenerating(true)
-    try {
-      const r = await fetch('/api/plan', {
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body: JSON.stringify(payload)
-      })
-      const json = await r.json()
-      const planSteps = Array.isArray(json?.steps) ? json.steps : []
-
-      // Save to DB
-      await supabase.from('action_steps')
-        .delete()
-        .eq('user_id', user.id)
-        .eq('entry_date', today)
-
-      const rows = planSteps.map((s, i) => ({
-        user_id: user.id,
-        entry_date: today,
-        step_order: i + 1,
-        label: s.label || `Step ${i+1}`,
-        url: s.url || null,
-        completed: false
-      }))
-      if (rows.length) await supabase.from('action_steps').insert(rows)
-
-      setSteps(rows.map(r => ({
-        step_order: r.step_order, label: r.label, url: r.url, completed:false
-      })))
-
-      if (shouldAdvanceToPlan) {
-        jumpTo('plan')
-      }
-    } finally {
-      setGenerating(false)
-    }
+async function generatePlan(shouldAdvanceToPlan = false) {
+  const payload = {
+    focus,                 // e.g., "Financial freedom"
+    detail,                // user’s clarified target
+    mood,                  // 'good' | 'okay' | 'low'
+    didMeditation,         // true | false | null
+    name                   // first name for tone
   }
+  if (!payload.focus && !payload.detail) return
+  setGenerating(true)
+  try {
+    const r = await fetch('/api/plan', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(payload)
+    })
+    const json = await r.json()
+    const planSteps = Array.isArray(json?.steps) ? json.steps : []
+
+    // Save to DB (same as before)
+    await supabase.from('action_steps').delete().eq('user_id', user.id).eq('entry_date', today)
+    const rows = planSteps.map((s, i) => ({
+      user_id: user.id, entry_date: today, step_order: i+1,
+      label: s.label || `Step ${i+1}`, url: s.url || null, completed: false
+    }))
+    if (rows.length) await supabase.from('action_steps').insert(rows)
+    setSteps(rows.map(r => ({ step_order: r.step_order, label: r.label, url: r.url, completed:false })))
+
+    if (shouldAdvanceToPlan) jumpTo('plan')
+  } finally {
+    setGenerating(false)
+  }
+}
+
 
   async function toggleStep(step) {
     const next = steps.map(s => s.step_order === step.step_order
