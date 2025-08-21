@@ -374,11 +374,11 @@ export default function Chat() {
           <div className="choiceRow">
             <div className="choiceCopy">
               <strong>How shall we proceed?</strong>
-              <span className="hint">Restart today’s setup, or continue your path for today.</span>
+              <span className="hint">Choose a new goal, or continue your path for today.</span>
             </div>
             <div className="choiceActions">
               <button type="button" className="linkBtn" onClick={restartQuestionnaire}>
-                Restart Setup
+                New Goal
               </button>
               <button type="button" className="btn btn-primary" onClick={continueToday}>
                 Continue Today
