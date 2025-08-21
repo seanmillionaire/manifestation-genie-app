@@ -371,7 +371,7 @@ export default function Chat() {
       {/* Step 2 — Today’s Genie Flow (auto-start, no fork) */}
       {hasName && !wizardDone && (
         <section className="card wizardCard">
-          <h2 className="panelTitle">Step 2 — Today’s Genie Flow</h2>
+          <h2 className="panelTitle">Start Today’s Manifestation</h2>
           <div className="wizardScope">
             <Questionnaire session={session} onDone={handleWizardDone} />
           </div>
