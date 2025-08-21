@@ -1,4 +1,4 @@
-// components/GenieFlow.jsx — One-step plan + full questionnaire with Finish
+// components/GenieFlow.jsx — One-step plan + full questionnaire with Finish (drop-in)
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../src/supabaseClient'
 
@@ -13,8 +13,8 @@ function Button({ children, onClick, disabled, variant='primary', style }) {
   }
   return <button type="button" onClick={disabled ? undefined : onClick} style={base}>{children}</button>
 }
-
 function Field({ children }) { return <div style={{ marginTop:10 }}>{children}</div> }
+
 const todayStr = () => new Date().toISOString().slice(0,10)
 const ordinalWord = (n) => (['first','second','third'][n-1] || 'next')
 
@@ -28,7 +28,7 @@ export default function GenieFlow({ session, onDone }) {
   const [mood, setMood] = useState(null)                      // 'sad'|'neutral'|'happy'
   const [didMeditation, setDidMeditation] = useState(null)    // true|false
   const [noMeditationReason, setNoMeditationReason] = useState('')
-  const [intent, setIntent] = useState('')                    // focus category or phrasing
+  const [intent, setIntent] = useState('')                    // focus/category
   const [idea, setIdea] = useState('')                        // clarified target
   const [steps, setSteps] = useState([])                      // [{step_order,label,url,completed}]
   const [generating, setGenerating] = useState(false)
@@ -50,9 +50,7 @@ export default function GenieFlow({ session, onDone }) {
         .from('daily_entries').select('*').eq('user_id', user.id).eq('entry_date', today).maybeSingle()
       if (entry && mounted) {
         setMood(entry.mood ?? null)
-        setDidMeditation(
-          typeof entry.did_meditation === 'boolean' ? entry.did_meditation : null
-        )
+        setDidMeditation(typeof entry.did_meditation === 'boolean' ? entry.did_meditation : null)
         setNoMeditationReason(entry.no_meditation_reason || '')
       }
 
@@ -68,7 +66,6 @@ export default function GenieFlow({ session, onDone }) {
         .select('*')
         .eq('user_id', user.id).eq('entry_date', today)
         .order('step_order', { ascending: true })
-
       if (mounted && dSteps?.length) {
         setSteps(dSteps.map(s => ({
           id: s.id, step_order: s.step_order, label: s.label, url: s.url, completed: s.completed
@@ -113,7 +110,7 @@ export default function GenieFlow({ session, onDone }) {
     if (key === 'maybeReason') return true
     if (key === 'intent') return !!intent.trim()
     if (key === 'idea') return true
-    if (key === 'plan') return true        // allow proceeding to "finish" at any time
+    if (key === 'plan') return true        // allow proceeding to finish at any time
     if (key === 'finish') return true
     return false
   }, [key, mood, didMeditation, intent])
@@ -161,7 +158,8 @@ export default function GenieFlow({ session, onDone }) {
 
   // plan step helpers
   const completedCount = steps.filter(s => s.completed).length
-  const currentStep = steps.find(s => !s.completed) || null
+  const currentStep = steps.find(s => !s.completed) || steps[0] || null
+
   async function completeCurrentStep() {
     if (!user || !currentStep) return
     await supabase.from('action_steps')
@@ -201,7 +199,7 @@ export default function GenieFlow({ session, onDone }) {
       {key === 'med' && (
         <>
           <div style={{fontSize:18, fontWeight:900, marginBottom:6}}>Did you do your Hypnotic Meditation today?</div>
-        <div style={{opacity:.9, marginBottom:12}}>If not yet, I’ll keep today extra simple.</div>
+          <div style={{opacity:.9, marginBottom:12}}>If not yet, I’ll keep today extra simple.</div>
           <div style={{display:'flex', gap:8}}>
             <Button variant={didMeditation===true?'primary':'ghost'} onClick={()=>setDidMeditation(true)}>Yes</Button>
             <Button variant={didMeditation===false?'primary':'ghost'} onClick={()=>setDidMeditation(false)}>Not yet</Button>
@@ -241,7 +239,7 @@ export default function GenieFlow({ session, onDone }) {
       {key === 'idea' && (
         <>
           <div style={{fontSize:18, fontWeight:900, marginBottom:6}}>
-            Great — now let’s add just enough clarity so you’ll hit the target.
+            Great — now add just enough clarity so you’ll hit the target.
           </div>
           <Field>
             <input
@@ -277,19 +275,19 @@ export default function GenieFlow({ session, onDone }) {
 
               <div style={{fontSize:18, fontWeight:900, margin:'6px 0 12px'}}>
                 Alright {fullName}, do this <em style={{fontStyle:'normal', textDecoration:'underline'}}>
-                  {ordinalWord(completedCount + 1)}
+                  {ordinalWord((steps.filter(s => s.completed).length) + 1)}
                 </em> step now (≤15 min):
               </div>
 
               <div style={{padding:'14px 16px', border:'1px solid #222', borderRadius:12, background:'rgba(255,255,255,0.03)'}}>
                 <div style={{fontSize:16, fontWeight:800, lineHeight:1.5}}>
-                  {(steps.find(s => !s.completed) || steps[0]).label}
+                  {currentStep?.label}
                 </div>
 
-                { (steps.find(s => !s.completed) || steps[0]).url && (
+                {currentStep?.url && (
                   <div style={{marginTop:10}}>
                     <a
-                      href={(steps.find(s => !s.completed) || steps[0]).url}
+                      href={currentStep.url}
                       target="_blank"
                       rel="noreferrer"
                       style={{ fontWeight:900, textDecoration:'underline', display:'inline-block' }}
