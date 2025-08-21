@@ -391,15 +391,15 @@ export default function Chat() {
       {/* Step 1: Name gate stays as-is in your app (not shown here) */}
 
       {/* Step 2: Flow gate */}
-      {hasName && !wizardDone && (
-        <section className="card wizardCard">
-          <h2 className="panelTitle">Today’s Focus</h2>
-          <div className="wizardScope">
-            <GenieFlow session={session} onDone={handleWizardDone} />
-          </div>
-          <div className="microNote">Complete this to unlock the chat.</div>
-        </section>
-      )}
+{hasName && !wizardDone && (
+  <section className="card wizardCard">
+    <h2 className="panelTitle">Today’s Focus</h2>
+    <div className="flowScope">
+      <GenieFlow session={session} onDone={handleWizardDone} />
+    </div>
+    <div className="microNote">Complete this to unlock the chat.</div>
+  </section>
+)}
 
       {/* Chat console */}
       {hasName && wizardDone && (
@@ -479,6 +479,21 @@ function Style() {
       .hero { text-align: center; margin-bottom: 28px; }
       .sub { margin: 10px auto 0; font-size: 18px; color: rgba(255,255,255,0.9); max-width: 68ch; line-height: 1.6; }
       .sub.small { font-size: 16px; color: rgba(255,255,255,0.7); }
+
+/* ===== GenieFlow neutral scope (do NOT use !important) ===== */
+.flowScope {
+  background: #fff;
+  color: #000;
+  border-radius: 12px;
+  padding: 12px;
+}
+
+/* make the inner content breathe on dark card */
+.flowScope > div {
+  background: #fff;
+  color: #000;
+  border-radius: 10px;
+}
 
       /* Cards */
       .card {
