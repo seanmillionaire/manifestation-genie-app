@@ -1,5 +1,5 @@
-// components/Questionnaire.jsx
-import { useEffect, useMemo, useState } from 'react'
+// components/Questionnaire.jsx — Click-to-Advance Flow (no Next/Back)
+import { useEffect, useMemo, useState, useRef } from 'react'
 import { supabase } from '../src/supabaseClient'
 
 const todayStr = () => new Date().toISOString().slice(0,10)
@@ -37,6 +37,11 @@ export default function Questionnaire({ session, onDone }) {
 
   // Step index
   const [idx, setIdx] = useState(0)
+
+  // refs for inputs (to allow Enter-to-advance)
+  const reasonRef = useRef(null)
+  const goalRef = useRef(null)
+  const clarifyRef = useRef(null)
 
   // Load profile + any today rows to resume
   useEffect(() => {
@@ -101,18 +106,6 @@ export default function Questionnaire({ session, onDone }) {
   const total = stepKeys.length
   const key = stepKeys[idx]
 
-  // Guards to enable Next
-  const canNext = useMemo(() => {
-    if (key === 'mood') return !!mood
-    if (key === 'meditation') return didMeditation === true || didMeditation === false
-    if (key === 'maybeReason') return true // optional text
-    if (key === 'goal') return !!intent.trim()
-    if (key === 'clarify') return true     // optional idea
-    if (key === 'plan') return steps.length > 0
-    if (key === 'finish') return true
-    return false
-  }, [key, mood, didMeditation, intent, steps.length])
-
   // Persistence helpers
   async function upsertEntry(fields) {
     await supabase.from('daily_entries').upsert(
@@ -127,7 +120,58 @@ export default function Questionnaire({ session, onDone }) {
     )
   }
 
-  async function generatePlan() {
+  // === Auto-advance handlers ===
+  async function chooseMood(val) {
+    setMood(val)
+    await upsertEntry({ mood: val })
+    advance()
+  }
+
+  async function chooseMeditation(val) {
+    setDidMeditation(val)
+    await upsertEntry({
+      did_meditation: val,
+      no_meditation_reason: val ? null : (noMeditationReason || null)
+    })
+    // jump: if "No", go to maybeReason; if "Yes", skip to goal
+    if (val === true) {
+      jumpTo('goal')
+    } else {
+      jumpTo('maybeReason')
+    }
+  }
+
+  async function saveReasonAndAdvance() {
+    await upsertEntry({ no_meditation_reason: noMeditationReason || null })
+    advance()
+  }
+
+  async function saveGoalAndAdvance() {
+    const clean = intent.trim()
+    if (!clean) return
+    await upsertIntent(clean, idea)
+    advance()
+  }
+
+  async function saveClarifyAndAdvance() {
+    await upsertIntent(intent.trim(), idea.trim())
+    if (steps.length === 0 && intent.trim()) {
+      await generatePlan(true) // true = shouldAdvanceToPlan
+    } else {
+      advance()
+    }
+  }
+
+  function advance() {
+    setIdx((i) => Math.min(i + 1, total - 1))
+  }
+
+  function jumpTo(stepKey) {
+    const nextIndex = stepKeys.indexOf(stepKey)
+    if (nextIndex >= 0) setIdx(nextIndex)
+  }
+
+  async function generatePlan(shouldAdvanceToPlan = false) {
     if (!intent.trim()) return
     setGenerating(true)
     try {
@@ -158,6 +202,10 @@ export default function Questionnaire({ session, onDone }) {
       setSteps(rows.map(r => ({
         step_order: r.step_order, label: r.label, url: r.url, completed:false
       })))
+
+      if (shouldAdvanceToPlan) {
+        jumpTo('plan')
+      }
     } finally {
       setGenerating(false)
     }
@@ -174,43 +222,27 @@ export default function Questionnaire({ session, onDone }) {
       .eq('user_id', user.id).eq('entry_date', today).eq('step_order', step.step_order)
   }
 
-  // Navigation
-  async function next() {
-    // Save current step results before moving forward
-    if (key === 'mood') await upsertEntry({ mood })
-    if (key === 'meditation')
-      await upsertEntry({
-        did_meditation: didMeditation,
-        no_meditation_reason: didMeditation ? null : (noMeditationReason || null)
-      })
-    if (key === 'maybeReason')
-      await upsertEntry({ no_meditation_reason: noMeditationReason || null })
-    if (key === 'goal' || key === 'clarify')
-      await upsertIntent(intent, idea)
-
-    // If leaving clarify without steps yet, auto-generate
-    if (key === 'clarify' && steps.length === 0 && intent.trim()) {
-      await generatePlan()
-    }
-
-    if (idx < total - 1) setIdx(idx + 1)
-  }
-  function back() { if (idx > 0) setIdx(idx - 1) }
-
   // Copy (final tone)
   const copy = {
     moodQ: `Hey ${name} 👋 … quick check‑in. How’s your vibe today?`,
     medQ:  `Did you listen to your Hypnotic Meditation yet?`,
-    medNoFollow: `All good. What got in the way?`,
+    medNoFollow: `All good. What got in the way? (Press Enter to continue)`,
     medEmpathy: `I hear you. No stress. Today’s not over. One track, one shift — that’s all it takes.`,
     goalQ: `Cool. Now tell me—what’s one thing you want to bring into reality today?`,
-    goalExamples: `Examples: “$100 today” / “Go for a walk” / “Meet someone new”`,
-    clarifyQ: `Can you be more clear? The clearer the target, the easier the Genie can help.`,
+    goalExamples: `Examples: “$100 today” / “Go for a walk” / “Meet someone new” (Press Enter to continue)`,
+    clarifyQ: `Can you be more clear? The clearer the target, the easier the Genie can help. (Press Enter to continue)`,
     clarifyHints: `e.g., “make $100 on Fiverr” or “30‑minute walk”.`,
     planIntro: `Alright ${name}, here’s your 3‑step plan for today:`,
     planNudge: `When you do this, you’re stacking today’s win on top of your bigger vision.`,
     finishFinal: `✨ That’s your map for today, ${name}. Small wins → big shifts. You ready to roll?`,
   }
+
+  useEffect(() => {
+    // Auto-focus input when step changes
+    if (key === 'maybeReason') reasonRef.current?.focus()
+    if (key === 'goal') goalRef.current?.focus()
+    if (key === 'clarify') clarifyRef.current?.focus()
+  }, [key])
 
   if (loading) return <div>Loading…</div>
 
@@ -227,9 +259,9 @@ export default function Questionnaire({ session, onDone }) {
         <>
           <div style={{fontSize:20, fontWeight:900, marginBottom:8}}>{copy.moodQ}</div>
           <div style={{display:'flex', gap:10}}>
-            <Button variant={mood==='good'?'primary':'ghost'} onClick={()=>setMood('good')}>😀 Good</Button>
-            <Button variant={mood==='okay'?'primary':'ghost'} onClick={()=>setMood('okay')}>😐 Okay</Button>
-            <Button variant={mood==='low'?'primary':'ghost'} onClick={()=>setMood('low')}>😔 Low</Button>
+            <Button onClick={()=>chooseMood('good')}>😀 Good</Button>
+            <Button onClick={()=>chooseMood('okay')}>😐 Okay</Button>
+            <Button onClick={()=>chooseMood('low')}>😔 Low</Button>
           </div>
         </>
       )}
@@ -238,8 +270,8 @@ export default function Questionnaire({ session, onDone }) {
         <>
           <div style={{fontSize:20, fontWeight:900, marginBottom:8}}>{copy.medQ}</div>
           <div style={{display:'flex', gap:10}}>
-            <Button variant={didMeditation===true?'primary':'ghost'} onClick={()=>setDidMeditation(true)}>✅ Yes</Button>
-            <Button variant={didMeditation===false?'primary':'ghost'} onClick={()=>setDidMeditation(false)}>❌ Not yet</Button>
+            <Button onClick={()=>chooseMeditation(true)}>✅ Yes</Button>
+            <Button onClick={()=>chooseMeditation(false)}>❌ Not yet</Button>
           </div>
         </>
       )}
@@ -249,8 +281,10 @@ export default function Questionnaire({ session, onDone }) {
           <div style={{fontSize:20, fontWeight:900, marginBottom:6}}>{copy.medNoFollow}</div>
           <Field>
             <textarea
+              ref={reasonRef}
               value={noMeditationReason}
               onChange={e=>setNoMeditationReason(e.target.value)}
+              onKeyDown={(e)=>{ if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); saveReasonAndAdvance() } }}
               rows={3}
               className="textArea"
               style={{ width:'100%' }}
@@ -268,8 +302,10 @@ export default function Questionnaire({ session, onDone }) {
           <div style={{fontSize:20, fontWeight:900, marginBottom:6}}>{copy.goalQ}</div>
           <Field>
             <input
+              ref={goalRef}
               value={intent}
               onChange={e=>setIntent(e.target.value)}
+              onKeyDown={(e)=>{ if(e.key==='Enter'){ e.preventDefault(); saveGoalAndAdvance() } }}
               className="textInput"
               placeholder='e.g., "Make $100 today"'
             />
@@ -285,8 +321,10 @@ export default function Questionnaire({ session, onDone }) {
           <div style={{fontSize:20, fontWeight:900, marginBottom:6}}>{copy.clarifyQ}</div>
           <Field>
             <input
+              ref={clarifyRef}
               value={idea}
               onChange={e=>setIdea(e.target.value)}
+              onKeyDown={(e)=>{ if(e.key==='Enter'){ e.preventDefault(); saveClarifyAndAdvance() } }}
               className="textInput"
               placeholder='e.g., "Make $100 on Fiverr"'
             />
@@ -295,7 +333,7 @@ export default function Questionnaire({ session, onDone }) {
             <div style={{fontSize:14, color:'#444'}}>{copy.clarifyHints}</div>
           </Field>
           <Field>
-            <Button onClick={generatePlan} disabled={generating || !intent.trim()}>
+            <Button onClick={()=>generatePlan(true)} disabled={generating || !intent.trim()}>
               {generating ? 'Summoning plan…' : 'Generate 3‑step plan'}
             </Button>
           </Field>
@@ -324,24 +362,18 @@ export default function Questionnaire({ session, onDone }) {
               ))}
             </ol>
           )}
-          <div style={{fontSize:14, color:'#444'}}>{copy.planNudge}</div>
+          <div style={{fontSize:14, color:'#444', marginBottom:12}}>{copy.planNudge}</div>
+          {/* Single forward CTA to go finish */}
+          <Button onClick={()=>jumpTo('finish')} style={{minWidth:180}}>Lock it in</Button>
         </>
       )}
 
       {key === 'finish' && (
         <>
           <div style={{fontSize:20, fontWeight:900, marginBottom:8}}>{copy.finishFinal}</div>
+          <Button onClick={onDone} style={{minWidth:200}}>Yes, let’s go</Button>
         </>
       )}
-
-      {/* nav */}
-      <div style={{marginTop:16, display:'flex', justifyContent:'space-between'}}>
-        <Button variant="ghost" onClick={back} disabled={idx===0} style={{minWidth:110}}>Back</Button>
-        {key !== 'finish'
-          ? <Button onClick={next} disabled={!canNext} style={{minWidth:110}}>Next</Button>
-          : <Button onClick={onDone} style={{minWidth:160}}>Yes, let’s go</Button>
-        }
-      </div>
     </div>
   )
 }
