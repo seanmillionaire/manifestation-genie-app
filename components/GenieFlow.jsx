@@ -1,4 +1,4 @@
-// components/GenieFlow.jsx — Plan step = single-step focus with click‑baity launcher
+// components/GenieFlow.jsx
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../src/supabaseClient'
 
@@ -18,11 +18,8 @@ function Field({ children }) {
   return <div style={{marginTop:10}}>{children}</div>
 }
 
-function todayStr() { return new Date().toISOString().slice(0,10) }
-
-// 1→first, 2→second, 3→third, else→next
-function ordinalWord(n) {
-  return ['first','second','third'][n-1] || 'next'
+function todayStr() {
+  return new Date().toISOString().slice(0,10)
 }
 
 export default function GenieFlow({ session, onDone }) {
@@ -31,7 +28,7 @@ export default function GenieFlow({ session, onDone }) {
   const [fullName, setFullName] = useState('')
   const [today] = useState(() => todayStr())
 
-  const [mood, setMood] = useState(null)                   // 'sad'|'neutral'|'happy'
+  const [mood, setMood] = useState(null)                 // 'sad'|'neutral'|'happy'
   const [didMeditation, setDidMeditation] = useState(null) // true|false
   const [noMeditationReason, setNoMeditationReason] = useState('')
   const [intent, setIntent] = useState('')
@@ -41,11 +38,11 @@ export default function GenieFlow({ session, onDone }) {
 
   const [idx, setIdx] = useState(0)
 
-  // Load profile + today’s state
+  // Load profile name so Genie greets by name (not email)
   useEffect(() => {
     let mounted = true
     ;(async () => {
-      if (!user) { setLoading(false); return }
+      if (!user) return
       setLoading(true)
 
       const { data: profile } = await supabase
@@ -57,7 +54,6 @@ export default function GenieFlow({ session, onDone }) {
       if (entry && mounted) {
         setMood(entry.mood ?? null)
         setDidMeditation(entry.did_meditation ?? null)
-        setNoMedititationReason?.(entry.no_meditation_reason || '') // safeguard if function typo
         setNoMeditationReason(entry.no_meditation_reason || '')
       }
 
@@ -69,15 +65,9 @@ export default function GenieFlow({ session, onDone }) {
       }
 
       const { data: dSteps } = await supabase
-        .from('action_steps')
-        .select('*')
-        .eq('user_id', user.id).eq('entry_date', today)
-        .order('step_order', { ascending: true })
-
+        .from('action_steps').select('*').eq('user_id', user.id).eq('entry_date', today).order('step_order', { ascending: true })
       if (mounted && dSteps?.length) {
-        setSteps(dSteps.map(s => ({
-          id: s.id, step_order: s.step_order, label: s.label, url: s.url, completed: s.completed
-        })))
+        setSteps(dSteps.map(s => ({ id:s.id, step_order:s.step_order, label:s.label, url:s.url, completed:s.completed })))
       }
 
       setLoading(false)
@@ -103,7 +93,7 @@ export default function GenieFlow({ session, onDone }) {
   const stepKeys = useMemo(() => {
     const base = ['mood','med','maybeReason','intent','idea','plan']
     return didMeditation === false ? base : base.filter(s => s !== 'maybeReason')
-  }, [didMedititation, didMeditation])
+  }, [didMeditation])
   const total = stepKeys.length
 
   const canNext = useMemo(() => {
@@ -136,7 +126,7 @@ export default function GenieFlow({ session, onDone }) {
     try {
       const r = await fetch('/api/plan', {
         method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ focus: intent, detail: idea }) // pass richer names if your API expects them
+        body: JSON.stringify({ intent, idea })
       })
       const json = await r.json()
       const planSteps = json.steps || []
@@ -152,32 +142,12 @@ export default function GenieFlow({ session, onDone }) {
     }
   }
 
-  // single‑step actions
-  async function completeCurrentStep() {
-    const cur = steps.find(s => !s.completed)
-    if (!cur) return
-    await supabase
-      .from('action_steps')
-      .update({ completed: true, completed_at: new Date().toISOString() })
-      .eq('user_id', user.id).eq('entry_date', today).eq('step_order', cur.step_order)
-
-    setSteps(prev => prev.map(s => s.step_order === cur.step_order ? { ...s, completed: true } : s))
-
-    // if all done, you can call onDone or keep them on plan
-    const stillOpen = steps.some(s => !s.completed && s.step_order !== cur.step_order)
-    if (!stillOpen && typeof onDone === 'function') onDone()
-  }
-
-  function shrinkLabel(label='') {
-    if (!label) return 'Do the first 5‑minute slice.'
-    if (label.length <= 60) return `Timebox 5 min: ${label}`
-    return `Do a 5‑minute slice of: ${label.slice(0, 72)}…`
-  }
-  function markStuck() {
-    // Don’t touch DB — just shrink the current step label so it feels actionable now.
-    const cur = steps.find(s => !s.completed)
-    if (!cur) return
-    setSteps(prev => prev.map(s => s.step_order === cur.step_order ? { ...s, label: shrinkLabel(s.label) } : s))
+  async function toggleStep(step) {
+    const next = steps.map(s => s.step_order === step.step_order ? { ...s, completed: !s.completed } : s)
+    setSteps(next)
+    await supabase.from('action_steps')
+      .update({ completed: !step.completed, completed_at: !step.completed ? new Date().toISOString() : null })
+      .eq('user_id', user.id).eq('entry_date', today).eq('step_order', step.step_order)
   }
 
   if (loading) return <div>Loading Genie…</div>
@@ -237,7 +207,7 @@ export default function GenieFlow({ session, onDone }) {
             <input
               value={intent}
               onChange={e=>setIntent(e.target.value)}
-              placeholder="e.g., Financial freedom"
+              placeholder="e.g., Make money"
               style={{ width:'100%', border:'2px solid #000', borderRadius:8, padding:'10px 12px', fontSize:14, background:'#fff', color:'#000' }}
             />
           </Field>
@@ -246,18 +216,18 @@ export default function GenieFlow({ session, onDone }) {
 
       {key === 'idea' && (
         <>
-          <div style={{fontSize:18, fontWeight:900, marginBottom:6}}>Great—now add a bit more clarity so we hit the target.</div>
+          <div style={{fontSize:18, fontWeight:900, marginBottom:6}}>Do you already have an idea, or should I help?</div>
           <Field>
             <input
               value={idea}
               onChange={e=>setIdea(e.target.value)}
-              placeholder="e.g., Make $100 on Etsy"
+              placeholder="e.g., Fiverr UGC gigs"
               style={{ width:'100%', border:'2px solid #000', borderRadius:8, padding:'10px 12px', fontSize:14, background:'#fff', color:'#000' }}
             />
           </Field>
           <Field>
-            <Button onClick={async ()=>{ await generatePlan(); setIdx(stepKeys.indexOf('plan')) }} disabled={generating || !intent.trim()}>
-              {generating ? 'Summoning plan…' : 'Continue'}
+            <Button onClick={generatePlan} disabled={generating || !intent.trim()}>
+              {generating ? 'Summoning plan…' : 'Generate today’s step-by-step'}
             </Button>
           </Field>
         </>
@@ -265,69 +235,30 @@ export default function GenieFlow({ session, onDone }) {
 
       {key === 'plan' && (
         <>
-          {/* If no steps yet (e.g., refresh), allow loading */}
-          {steps.length === 0 && (
-            <Field>
-              <Button onClick={()=>generatePlan()} disabled={generating}>
-                {generating ? 'Summoning plan…' : 'Load today’s steps'}
-              </Button>
-            </Field>
+          <div style={{fontSize:18, fontWeight:900, marginBottom:6}}>Your Genie Plan (Today)</div>
+          {steps.length === 0 ? (
+            <div>No steps yet. Click Back and generate your plan.</div>
+          ) : (
+            <ol style={{paddingLeft:18, marginTop:8}}>
+              {steps.map(step=>(
+                <li key={step.step_order} style={{margin:'10px 0'}}>
+                  <label style={{display:'flex', alignItems:'center', gap:10}}>
+                    <input type="checkbox" checked={!!step.completed} onChange={()=>toggleStep(step)} />
+                    <span style={{textDecoration: step.completed ? 'line-through' : 'none'}}>
+                      {step.label} {step.url ? <a href={step.url} target="_blank" rel="noreferrer" style={{ fontWeight:900, color:'#000' }}> (open)</a> : null}
+                    </span>
+                  </label>
+                </li>
+              ))}
+            </ol>
           )}
-
-          {steps.length > 0 && (() => {
-            const completedCount = steps.filter(s => s.completed).length
-            const cur = steps.find(s => !s.completed) || steps[steps.length-1]
-            const ord = ordinalWord(completedCount + 1)
-
-            return (
-              <div style={{marginTop:6}}>
-                <div style={{fontSize:14, opacity:.8, marginBottom:6}}>
-                  Focus: <strong>{intent || '—'}</strong>{idea ? ` — “${idea}”` : ''}
-                </div>
-
-                <div style={{fontSize:18, fontWeight:900, margin:'6px 0 12px'}}>
-                  Alright {fullName}, do this <em style={{fontStyle:'normal', textDecoration:'underline'}}>{ord}</em> step now (≤15 min):
-                </div>
-
-                <div style={{
-                  padding:'14px 16px',
-                  border:'1px solid #222',
-                  borderRadius:12,
-                  background:'rgba(255,255,255,0.03)'
-                }}>
-                  <div style={{fontSize:16, fontWeight:800, lineHeight:1.5}}>
-                    {cur.label}
-                  </div>
-
-                  {cur.url && (
-                    <div style={{marginTop:10}}>
-                      <a
-                        href={cur.url}
-                        target="_blank"
-                        rel="noreferrer"
-                        style={{ fontWeight:900, textDecoration:'underline', display:'inline-block' }}
-                      >
-                        🔥 Open this now ↗
-                      </a>
-                    </div>
-                  )}
-
-                  <div style={{display:'flex', gap:10, marginTop:12}}>
-                    <Button onClick={completeCurrentStep}>I did it ✅</Button>
-                    <Button variant="ghost" onClick={markStuck}>I’m stuck ⚡</Button>
-                  </div>
-                </div>
-
-                <div style={{fontSize:13, color:'#444', marginTop:12}}>
-                  Small wins compound. One brick at a time.
-                </div>
-              </div>
-            )
-          })()}
+          <Field>
+            <Button onClick={()=>onDone?.()}>Finish & Open Chat</Button>
+          </Field>
         </>
       )}
 
-      {/* nav buttons (kept for non-plan steps) */}
+      {/* nav buttons */}
       <div style={{marginTop:14, display:'flex', justifyContent:'space-between'}}>
         <Button variant="ghost" onClick={()=>{ if (idx>0) setIdx(idx-1) }} style={{minWidth:96}}>Back</Button>
         <Button onClick={doNext} disabled={!canNext || idx===total-1} style={{minWidth:96}}>Next</Button>
