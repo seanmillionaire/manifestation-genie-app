@@ -93,13 +93,37 @@ export default function Chat() {
 
   // --- NEW: restart / continue choice banner ---
   const [showReturnChoice, setShowReturnChoice] = useState(false)
-  function continueToday() {
-    setShowReturnChoice(false)
-    setMessages(m => [
-      ...m,
-      { role: 'assistant', content: enforceTone("Continuing today’s path. What’s the next move?") }
+async function continueToday() {
+  setShowReturnChoice(false)
+  // If Step 2 isn't marked done, but the user already has today's intent/steps,
+  // treat it as done and open the chat.
+  if (!wizardDone && session?.user?.id) {
+    const today = todayStr()
+    const [{ data: intentRow }, { data: stepsRows }] = await Promise.all([
+      supabase
+        .from('daily_intents')
+        .select('intent')
+        .eq('user_id', session.user.id)
+        .eq('entry_date', today)
+        .maybeSingle(),
+      supabase
+        .from('action_steps')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', session.user.id)
+        .eq('entry_date', today)
     ])
+    const hasProgress = !!(intentRow?.intent) || (stepsRows?.length ?? 0) > 0
+    if (hasProgress) {
+      setWizardDone(true)
+      localStorage.setItem(`mg_wizardDone_${session.user.id}_${today}`, 'true')
+    }
   }
+  setMessages(m => [
+    ...m,
+    { role: 'assistant', content: enforceTone("Continuing today’s path. What’s the next move?") }
+  ])
+}
+
   async function restartQuestionnaire() {
     const uid = session?.user?.id
     if (!uid) return
