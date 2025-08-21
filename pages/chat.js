@@ -1,6 +1,5 @@
-// pages/chat.js — Clean, single-path flow (no Restart/Continue fork)
-// One‑Liner, Practical + Light‑Magic Genie with Goal Memory (fixed-height console, cleaned)
-import Questionnaire from '../components/Questionnaire'
+// pages/chat.js — Chat + Gate with GenieFlow (drop-in)
+import GenieFlow from '../components/GenieFlow'
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../src/supabaseClient'
 
@@ -92,8 +91,10 @@ export default function Chat() {
   // today's intent memory
   const [todayIntent, setTodayIntent] = useState(null)
 
-  // --- (kept) voice-only helpers: allow users to type "restart" / "continue" if they want ---
+  // --- NEW: restart / continue choice banner ---
+  const [showReturnChoice, setShowReturnChoice] = useState(false)
   function continueToday() {
+    setShowReturnChoice(false)
     setMessages(m => [
       ...m,
       { role: 'assistant', content: enforceTone("Continuing today’s path. What’s the next move?") }
@@ -105,9 +106,10 @@ export default function Chat() {
     localStorage.removeItem(`mg_wizardDone_${uid}_${todayStr()}`) // reopen Step 2 for today
     setWizardDone(false)
     setTodayIntent(null)
+    setShowReturnChoice(false)
     setMessages(m => [
       ...m,
-      { role: 'assistant', content: enforceTone('Starting fresh. Step 2 — Today’s Genie Flow is ready.') }
+      { role: 'assistant', content: enforceTone('Starting fresh. Step 2 is ready.') }
     ])
   }
 
@@ -200,7 +202,7 @@ export default function Chat() {
     return () => { cancelled = true }
   }, [session?.user?.id, hasName])
 
-  // greet after profile is loaded; read today's intent (no fork, just gentle welcome)
+  // greet after profile is loaded; read today's intent
   useEffect(() => {
     async function greet() {
       if (!session?.user?.id || !profileLoaded || bootGreeted) return
@@ -215,22 +217,23 @@ export default function Chat() {
       const steps = stepsRows || []
       const firstIncomplete = steps.find(s => !s.completed)
 
-      const hello = `✨ Welcome back, ${userName}.`
+      const hello = `✨ Welcome back, ${userName}. `
       let body
       if (!hasName) {
         body = `Add your name to personalize.`
       } else if (!wizardDone) {
-        body = `Begin today’s quick check‑in.`
+        body = `Resume today’s quick setup.`
       } else if (intentRow?.intent) {
-        body = `Locked goal: “${intentRow.intent}”. Continue?`
+        body = `Continue with “${intentRow.intent}”?`
       } else if (firstIncomplete) {
-        body = `Resume Step ${firstIncomplete.step_order} — ${firstIncomplete.label}.`
+        body = `Resume at Step ${firstIncomplete.step_order} — ${firstIncomplete.label}. Continue?`
       } else {
         body = `What’s today’s goal in one line?`
       }
 
-      setMessages([{ role: 'assistant', content: enforceTone(`${hello} ${body}`) }])
+      setMessages([{ role: 'assistant', content: enforceTone(hello + body) }])
       setBootGreeted(true)
+      setShowReturnChoice(true)
     }
     greet()
   }, [session?.user?.id, profileLoaded, userName, hasName, wizardDone, bootGreeted])
@@ -257,7 +260,7 @@ export default function Chat() {
     const input = e.target.prompt.value.trim()
     if (!input) return
 
-    // hidden quick commands (keep power users happy)
+    // quick voice commands for the choice
     const cmd = input.toLowerCase()
     if (/(^|\b)(restart|start over|reset setup|begin again)(\b|$)/i.test(cmd)) {
       await restartQuestionnaire()
@@ -365,21 +368,40 @@ export default function Chat() {
         <p className="sub small">✨ Welcome back, {userName}.</p>
       </header>
 
-      {/* Step 1 — Name (only if missing) */}
-      {!hasName && <NameStep session={session} setHasName={setHasName} setProfile={setProfile} setProfileLoaded={setProfileLoaded} />}
-
-      {/* Step 2 — Today’s Genie Flow (auto-start, no fork) */}
-      {hasName && !wizardDone && (
-        <section className="card wizardCard">
-          <h2 className="panelTitle">Start Today’s Manifestation</h2>
-          <div className="wizardScope">
-            <Questionnaire session={session} onDone={handleWizardDone} />
+      {/* --- Restart vs Continue bar --- */}
+      {showReturnChoice && hasName && (
+        <section className="card choiceBar">
+          <div className="choiceRow">
+            <div className="choiceCopy">
+              <strong>How shall we proceed?</strong>
+              <span className="hint">Restart today’s setup, or continue your path for today.</span>
+            </div>
+            <div className="choiceActions">
+              <button type="button" className="ghost" onClick={restartQuestionnaire}>
+                Restart Setup
+              </button>
+              <button type="button" className="btn btn-primary" onClick={continueToday}>
+                Continue Today
+              </button>
+            </div>
           </div>
-          <div className="microNote"></div>
         </section>
       )}
 
-      {/* Chat console after the flow */}
+      {/* Step 1: Name gate stays as-is in your app (not shown here) */}
+
+      {/* Step 2: Flow gate */}
+      {hasName && !wizardDone && (
+        <section className="card wizardCard">
+          <h2 className="panelTitle">Today’s Focus</h2>
+          <div className="wizardScope">
+            <GenieFlow session={session} onDone={handleWizardDone} />
+          </div>
+          <div className="microNote">Complete this to unlock the chat.</div>
+        </section>
+      )}
+
+      {/* Chat console */}
       {hasName && wizardDone && (
         <section className="card chatCard">
           <h2 className="panelTitle">Chat with the Genie</h2>
@@ -437,49 +459,6 @@ export default function Chat() {
   )
 }
 
-function NameStep({ session, setHasName, setProfile, setProfileLoaded }) {
-  const [name, setName] = useState('')
-  const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState(false)
-
-  useEffect(() => {
-    let cancelled = false
-    ;(async () => {
-      if (!session?.user?.id) return
-      const { data } = await supabase.from('profiles').select('full_name').eq('id', session.user.id).maybeSingle()
-      if (cancelled) return
-      setName(data?.full_name || ''); setLoading(false)
-    })()
-    return () => { cancelled = true }
-  }, [session?.user?.id])
-
-  async function save() {
-    if (!session?.user?.id) return
-    setSaving(true)
-    await supabase.from('profiles').upsert({ id: session.user.id, full_name: name || null })
-    setSaving(false)
-    if (name.trim()) {
-      setHasName(true)
-      setProfile({ full_name: name })
-      setProfileLoaded(true)
-      localStorage.setItem(`mg_hasName_${session.user.id}`, 'true')
-    }
-  }
-
-  if (loading) return <div className="card">Loading…</div>
-  return (
-    <section className="card">
-      <h2 className="panelTitle">Step 1 — Your Name</h2>
-      <div className="hStack">
-        <input className="textInput" value={name} onChange={e=>setName(e.target.value)} placeholder="Your name" />
-        <button type="button" className="btn btn-primary" onClick={save} disabled={saving || !name.trim()}>
-          {saving ? 'Saving…' : 'Save & Continue'}
-        </button>
-      </div>
-    </section>
-  )
-}
-
 function Loader({ text }) {
   return (
     <div className="wrap">
@@ -495,210 +474,41 @@ function Loader({ text }) {
 function Style() {
   return (
     <style jsx global>{`
-      /* globals come from globals.css */
-      /* === HARD OVERRIDE so the questionnaire matches the dark theme === */
-
-      .wizardCard { overflow: hidden; }
-      .wizardScope {
-        background: rgba(255,255,255,0.04);
-        border: 1px solid rgba(255,255,255,0.12);
-        border-radius: 12px;
-        padding: 12px;
-      }
-
-      .wizardScope :global(*) {
-        background: transparent !important;
-        background-color: transparent !important;
-        color: var(--white) !important;
-        border-color: rgba(255,255,255,0.15) !important;
-        font-family: inherit !important;
-      }
-
-      .wizardScope :global(input),
-      .wizardScope :global(textarea),
-      .wizardScope :global(select) {
-        background: #0F2435 !important;
-        color: var(--white) !important;
-        border: 1px solid #1E3448 !important;
-        border-radius: 12px !important;
-        padding: 12px 14px !important;
-      }
-      .wizardScope :global(input:focus),
-      .wizardScope :global(textarea:focus),
-      .wizardScope :global(select:focus) {
-        border-color: var(--gold) !important;
-      }
-
-      .wizardScope :global(.pill),
-      .wizardScope :global(.option),
-      .wizardScope :global(.choice),
-      .wizardScope :global([class*="option"]),
-      .wizardScope :global([class*="Choice"]) {
-        background: rgba(255,255,255,0.06) !important;
-        border: 1px solid rgba(255,255,255,0.15) !important;
-        color: var(--white) !important;
-        border-radius: 14px !important;
-      }
-
-      .wizardScope :global(button),
-      .wizardScope :global(.btn) {
-        font-weight: 800 !important;
-        border-radius: 12px !important;
-      }
-      .wizardScope :global(.btn-primary),
-      .wizardScope :global(button[type="submit"]),
-      .wizardScope :global([class*="primary"]) {
-        background: var(--gold) !important;
-        color: #0D1B2A !important;
-        border: 0 !important;
-        box-shadow: 0 6px 16px rgba(0,0,0,0.25) !important;
-        filter: drop-shadow(0 0 8px rgba(255,215,0,0.35)) !important;
-      }
-      .wizardScope :global(.btn-primary:hover),
-      .wizardScope :global(button[type="submit"]:hover),
-      .wizardScope :global([class*="primary"]:hover) {
-        background: var(--green) !important;
-        color: #082117 !important;
-      }
-
-      .wizardScope :global(.btn-secondary),
-      .wizardScope :global(.ghost),
-      .wizardScope :global([class*="secondary"]),
-      .wizardScope :global(button.back) {
-        background: transparent !important;
-        color: var(--white) !important;
-        border: 1px solid rgba(255,255,255,0.3) !important;
-      }
-
-      .wizardScope :global(img),
-      .wizardScope :global(video),
-      .wizardScope :global(svg),
-      .wizardScope :global(canvas) {
-        background: transparent !important;
-        border-color: transparent !important;
-      }
-
-      .wizardScope :global(.meta),
-      .wizardScope :global(.subtitle),
-      .wizardScope :global(.help),
-      .wizardScope :global(.hint) {
-        color: rgba(255,255,255,0.8) !important;
-      }
-
       * { box-sizing: border-box; }
       .wrap { max-width: 960px; margin: 48px auto 72px; padding: 0 24px; }
-
       .hero { text-align: center; margin-bottom: 28px; }
-      .hero h1 { margin:0; font-size: 44px; font-weight: 900; color: var(--gold); letter-spacing:.2px; }
       .sub { margin: 10px auto 0; font-size: 18px; color: rgba(255,255,255,0.9); max-width: 68ch; line-height: 1.6; }
       .sub.small { font-size: 16px; color: rgba(255,255,255,0.7); }
-
-      .card {
-        background: rgba(255,255,255,0.04);
-        color: var(--white);
-        border: 1px solid rgba(255,255,255,0.12);
-        border-radius:16px;
-        padding:22px;
-        margin-bottom:22px;
-        backdrop-filter: blur(6px);
-      }
+      .card { background: rgba(255,255,255,0.04); color: var(--white); border: 1px solid rgba(255,255,255,0.12); border-radius:16px; padding:22px; margin-bottom:22px; backdrop-filter: blur(6px); }
       .center { display:flex; flex-direction:column; align-items:center; text-align:center; }
 
-      .chatCard {
-        padding: 22px;
-        display: flex;
-        flex-direction: column;
-        max-height: 70vh;
-        min-height: 360px;
-      }
+      .choiceBar { padding: 14px 16px; margin-top: 16px; }
+      .choiceRow { display:flex; align-items:center; justify-content:space-between; gap:14px; flex-wrap:wrap; }
+      .choiceCopy { display:flex; flex-direction:column; gap:4px; }
+      .choiceCopy .hint { font-size:13px; color: rgba(255,255,255,0.7); }
+      .choiceActions { display:flex; gap:10px; }
 
+      .chatCard { padding: 22px; display: flex; flex-direction: column; max-height: 70vh; min-height: 360px; }
       .panelTitle { margin:0 0 12px 0; font-size:18px; font-weight:800; text-transform:uppercase; letter-spacing:.6px; color: var(--gold); }
       .microNote { margin-top:8px; font-size:13px; color: rgba(255,255,255,0.65); }
 
-      .hStack { display:flex; gap:12px; align-items:center; }
-
-      .textInput, .textArea {
-        border:1px solid #1E3448;
-        border-radius:12px;
-        padding:14px 16px;
-        font-size:16px;
-        background:#0F2435;
-        color: var(--white);
-        outline:none;
-        line-height:1.5;
-      }
-      .textInput { width:100%; }
-      .textArea { flex:1; min-height: 84px; }
-      .textInput:focus, .textArea:focus { border-color: var(--gold); }
-
-      .btn { font-size:16px; }
-      .btn:disabled { opacity:.7; cursor:default; }
-      .ghost {
-        background: transparent;
-        color: var(--white);
-        border:1px solid rgba(255,255,255,0.3);
-        border-radius:12px;
-        padding:10px 14px;
-        font-weight:800;
-        cursor:pointer;
-        font-size:15px;
-      }
-      .ghost:hover { border-color: var(--gold); color: var(--gold); }
-
-      .list {
-        flex: 1;
-        overflow-y: auto;
-        margin-bottom: 12px;
-        padding-right: 6px;
-        scroll-behavior: smooth;
-        overscroll-beavior: contain;
-        scrollbar-gutter: stable both-edges;
-        -webkit-overflow-scrolling: touch;
-      }
-
+      .list { flex: 1; overflow-y: auto; margin-bottom: 12px; padding-right: 6px; scroll-behavior: smooth; overscroll-behavior: contain; scrollbar-gutter: stable both-edges; -webkit-overflow-scrolling: touch; }
       .row { display:flex; gap:14px; margin:12px 8px; }
       .row.me { justify-content: flex-end; }
       .avatar { font-size: 22px; line-height: 1; margin-top: 2px; font-family: "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji", system-ui, sans-serif !important; }
-
-      .bubble {
-        max-width: 70ch;
-        padding: 14px 16px;
-        border: 1px solid rgba(255,255,255,0.15);
-        border-radius: 14px;
-        background: rgba(255,255,255,0.06);
-        color: var(--white);
-        line-height: 1.6;
-        font-size: 16px;
-      }
-      .bubble.user {
-        background: var(--gold);
-        color: #0D1B2A;
-        border-color: var(--gold);
-      }
-
+      .bubble { max-width: 70ch; padding: 14px 16px; border: 1px solid rgba(255,255,255,0.15); border-radius: 14px; background: rgba(255,255,255,0.06); color: var(--white); line-height: 1.6; font-size: 16px; }
+      .bubble.user { background: var(--gold); color: #0D1B2A; border-color: var(--gold); }
       .tag { font-size: 12px; font-weight: 700; margin-bottom: 6px; opacity:.7; color: rgba(255,255,255,0.8); }
       .row.me .tag { color: #0D1B2A; opacity:.85; }
-
       .msg { white-space: pre-wrap; }
-
       .composer { display:flex; gap:12px; align-items:flex-end; margin-top: 4px; }
-
       .dots { display:inline-flex; gap:8px; align-items:center; }
       .dots span { width:6px; height:6px; background: var(--gold); border-radius:50%; opacity:.35; animation: blink 1.2s infinite ease-in-out; }
       .dots span:nth-child(2){ animation-delay:.15s }
       .dots span:nth-child(3){ animation-delay:.3s }
       @keyframes blink { 0%,80%,100%{opacity:.25} 40%{opacity:1} }
-
       .fomoLine { text-align:center; font-weight:800; margin: 20px 0 6px; font-size:15px; color: rgba(255,255,255,0.8); }
       .bottomRight { display:flex; justify-content:flex-end; margin-top: 16px; }
-
-      @media (max-width: 560px) {
-        .wrap { margin: 32px auto 56px; padding: 0 16px; }
-        .hero h1 { font-size: 34px; }
-        .sub { font-size: 16px; }
-        .panelTitle { font-size: 16px; }
-        .chatCard { max-height: 60vh; min-height: 300px; }
-      }
     `}</style>
   )
 }
