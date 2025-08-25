@@ -1,4 +1,4 @@
-// pages/chat.js — Chat + Gate with GenieFlow (drop-in)
+// pages/chat.js — Chat + Gate with GenieFlow (Hormozi + Becker upgrade)
 import Questionnaire from '../components/Questionnaire'
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../src/supabaseClient'
@@ -91,43 +91,42 @@ export default function Chat() {
   // today's intent memory
   const [todayIntent, setTodayIntent] = useState(null)
 
-  // --- NEW: restart / continue choice banner ---
+  // NEW: restart / continue choice banner
   const [showReturnChoice, setShowReturnChoice] = useState(false)
-async function continueToday() {
-  setShowReturnChoice(false)
-  // If Step 2 isn't marked done, but the user already has today's intent/steps,
-  // treat it as done and open the chat.
-  if (!wizardDone && session?.user?.id) {
-    const today = todayStr()
-    const [{ data: intentRow }, { data: stepsRows }] = await Promise.all([
-      supabase
-        .from('daily_intents')
-        .select('intent')
-        .eq('user_id', session.user.id)
-        .eq('entry_date', today)
-        .maybeSingle(),
-      supabase
-        .from('action_steps')
-        .select('id', { count: 'exact', head: true })
-        .eq('user_id', session.user.id)
-        .eq('entry_date', today)
-    ])
-    const hasProgress = !!(intentRow?.intent) || (stepsRows?.length ?? 0) > 0
-    if (hasProgress) {
-      setWizardDone(true)
-      localStorage.setItem(`mg_wizardDone_${session.user.id}_${today}`, 'true')
+
+  async function continueToday() {
+    setShowReturnChoice(false)
+    if (!wizardDone && session?.user?.id) {
+      const today = todayStr()
+      const [{ data: intentRow }, { data: stepsRows }] = await Promise.all([
+        supabase
+          .from('daily_intents')
+          .select('intent')
+          .eq('user_id', session.user.id)
+          .eq('entry_date', today)
+          .maybeSingle(),
+        supabase
+          .from('action_steps')
+          .select('id', { count: 'exact', head: true })
+          .eq('user_id', session.user.id)
+          .eq('entry_date', today)
+      ])
+      const hasProgress = !!(intentRow?.intent) || (stepsRows?.length ?? 0) > 0
+      if (hasProgress) {
+        setWizardDone(true)
+        localStorage.setItem(`mg_wizardDone_${session.user.id}_${today}`, 'true')
+      }
     }
+    setMessages(m => [
+      ...m,
+      { role: 'assistant', content: enforceTone("Continuing today’s path. What’s the next move?") }
+    ])
   }
-  setMessages(m => [
-    ...m,
-    { role: 'assistant', content: enforceTone("Continuing today’s path. What’s the next move?") }
-  ])
-}
 
   async function restartQuestionnaire() {
     const uid = session?.user?.id
     if (!uid) return
-    localStorage.removeItem(`mg_wizardDone_${uid}_${todayStr()}`) // reopen Step 2 for today
+    localStorage.removeItem(`mg_wizardDone_${uid}_${todayStr()}`)
     setWizardDone(false)
     setTodayIntent(null)
     setShowReturnChoice(false)
@@ -137,7 +136,7 @@ async function continueToday() {
     ])
   }
 
-  // --- AUTO‑SCROLL: scroll the chat container, not the page ---
+  // AUTO‑SCROLL: scroll the chat container, not the page
   useEffect(() => {
     const el = listRef.current
     if (!el) return
@@ -182,7 +181,6 @@ async function continueToday() {
       }
     })
     return () => subscription.unsubscribe()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session?.user?.id])
 
   // allowlist
@@ -388,43 +386,52 @@ async function continueToday() {
           style={{ height: "60px", width: "auto" }}
           className="mb-3"
         />
-        <p className="sub">Your Personal AI Assistant for Turning Goals into Reality</p>
-        <p className="sub small">✨ Welcome back, {userName}.</p>
+        <p className="sub">Your Daily Portal to Turn Goals into Reality</p>
+        <p className="sub small">✨ Welcome back, {userName}. Today the lamp is lit for you.</p>
       </header>
 
-      {/* --- Restart vs Continue bar --- */}
+      {/* --- Restart vs Continue bar (Hormozi stack + Becker flow) --- */}
       {showReturnChoice && hasName && (
         <section className="card choiceBar">
           <div className="choiceRow">
             <div className="choiceCopy">
               <strong>How shall we proceed?</strong>
-              <span className="hint">Choose a new goal, or continue your path for today.</span>
+              <span className="hint">Choose your path — today’s ritual, or a new goal.</span>
             </div>
             <div className="choiceActions">
               <button type="button" className="linkBtn" onClick={restartQuestionnaire}>
-                New Goal
+                + New Goal
               </button>
               <button type="button" className="btn btn-primary" onClick={continueToday}>
-                Continue Today
+                Start My Manifestation
               </button>
             </div>
           </div>
+
+          {/* Mini value stack */}
+          <ul className="stack">
+            <li><strong>6 guided steps</strong> • ~3 min</li>
+            <li><strong>Instant clarity reset</strong></li>
+            <li><strong>Subconscious lock‑in ritual</strong></li>
+          </ul>
         </section>
       )}
 
-      {/* Step 1: Name gate stays as-is in your app (not shown here) */}
-
       {/* Step 2: Flow gate */}
-{hasName && !wizardDone && (
-  <section className="card wizardCard">
-    <h2 className="panelTitle">Start Today’s Manifestation</h2>
-    <div className="wizardScope">
-      <Questionnaire session={session} onDone={handleWizardDone} />
-    </div>
-    <div className="microNote"></div>
-  </section>
-)}
-
+      {hasName && !wizardDone && (
+        <section className="card wizardCard">
+          <div className="chipRow">
+            <span className="chip">Step 1 of 6</span>
+            <span className="dot">•</span>
+            <span className="chipTitle">Tune Your Frequency</span>
+          </div>
+          <h2 className="panelTitle">Start Today’s Manifestation</h2>
+          <div className="wizardScope">
+            <Questionnaire session={session} onDone={handleWizardDone} />
+          </div>
+          <div className="microNote"></div>
+        </section>
+      )}
 
       {/* Chat console */}
       {hasName && wizardDone && (
@@ -473,7 +480,9 @@ async function continueToday() {
         </section>
       )}
 
-      <div className="fomoLine"><p>🔥 108 people used Manifestation Genie today</p></div>
+      <div className="fomoLine">
+        <p>🔥 <strong>108</strong> manifestors activated their Genie today — join the current.</p>
+      </div>
 
       <div className="bottomRight">
         <button type="button" className="ghost" onClick={() => supabase.auth.signOut()}>Logout</button>
@@ -500,11 +509,11 @@ function Style() {
   return (
     <style jsx global>{`
       * { box-sizing: border-box; }
+      :root { --gold:#FFD600; --green:#19E28A; --white:#fff; }
       .wrap { max-width: 960px; margin: 48px auto 72px; padding: 0 24px; }
       .hero { text-align: center; margin-bottom: 28px; }
       .sub { margin: 10px auto 0; font-size: 18px; color: rgba(255,255,255,0.9); max-width: 68ch; line-height: 1.6; }
-      .sub.small { font-size: 16px; color: rgba(255,255,255,0.7); }
-
+      .sub.small { font-size: 16px; color: rgba(255,255,255,0.78); }
 
       /* Cards */
       .card {
@@ -515,28 +524,54 @@ function Style() {
         padding: 22px;
         margin-bottom: 22px;
         backdrop-filter: blur(6px);
+        box-shadow: 0 10px 28px rgba(0,0,0,.25);
       }
       .center { display:flex; flex-direction:column; align-items:center; text-align:center; }
 
       /* Choice bar */
-      .choiceBar { padding: 14px 16px; margin-top: 16px; }
+      .choiceBar { padding: 16px 16px 12px; margin-top: 16px; }
       .choiceRow { display:flex; align-items:center; justify-content:space-between; gap:14px; flex-wrap:wrap; }
       .choiceCopy { display:flex; flex-direction:column; gap:4px; }
-      .choiceCopy .hint { font-size:13px; color: rgba(255,255,255,0.7); }
-      .choiceActions { display:flex; gap:10px; }
+      .choiceCopy .hint { font-size:13px; color: rgba(255,255,255,0.72); }
+      .choiceActions { display:flex; gap:10px; flex-wrap:wrap; }
+
+      /* Mini value stack */
+      .stack{ display:flex; gap:12px; flex-wrap:wrap; margin:12px 0 0; padding:0; list-style:none; color:rgba(255,255,255,.82); }
+      .stack li{ padding:8px 10px; border-radius:10px; border:1px solid rgba(255,255,255,.12); background:rgba(255,255,255,.05); font-size:13.5px; }
 
       /* Subtle text button for Restart */
       .linkBtn {
         background: transparent;
-        border: 0;
-        color: rgba(255,255,255,0.7);
+        border: 1px solid rgba(255,255,255,0.18);
+        color: rgba(255,255,255,0.9);
         font-weight: 800;
-        padding: 8px 10px;
-        border-radius: 8px;
+        padding: 10px 12px;
+        border-radius: 10px;
         cursor: pointer;
       }
-      .linkBtn:hover { color: var(--gold); text-decoration: underline; }
-      .linkBtn:focus { outline: none; box-shadow: 0 0 0 2px rgba(255,215,0,0.25); border-radius: 8px; }
+      .linkBtn:hover { color: var(--white); background: rgba(255,255,255,0.06); }
+
+      .btn.btn-primary {
+        font-weight: 900;
+        padding: 12px 16px;
+        border-radius: 12px;
+        border: 0;
+        background: var(--gold);
+        color: #0D1B2A;
+        box-shadow: 0 0 22px rgba(255,214,0,.55);
+        filter: drop-shadow(0 0 8px rgba(255,215,0,0.35));
+        cursor: pointer;
+      }
+      .btn.btn-primary:hover { background: #F8D200; }
+
+      /* Wizard header chips */
+      .chipRow{ display:flex; align-items:center; gap:8px; color:#CFE0FF; margin-bottom:6px; }
+      .chip{
+        font-size:12px; padding:5px 8px; border-radius:999px;
+        background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.12);
+      }
+      .dot{ opacity:.4; }
+      .chipTitle{ font-weight:700; letter-spacing:.2px; }
 
       /* Chat card */
       .chatCard {
@@ -568,6 +603,7 @@ function Style() {
         overscroll-behavior: contain;
         scrollbar-gutter: stable both-edges;
         -webkit-overflow-scrolling: touch;
+        max-height: 56vh; /* keep console from falling off page on smaller screens */
       }
 
       /* Bubbles */
@@ -615,19 +651,6 @@ function Style() {
       }
       .textArea:focus { border-color: var(--gold); }
 
-      .btn.btn-primary {
-        font-weight: 900;
-        padding: 12px 16px;
-        border-radius: 12px;
-        border: 0;
-        background: var(--gold);
-        color: #0D1B2A;
-        box-shadow: 0 6px 16px rgba(0,0,0,0.25);
-        filter: drop-shadow(0 0 8px rgba(255,215,0,0.35));
-        cursor: pointer;
-      }
-      .btn.btn-primary:hover { background: var(--green); color: #082117; }
-
       /* Typing dots */
       .dots { display:inline-flex; gap:8px; align-items:center; }
       .dots span { width:6px; height:6px; background: var(--gold); border-radius:50%; opacity:.35; animation: blink 1.2s infinite ease-in-out; }
@@ -635,14 +658,14 @@ function Style() {
       .dots span:nth-child(3){ animation-delay:.3s }
       @keyframes blink { 0%,80%,100%{opacity:.25} 40%{opacity:1} }
 
-      .fomoLine { text-align:center; font-weight:800; margin: 20px 0 6px; font-size:15px; color: rgba(255,255,255,0.8); }
+      .fomoLine { text-align:center; font-weight:800; margin: 20px 0 6px; font-size:15px; color: rgba(255,255,255,0.86); }
       .bottomRight { display:flex; justify-content:flex-end; margin-top: 16px; }
 
       /* Mobile */
       @media (max-width: 560px) {
         .wrap { margin: 32px auto 56px; padding: 0 16px; }
         .chatCard .panelTitle { padding: 14px 14px 6px; }
-        .list { padding: 6px 10px 12px; }
+        .list { padding: 6px 10px 12px; max-height: 52vh; }
       }
     `}</style>
   )
