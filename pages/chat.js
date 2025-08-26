@@ -380,8 +380,8 @@ export default function Chat() {
   return (
     <div className="wrap">
   <header className="hero">
-  <p className="welcome">✨ Welcome back, {userName}.</p>
-  <p className="sub">This is your daily portal to turn goals into reality</p>
+  <p className="welcome">🧞‍♂️ Welcome back, {userName}</p>
+  <p className="sub">This is your daily portal to manifest your goals</p>
 </header>
 
 
