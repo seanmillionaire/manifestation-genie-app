@@ -628,11 +628,7 @@ function Style() {
   margin: 0 0 8px;
   color: var(--white);
 }
-.sub {
-  margin: 0;
-  font-size: 16px;
-  color: rgba(255,255,255,0.78);
-}
+
 
       .tag { font-size: 11px; font-weight: 800; margin-bottom: 6px; opacity:.7; }
       .row.me .tag { color: #0D1B2A; opacity:.85; }
