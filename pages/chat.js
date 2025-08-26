@@ -379,16 +379,11 @@ export default function Chat() {
 
   return (
     <div className="wrap">
-      <header className="hero">
-        <img
-          src="https://storage.googleapis.com/mixo-sites/images/file-3ee255ce-ebaa-41de-96f6-a1233499cf70.png"
-          alt="Manifestation Genie Logo"
-          style={{ height: "60px", width: "auto" }}
-          className="mb-3"
-        />
-        <p className="sub">Your Daily Portal to Turn Goals into Reality</p>
-        <p className="sub small">✨ Welcome back, {userName}. Today the lamp is lit for you.</p>
-      </header>
+  <header className="hero">
+  <p className="welcome">✨ Welcome back, {userName}.</p>
+  <p className="sub">This is your daily portal to turn goals into reality</p>
+</header>
+
 
       {/* --- Restart vs Continue bar (Hormozi stack + Becker flow) --- */}
       {showReturnChoice && hasName && (
