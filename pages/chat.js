@@ -622,6 +622,18 @@ function Style() {
         color: #0D1B2A;
         border-color: #FFE169;
       }
+      .welcome {
+  font-size: 22px;
+  font-weight: 800;
+  margin: 0 0 8px;
+  color: var(--white);
+}
+.sub {
+  margin: 0;
+  font-size: 16px;
+  color: rgba(255,255,255,0.78);
+}
+
       .tag { font-size: 11px; font-weight: 800; margin-bottom: 6px; opacity:.7; }
       .row.me .tag { color: #0D1B2A; opacity:.85; }
       .msg { white-space: pre-wrap; }
