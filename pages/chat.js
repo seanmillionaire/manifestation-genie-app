@@ -543,9 +543,16 @@ function Style() {
         padding: 10px 12px;
         border-radius: 10px;
         cursor: pointer;
+        transition: background .15s ease, box-shadow .15s ease, transform .15s ease;
       }
-      .linkBtn:hover { color: var(--white); background: rgba(255,255,255,0.06); }
+      .linkBtn:hover {
+        color: var(--white);
+        background: rgba(255,255,255,0.06);
+        box-shadow: 0 0 14px rgba(255,255,255,.18) inset, 0 0 10px rgba(255,255,255,.12);
+        transform: translateY(-1px);
+      }
 
+      /* Primary CTA base */
       .btn.btn-primary {
         font-weight: 900;
         padding: 12px 16px;
@@ -556,8 +563,43 @@ function Style() {
         box-shadow: 0 0 22px rgba(255,214,0,.55);
         filter: drop-shadow(0 0 8px rgba(255,215,0,0.35));
         cursor: pointer;
+        transition: transform .15s ease, box-shadow .15s ease, background .15s ease;
+        position: relative;
+        overflow: hidden;
+        transform: translateZ(0);
       }
       .btn.btn-primary:hover { background: #F8D200; }
+      .btn.btn-primary:active { transform: translateY(0); box-shadow: 0 4px 14px rgba(0,0,0,.28); }
+
+      /* === CTA shimmer + aura === */
+      .btn.btn-primary::before{
+        content:"";
+        position:absolute; inset:0;
+        background: linear-gradient(120deg, transparent 0%, rgba(255,255,255,.35) 45%, transparent 55%) no-repeat;
+        background-size: 200% 100%;
+        mix-blend-mode: screen;
+        animation: sheen 2.4s linear infinite;
+        pointer-events:none;
+      }
+      @keyframes sheen{
+        0%   { background-position: 200% 0; }
+        100% { background-position: -200% 0; }
+      }
+      .btn.btn-primary::after{
+        content:"";
+        position:absolute; inset:-2px;
+        border-radius: 14px;
+        background:
+          radial-gradient(140px 60px at 30% -40%, rgba(255,214,0,.45), transparent 70%),
+          radial-gradient(140px 60px at 80% 140%, rgba(102,51,204,.35), transparent 70%);
+        opacity:0; transition: opacity .18s ease;
+        pointer-events:none;
+      }
+      .btn.btn-primary:hover{
+        transform: translateY(-1px);
+        box-shadow: 0 0 28px rgba(255,214,0,.75), 0 8px 24px rgba(0,0,0,.35);
+      }
+      .btn.btn-primary:hover::after{ opacity:.45; }
 
       /* Wizard header chips */
       .chipRow{ display:flex; align-items:center; gap:8px; color:#CFE0FF; margin-bottom:6px; }
@@ -598,7 +640,7 @@ function Style() {
         overscroll-behavior: contain;
         scrollbar-gutter: stable both-edges;
         -webkit-overflow-scrolling: touch;
-        max-height: 56vh; /* keep console from falling off page on smaller screens */
+        max-height: 56vh;
       }
 
       /* Bubbles */
@@ -622,13 +664,13 @@ function Style() {
         color: #0D1B2A;
         border-color: #FFE169;
       }
-      .welcome {
-  font-size: 22px;
-  font-weight: 800;
-  margin: 0 0 8px;
-  color: var(--white);
-}
 
+      .welcome{
+        font-size: 22px;
+        font-weight: 800;
+        margin: 0 0 8px;
+        color: var(--white);
+      }
 
       .tag { font-size: 11px; font-weight: 800; margin-bottom: 6px; opacity:.7; }
       .row.me .tag { color: #0D1B2A; opacity:.85; }
@@ -663,6 +705,42 @@ function Style() {
 
       .fomoLine { text-align:center; font-weight:800; margin: 20px 0 6px; font-size:15px; color: rgba(255,255,255,0.86); }
       .bottomRight { display:flex; justify-content:flex-end; margin-top: 16px; }
+
+      /* === Vibe Pills (Good / Okay / Low) — white→grey gradient + mystical aura === */
+      .wizardCard button:not(.btn):not(.linkBtn){
+        position: relative;
+        border-radius: 12px;
+        padding: 10px 14px;
+        font-weight: 800;
+        background: linear-gradient(180deg, #ffffff, #E9EEF3);
+        color: #0D1B2A;
+        border: 1px solid rgba(13,27,42,.18);
+        box-shadow:
+          inset 0 1px 0 #fff,
+          0 4px 14px rgba(0,0,0,.18);
+        transition: transform .16s ease, box-shadow .16s ease, filter .16s ease;
+      }
+      .wizardCard button:not(.btn):not(.linkBtn):hover{
+        transform: translateY(-1px);
+        box-shadow:
+          inset 0 1px 0 #fff,
+          0 8px 18px rgba(0,0,0,.22),
+          0 0 22px rgba(102,51,204,.25);
+      }
+      .wizardCard button:not(.btn):not(.linkBtn):active{
+        transform: translateY(0);
+        filter: saturate(1.04);
+      }
+      .wizardCard button:not(.btn):not(.linkBtn)::after{
+        content:"";
+        position:absolute; inset:-2px; border-radius:12px;
+        background:
+          radial-gradient(120px 60px at 30% -20%, rgba(102,51,204,.28), transparent 70%),
+          radial-gradient(120px 60px at 80% 120%, rgba(255,214,0,.35), transparent 70%);
+        opacity:0; transition: opacity .18s ease;
+        pointer-events:none;
+      }
+      .wizardCard button:not(.btn):not(.linkBtn):hover::after{ opacity:.6; }
 
       /* Mobile */
       @media (max-width: 560px) {
