@@ -67,6 +67,13 @@ const getFirstNameFromCache = () => {
   } catch {}
   return 'Friend'
 }
+const STREAK_ANNOUNCED_KEY = 'mg_streak_announced_date';
+function getAnnouncedDate() {
+  try { return localStorage.getItem(STREAK_ANNOUNCED_KEY) || null } catch { return null }
+}
+function setAnnouncedToday() {
+  try { localStorage.setItem(STREAK_ANNOUNCED_KEY, getToday()) } catch {}
+}
 
 const toSocialLines = (text='', wordsPerLine=9) => {
   const soft = text
@@ -446,9 +453,20 @@ export default function ChatPage() {
   // Persist state
   useEffect(()=>{ saveState({ phase, vibe, currentWish, lastWish, steps, thread }) }, [phase, vibe, currentWish, lastWish, steps, thread])
 
-// Announce streak once when entering chat (human)
+// Announce streak once when entering chat (human, once per day)
 useEffect(() => {
-  if (phase === 'chat' && !hasAnnouncedStreak) {
+  if (phase !== 'chat') return;
+
+  const today = getToday();
+  const alreadyAnnouncedToday = getAnnouncedDate() === today;
+
+  if (alreadyAnnouncedToday) {
+    // make sure local state matches storage so we don't try again this session
+    if (!hasAnnouncedStreak) setHasAnnouncedStreak(true);
+    return;
+  }
+
+  if (!hasAnnouncedStreak) {
     setThread(prev => prev.concat({
       id: newId(),
       role: 'assistant',
@@ -457,10 +475,12 @@ useEffect(() => {
         `${streakMessage(streak)}\nKeep the streak alive — what’s today’s micro-move?`
       )),
       likedByUser:false, likedByGenie:false
-    }))
-    setHasAnnouncedStreak(true)
+    }));
+    setHasAnnouncedStreak(true);
+    setAnnouncedToday();
   }
-}, [phase, streak, hasAnnouncedStreak])
+}, [phase, streak, hasAnnouncedStreak]);
+
 
 
   const handlePickVibe = (v) => {
