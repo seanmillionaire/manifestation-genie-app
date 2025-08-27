@@ -381,7 +381,7 @@ export default function Chat() {
     <div className="wrap">
   <header className="hero">
   <p className="welcome">🧞‍♂️ Welcome back, {userName}</p>
-  <p className="sub">This is your daily portal to manifest your goals ✨</p>
+  <p className="sub">Your genie has opened today’s portal — let’s manifest ✨</p>
 </header>
 
 
