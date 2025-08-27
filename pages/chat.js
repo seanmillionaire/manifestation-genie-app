@@ -43,8 +43,6 @@ const STORAGE_KEY = 'mg_chat_state_v1'
 const NAME_KEY = 'mg_first_name'
 const newId = () => Math.random().toString(36).slice(2,10)
 
-const nl2br = (s='') => s.replace(/\n/g, '<br/>')
-
 const injectName = (s, name) => (s || '').replaceAll('{firstName}', name || 'Friend')
 
 const loadState = () => {
@@ -466,30 +464,30 @@ const handleSend = async (text) => {
   setThread(prev => prev.concat(userMsg))
   maybeGenieLikes(userMsg)
 
-  try {
-    const reply = await genieReply({ text, thread, firstName, currentWish, vibe })
-+ const social = toSocialLines(reply, 9);            // wrap to short lines
-+ const aiMsg = {
-+   id: newId(),
-+   role: 'assistant',
-+   author: 'Genie',
-+   content: nl2br(escapeHTML(social)),
-+   likedByUser: false,
-+   likedByGenie: false
-+ }
-
-    setThread(prev => prev.concat(aiMsg))
-  } catch (e) {
-    const errMsg = {
-      id: newId(),
-      role: 'assistant',
-      author: 'Genie',
-      content: escapeHTML("The lamp flickered. Try again."),
-      likedByUser:false, likedByGenie:false
-    }
-    setThread(prev => prev.concat(errMsg))
+try {
+  const reply = await genieReply({ text, thread, firstName, currentWish, vibe })
+  const social = toSocialLines(reply, 9) // wrap to short, chatty lines
+  const aiMsg = {
+    id: newId(),
+    role: 'assistant',
+    author: 'Genie',
+    content: nl2br(escapeHTML(social)),  // preserve line breaks for rendering
+    likedByUser: false,
+    likedByGenie: false
   }
+  setThread(prev => prev.concat(aiMsg))
+} catch (e) {
+  const errMsg = {
+    id: newId(),
+    role: 'assistant',
+    author: 'Genie',
+    content: escapeHTML("The lamp flickered. Try again."),
+    likedByUser: false,
+    likedByGenie: false
+  }
+  setThread(prev => prev.concat(errMsg))
 }
+
 
 
 
