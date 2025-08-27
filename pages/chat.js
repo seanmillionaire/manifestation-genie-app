@@ -431,14 +431,17 @@ export default function ChatPage() {
         )}
 
         {/* NEW: Checklist */}
-        {phase === 'checklist' && (
-          <Checklist
-            steps={steps}
-            onToggle={toggleStep}
-            onComplete={completeChecklist}
-            onSkip={skipChecklist}
-          />
-        )}
+{phase === 'checklist' && (
+  <Checklist
+    wish={currentWish?.wish}
+    micro={currentWish?.micro}
+    steps={steps}
+    onToggle={toggleStep}
+    onComplete={completeChecklist}
+    onSkip={skipChecklist}
+  />
+)}
+
 
         {/* Magical Chat */}
         {phase === 'chat' && (
