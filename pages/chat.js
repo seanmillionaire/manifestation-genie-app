@@ -42,16 +42,21 @@ const pick = (arr) => arr[Math.floor(Math.random() * arr.length)]
 const STORAGE_KEY = 'mg_chat_state_v1'
 const NAME_KEY = 'mg_first_name'
 
-
 const injectName = (s, name) => (s || '').replaceAll('{firstName}', name || 'Friend')
+
 const loadState = () => {
   if (typeof window === 'undefined') return null
-  try { const r = localStorage.getItem(STORAGE_KEY); return r ? JSON.parse(r) : null } catch { return null }
+  try {
+    const r = localStorage.getItem(STORAGE_KEY)
+    return r ? JSON.parse(r) : null
+  } catch { return null }
 }
+
 const saveState = (state) => {
   if (typeof window === 'undefined') return
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)) } catch {}
 }
+
 const getFirstNameFromCache = () => {
   if (typeof window === 'undefined') return 'Friend'
   try {
@@ -157,7 +162,7 @@ function ChatConsole({ thread, onSend, onReset }) {
    Main Page
    ========================= */
 export default function ChatPage() {
-  // first name (cache first, then hydrate from Supabase)
+  // FIRST NAME: cache first; hydrate from Supabase (profiles → metadata → email)
   const [firstName, setFirstName] = useState(getFirstNameFromCache())
 
   // phases: welcome → vibe → resumeNew → questionnaire → chat
@@ -170,23 +175,53 @@ export default function ChatPage() {
   const [greeting] = useState(() => injectName(pick(GenieLang.greetings), firstName))
   const [thread, setThread] = useState([{ role:'assistant', content: greeting }])
 
-  // hydrate first name from Supabase session (once)
+  // 🔐 Ultra-safe Supabase name hydration (won’t crash)
   useEffect(() => {
-    let mounted = true
+    let alive = true
     ;(async () => {
-      const { data: { session } } = await supabase.auth.getSession()
-      const name =
-        session?.user?.user_metadata?.full_name ||
-        session?.user?.user_metadata?.name ||
-        session?.user?.email?.split('@')[0]
-      if (!mounted) return
-      if (name) {
-        const fn = String(name).trim().split(' ')[0]
-        setFirstName(fn || 'Friend')
-        try { localStorage.setItem(NAME_KEY, fn || 'Friend') } catch {}
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        const user = session?.user
+        if (!alive || !user) return
+
+        let fn = null
+
+        // 1) profiles.full_name (best source)
+        try {
+          const { data: p } = await supabase
+            .from('profiles')
+            .select('full_name')
+            .eq('id', user.id)
+            .maybeSingle()
+          if (p?.full_name) fn = String(p.full_name).trim().split(' ')[0]
+        } catch (e) {
+          // non-fatal (RLS or table missing in this env)
+          // console.warn('profiles lookup', e)
+        }
+
+        // 2) auth metadata fallbacks
+        if (!fn) {
+          const meta = user.user_metadata || {}
+          fn =
+            (meta.full_name?.trim().split(' ')[0]) ||
+            (meta.name?.trim().split(' ')[0]) ||
+            meta.given_name ||
+            null
+        }
+
+        // 3) email local part
+        if (!fn) fn = (user.email || '').split('@')[0] || 'Friend'
+
+        if (alive) {
+          setFirstName(fn)
+          try { localStorage.setItem(NAME_KEY, fn) } catch {}
+        }
+      } catch (e) {
+        // keep running with cached/fallback name
+        // console.warn('name hydrate failed', e)
       }
     })()
-    return () => { mounted = false }
+    return () => { alive = false }
   }, [])
 
   // Load persisted state on mount
