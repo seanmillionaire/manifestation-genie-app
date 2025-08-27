@@ -387,43 +387,50 @@ export default function ChatPage() {
   ])
 
   // Supabase name hydration
-  useEffect(() => {
-    let alive = true
-    ;(async () => {
+  // Supabase name hydration
+useEffect(() => {
+  let alive = true
+  ;(async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const user = session?.user
+      if (!alive || !user) return
+      let fn = null
+
       try {
-        const { data: { session } } = await supabase.auth.getSession()
-        const user = session?.user
-        if (!alive || !user) return
-        let fn = null
-
-        try {
-          const { data: p } = await supabase
-            .from('profiles')
-            .select('full_name')
-            .eq('id', user.id)
-            .maybeSingle()
-          if (p?.full_name) fn = String(p.full_name).trim().split(' ')[0]
-        } catch {}
-
-        if (!fn) {
-          const meta = user.user_metadata || {}
-          fn =
-            (meta.full_name?.trim().split(' ')[0]) ||
-            (meta.name?.trim().split(' ')[0]) ||
-            meta.given_name ||
-            null
-        }
-
-        if (!fn) fn = (user.email || '').split('@')[0] || 'Friend'
-
-        if (alive) {
-          setFirstName(fn)
-          try { localStorage.setItem(NAME_KEY, fn) } catch {}
-        }
+        const { data: p } = await supabase
+          .from('profiles')
+          .select('full_name')
+          .eq('id', user.id)
+          .maybeSingle()
+        if (p?.full_name) fn = String(p.full_name).trim().split(' ')[0]
       } catch {}
-    })()
-    return () => { alive = false }
-  }, [])
+
+      if (!fn) {
+        const meta = user.user_metadata || {}
+        fn =
+          (meta.full_name?.trim().split(' ')[0]) ||
+          (meta.name?.trim().split(' ')[0]) ||
+          meta.given_name ||
+          null
+      }
+
+      if (!fn) fn = (user.email || '').split('@')[0] || 'Friend'
+
+      if (alive) {
+        setFirstName(fn)
+        try { localStorage.setItem(NAME_KEY, fn) } catch {}
+
+        // 👉 NEW: on login, if no vibe selected yet, show the Vibe screen first
+        setPhase(prev => (prev !== 'chat' && prev !== 'checklist' && prev !== 'questionnaire' && !vibe) ? 'vibe' : prev)
+      }
+    } catch {}
+  })()
+  return () => { alive = false }
+  // include `vibe` so the setter sees the latest value
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [vibe])
+
 
   // Load persisted state on mount
   useEffect(()=>{
