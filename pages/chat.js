@@ -620,14 +620,27 @@ setThread(prev => prev.concat({
     }
   }
 
-  const resetToNewWish = () => {
-    setPhase('vibe')
-    setVibe(null)
-    setCurrentWish(null)
-    setSteps([])
-    setThread([{ id:newId(), role:'assistant', author:'Genie', content: injectName(pick(GenieLang.greetings), firstName), likedByUser:false, likedByGenie:false }])
-    setHasAnnouncedStreak(false)
+const resetToNewWish = () => {
+  setPhase('vibe')
+  setVibe(null)
+  setCurrentWish(null)
+  setSteps([])
+  setThread([{
+    id:newId(),
+    role:'assistant',
+    author:'Genie',
+    content: injectName(pick(GenieLang.greetings), firstName),
+    likedByUser:false,
+    likedByGenie:false
+  }])
+  setHasAnnouncedStreak(false)
+
+  // 👇 force scroll back up
+  if (typeof window !== 'undefined') {
+    window.scrollTo({ top: 0, behavior: 'smooth' })
   }
+}
+
 
   return (
     <div style={styles.wrap}>
