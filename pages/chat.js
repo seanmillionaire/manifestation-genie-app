@@ -20,7 +20,7 @@ const GenieLang = {
   resumeLabel: "Continue last wish",
   newLabel: "Start a new wish",
   questPrompts: {
-    wish: "What’s the outcome you’re chasing? Say it like you mean it.",
+    wish: "What’s the #1 thing you want to manifest? Say it like you mean it.",
     block: "What’s blocking you? Drop the excuse in one line.",
     micro: "What’s 1 micro-move you can make today? Something small."
   },
