@@ -487,7 +487,7 @@ try {
   }
   setThread(prev => prev.concat(errMsg))
 }
-
+}
 
 
 
@@ -817,6 +817,7 @@ bubbleText: {
   lineHeight: 1.6,
   whiteSpace: 'normal',  // we’re using <br/>
   wordBreak: 'break-word',
+   overflowWrap: 'anywhere',
 },
 
 
