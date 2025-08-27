@@ -508,15 +508,11 @@ function VibeButton({ label, emoji, onClick }) {
   )
 }
 
-/* =========================
-   Fake reply (stub)
-   Replace with real /api/chat call
-   ========================= */
 /* Hit /api/chat (your one-liner operator Genie) */
 async function genieReply({ text, thread, firstName, currentWish, vibe, intent }) {
   const context = {
     intent: intent || null,
-    mood: null, // set if you detect
+    mood: null,
     wish: currentWish?.wish || null,
     block: currentWish?.block || null,
     micro: currentWish?.micro || null,
@@ -533,24 +529,6 @@ async function genieReply({ text, thread, firstName, currentWish, vibe, intent }
       messages: [
         ...toPlainMessages(thread),
         { role:'user', content:text }
-      ]
-    })
-  })
-  const data = await resp.json()
-  return data.reply
-}
-
-
-  const resp = await fetch('/api/chat', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      userName: firstName || null,                 // <-- your API uses this
-      hmUrl: 'https://hypnoticmeditations.ai',     // optional; pass if you want HM mentions
-      context,                                     // optional context
-      messages: [
-        ...toPlainMessages(thread),
-        { role: 'user', content: text }
       ]
     })
   })
@@ -693,15 +671,7 @@ bubbleAI: {
     overflowY:'auto',
     boxShadow:'0 14px 34px rgba(0,0,0,.45)'
   },
-  bubbleAI: {
-    maxWidth:'85%',
-    background:'rgba(255,255,255,0.04)',
-    padding:'12px 14px',
-    borderRadius:12,
-    border:'1px solid rgba(255,255,255,0.08)',
-    margin:'8px 0',
-    backdropFilter:'blur(2px)'
-  },
+ 
   bubbleUser: {
     maxWidth:'85%',
     background:'rgba(255,214,0,0.08)',
