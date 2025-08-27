@@ -192,7 +192,7 @@ function Questionnaire({ initial, onComplete, vibe, firstName }) {
       </div>
 
       <div style={styles.card}>
-        <h3 style={styles.h3}>What’s the play today, {firstName}?</h3>
+        <h3 style={styles.h3}>Let's decode your dreams into reality👇</h3>
 
         <p style={styles.subtle}>{GenieLang.questPrompts.wish}</p>
         <textarea
