@@ -14,8 +14,8 @@ const GenieLang = {
   greetings: [
     "The lamp glows… your Genie is here. ✨ What’s stirring in your heart today {firstName}?",
     "Rub the lamp 🔮 — let’s spark some magic.",
-    "The stars whispered your name… shall we begin?",
-    "The portal is open 🌌 — step inside, Friend."
+    "The stars whispered your name {firstName}… shall we begin?",
+    "The portal is open 🌌 — step inside..."
   ],
   vibePrompt: "Choose your vibe: 🔥 Bold, 🙏 Calm, 💰 Rich. Which vibe shall we ride?",
   resumeOrNew: "Keep weaving the last wish, or light a fresh one?",
