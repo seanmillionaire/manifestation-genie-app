@@ -386,35 +386,147 @@ async function fakeGenieReply(text, { vibe, currentWish }) {
    Styles (inline for portability)
    ========================= */
 const styles = {
-  portalHeader: { textAlign:'left', marginBottom:16 },
-  portalTitle: { fontSize:32, fontWeight:900, margin:0, color:'#ffd600', letterSpacing:.2 },
-  portalSubtitle: { fontSize:18, opacity:.9, marginTop:6 },
+  /* ===== Portal Header ===== */
+  portalHeader: { textAlign:'left', marginBottom:18 },
+  portalTitle: { fontSize:34, fontWeight:900, margin:0, color:'#ffd600', letterSpacing:.3 },
+  portalSubtitle: { fontSize:18, opacity:.92, marginTop:6 },
 
-  wrap: { minHeight:'100vh', background:'#0b0b12', color:'#eee', padding:'24px' },
-  container: { maxWidth: 820, margin:'0 auto' },
-  card: { background:'#11121a', border:'1px solid #222433', borderRadius:16, padding:24, boxShadow:'0 10px 30px rgba(0,0,0,.35)' },
+  /* ===== Page + Container ===== */
+  wrap: {
+    minHeight:'100vh',
+    color:'#f2f2f6',
+    padding:'24px',
+    // Brighter cosmic look (deep navy → soft black radial)
+    background: 'radial-gradient(1200px 600px at 50% -10%, #1a1b2d 0%, #0c0d14 55%, #090a10 100%)',
+  },
+  container: { maxWidth: 860, margin:'0 auto' },
+
+  /* ===== Cards ===== */
+  card: {
+    background:'#171826',                        // a bit lighter than before
+    border:'1px solid rgba(255,255,255,0.06)',
+    borderRadius:18,
+    padding:24,
+    boxShadow:'0 18px 40px rgba(0,0,0,.45), inset 0 0 0 1px rgba(255,255,255,0.02)'
+  },
+
+  /* ===== Typography ===== */
   h2: { margin:0, fontSize:28, fontWeight:900, letterSpacing:.3 },
-  h3: { marginTop:0, fontSize:20, fontWeight:800 },
-  lead: { fontSize:18, opacity:.95, lineHeight:1.4 },
-  subtle: { fontSize:15, opacity:.85, lineHeight:1.4 },
-  mini: { fontSize:13, opacity:.8 },
+  h3: { marginTop:0, fontSize:22, fontWeight:850 },
+  lead: { fontSize:18, opacity:.96, lineHeight:1.45 },
+  subtle: { fontSize:15, opacity:.86, lineHeight:1.45 },
+  mini: { fontSize:13, opacity:.82 },
+
+  /* ===== Layout bits ===== */
   row: { display:'flex', gap:12, marginTop:12, flexWrap:'wrap' },
   vibeRow: { display:'grid', gridTemplateColumns:'repeat(3, 1fr)', gap:12, marginTop:12 },
-  vibeBtn: { padding:'14px 16px', borderRadius:12, border:'1px solid #292b3a', background:'#0f1017', color:'#fff', cursor:'pointer', textAlign:'center', boxShadow:'inset 0 0 0 1px rgba(255,255,255,0.02)' },
-  input: { width:'100%', padding:'12px 14px', borderRadius:10, border:'1px solid #2a2d3b', background:'#0f1017', color:'#fff', outline:'none' },
-  textarea: { width:'100%', padding:'12px 14px', borderRadius:10, border:'1px solid #2a2d3b', background:'#0f1017', color:'#fff', outline:'none', resize:'vertical' },
-  btn: { padding:'12px 16px', borderRadius:12, border:'2px solid #ffd600', background:'#111', color:'#ffd600', fontWeight:900, cursor:'pointer', letterSpacing:.2 },
-  btnGhost: { padding:'12px 16px', borderRadius:12, border:'1px solid #3a3c4d', background:'transparent', color:'#ddd', fontWeight:800, cursor:'pointer' },
-  lastWish: { marginTop:12, padding:12, border:'1px dashed #34374a', borderRadius:12, background:'#0d0f17' },
 
+  /* ===== Buttons ===== */
+  vibeBtn: {
+    padding:'14px 16px',
+    borderRadius:14,
+    border:'1px solid rgba(255,255,255,0.08)',
+    background:'linear-gradient(180deg, #161726 0%, #0f111a 100%)',
+    color:'#fff',
+    cursor:'pointer',
+    textAlign:'center',
+    boxShadow:'inset 0 0 0 1px rgba(255,255,255,0.02), 0 6px 16px rgba(0,0,0,.45)'
+  },
+  btn: {
+    padding:'12px 16px',
+    borderRadius:14,
+    border:'0',
+    background:'#ffd600',                        // solid gold button
+    color:'#111',
+    fontWeight:900,
+    cursor:'pointer',
+    letterSpacing:.2,
+    boxShadow:'0 0 24px rgba(255,214,0,0.55), 0 8px 28px rgba(0,0,0,.35)'
+  },
+  btnGhost: {
+    padding:'12px 16px',
+    borderRadius:14,
+    border:'1px solid rgba(255,255,255,0.14)',
+    background:'transparent',
+    color:'#e6e6ee',
+    fontWeight:820,
+    cursor:'pointer'
+  },
+
+  /* ===== Inputs ===== */
+  input: {
+    width:'100%',
+    padding:'12px 14px',
+    borderRadius:12,
+    border:'1px solid rgba(255,255,255,0.12)',
+    background:'linear-gradient(180deg, #0f1119 0%, #0c0d14 100%)',
+    color:'#fff',
+    outline:'none',
+    boxShadow:'0 0 14px rgba(255,214,0,0.07)'
+  },
+  textarea: {
+    width:'100%',
+    padding:'12px 14px',
+    borderRadius:12,
+    border:'1px solid rgba(255,255,255,0.12)',
+    background:'linear-gradient(180deg, #0f1119 0%, #0c0d14 100%)',
+    color:'#fff',
+    outline:'none',
+    resize:'vertical',
+    boxShadow:'0 0 14px rgba(255,214,0,0.07)'
+  },
+
+  /* ===== “Last Wish” pill ===== */
+  lastWish: {
+    marginTop:12,
+    padding:12,
+    border:'1px dashed rgba(255,255,255,0.18)',
+    borderRadius:12,
+    background:'linear-gradient(180deg, rgba(255,214,0,0.05), rgba(255,214,0,0.02))'
+  },
+
+  /* ===== Chat ===== */
   chatWrap: { display:'flex', flexDirection:'column', gap:12 },
-  chatStream: { background:'#0f1119', border:'1px solid #222433', borderRadius:16, padding:16, minHeight:360, maxHeight:520, overflowY:'auto' },
-  bubbleAI: { maxWidth:'85%', background:'#121422', padding:'12px 14px', borderRadius:12, border:'1px solid #2a2d3b', margin:'8px 0' },
-  bubbleUser: { maxWidth:'85%', background:'#0a0c14', padding:'12px 14px', borderRadius:12, border:'1px solid #2a2d3b', margin:'8px 0 8px auto' },
+  chatStream: {
+    background:'linear-gradient(180deg, #101221 0%, #0b0c15 100%)',
+    border:'1px solid rgba(255,255,255,0.08)',
+    borderRadius:18,
+    padding:16,
+    minHeight:380,
+    maxHeight:540,
+    overflowY:'auto',
+    boxShadow:'0 14px 34px rgba(0,0,0,.45)'
+  },
+  bubbleAI: {
+    maxWidth:'85%',
+    background:'rgba(255,255,255,0.04)',
+    padding:'12px 14px',
+    borderRadius:12,
+    border:'1px solid rgba(255,255,255,0.08)',
+    margin:'8px 0',
+    backdropFilter:'blur(2px)'
+  },
+  bubbleUser: {
+    maxWidth:'85%',
+    background:'rgba(255,214,0,0.08)',
+    padding:'12px 14px',
+    borderRadius:12,
+    border:'1px solid rgba(255,214,0,0.18)',
+    margin:'8px 0 8px auto'
+  },
   bubbleText: { fontSize:15, lineHeight:1.6 },
   chatInputRow: { display:'flex', gap:10, alignItems:'center' },
-  chatInput: { flex:1, padding:'12px 14px', borderRadius:10, border:'1px solid #2a2d3b', background:'#0f1017', color:'#fff', outline:'none' },
+  chatInput: {
+    flex:1,
+    padding:'12px 14px',
+    borderRadius:12,
+    border:'1px solid rgba(255,255,255,0.12)',
+    background:'linear-gradient(180deg, #0f1119 0%, #0c0d14 100%)',
+    color:'#fff',
+    outline:'none',
+  },
 }
+
 
 /* =========================
    Tiny utils
