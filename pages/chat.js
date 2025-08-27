@@ -41,6 +41,7 @@ const todayStr = () => new Date().toISOString().slice(0,10)
 const pick = (arr) => arr[Math.floor(Math.random() * arr.length)]
 const STORAGE_KEY = 'mg_chat_state_v1'
 const NAME_KEY = 'mg_first_name'
+const newId = () => Math.random().toString(36).slice(2,10)
 
 const injectName = (s, name) => (s || '').replaceAll('{firstName}', name || 'Friend')
 
@@ -178,38 +179,56 @@ function Checklist({ wish, micro, steps, onToggle, onComplete, onSkip }) {
 
 
 /* =========================
-   Minimal Chat Console
+   Messenger-style Chat Console (labels + likes)
    ========================= */
-/* =========================
-   Minimal Chat Console with Typewriter
-   ========================= */
-function ChatConsole({ thread, onSend, onReset, typingText }) {
+function ChatConsole({ thread, onSend, onReset, onToggleLike, firstName }) {
   const [input, setInput] = useState("")
   const endRef = useRef(null)
-  useEffect(()=>{ endRef.current?.scrollIntoView({behavior:'smooth'}) }, [thread, typingText])
+  useEffect(()=>{ endRef.current?.scrollIntoView({behavior:'smooth'}) }, [thread])
 
   return (
     <div style={styles.chatWrap}>
       <div style={styles.chatStream}>
-        {thread.map((m, i) => (
-          <div key={i} style={m.role === 'assistant' ? styles.bubbleAI : styles.bubbleUser}>
-            <div style={styles.bubbleText} dangerouslySetInnerHTML={{__html: m.content}} />
-          </div>
-        ))}
+        {thread.map((m) => {
+          const isAI = m.role === 'assistant'
+          return (
+            <div key={m.id} style={isAI ? styles.rowAI : styles.rowUser}>
+              {/* Avatar */}
+              <div style={styles.avatar}>{isAI ? '🔮' : '🙂'}</div>
 
-        {/* live typewriter line */}
-        {typingText && (
-          <div style={styles.bubbleAI}>
-            <div style={styles.bubbleText}>
-              <span dangerouslySetInnerHTML={{__html: typingText}} />
-              <span style={{opacity:.8}}>▌</span>
+              <div style={{flex:1, minWidth:0}}>
+                {/* Name label */}
+                <div style={styles.nameLabel}>{isAI ? 'Genie' : (m.author || firstName || 'You')}</div>
+
+                {/* Bubble */}
+                <div style={isAI ? styles.bubbleAI : styles.bubbleUser}>
+                  <div style={styles.bubbleText} dangerouslySetInnerHTML={{__html: m.content}} />
+                </div>
+
+                {/* Reactions row */}
+                <div style={styles.reactRow}>
+                  {isAI ? (
+                    // You can like Genie messages
+                    <button
+                      style={m.likedByUser ? styles.likeBtnActive : styles.likeBtn}
+                      onClick={() => onToggleLike(m.id, 'user')}
+                      aria-label="Like Genie message"
+                    >
+                      👍 {m.likedByUser ? 'Liked' : 'Like'}
+                    </button>
+                  ) : (
+                    // Genie may like yours; show badge if so
+                    m.likedByGenie ? <span style={styles.likeBadge}>Genie liked this 👍</span> : null
+                  )}
+                </div>
+              </div>
             </div>
-          </div>
-        )}
-
+          )
+        })}
         <div ref={endRef} />
       </div>
 
+      {/* Composer */}
       <div style={styles.chatInputRow}>
         <input
           value={input}
@@ -226,6 +245,7 @@ function ChatConsole({ thread, onSend, onReset, typingText }) {
     </div>
   )
 }
+
 
 /* =========================
    Main Page
@@ -389,26 +409,60 @@ export default function ChatPage() {
       content: `We’ll refine live. Tell me where you’re stuck on “${escapeHTML(currentWish?.wish || 'your goal')}”.`
     }))
   }
+const onToggleLike = (id, who) => {
+  setThread(prev => prev.map(m => {
+    if (m.id !== id) return m
+    if (who === 'user') return { ...m, likedByUser: !m.likedByUser }
+    if (who === 'genie') return { ...m, likedByGenie: !m.likedByGenie }
+    return m
+  }))
+}
+
+// Genie sometimes likes your message (wins or at random)
+const maybeGenieLikes = (msg) => {
+  const t = (msg.content || '').toLowerCase()
+  const isWin = /(done|shipped|published|posted|sold|launched|emailed|uploaded|completed|locked in)/.test(t)
+  const shouldLike = isWin || Math.random() < 0.25
+  if (!shouldLike) return
+  // flip likedByGenie on that message id
+  setThread(prev => prev.map(m => m.id === msg.id ? ({ ...m, likedByGenie:true }) : m))
+}
 
 const handleSend = async (text) => {
-  // Show the user message immediately
-  setThread(prev => prev.concat({ role:'user', content: escapeHTML(text) }))
+  const userMsg = {
+    id: newId(),
+    role: 'user',
+    author: firstName || 'You',
+    content: escapeHTML(text),
+    likedByUser: false,
+    likedByGenie: false
+  }
+  setThread(prev => prev.concat(userMsg))
+  maybeGenieLikes(userMsg)
 
   try {
-    const reply = await genieReply({
-      text,
-      thread,                // current thread BEFORE adding assistant reply
-      firstName,
-      currentWish,
-      vibe
-    })
-
-    // API already returns a one-liner (no HTML). Escape before rendering.
-    setThread(prev => prev.concat({ role:'assistant', content: escapeHTML(reply) }))
+    const reply = await genieReply({ text, thread, firstName, currentWish, vibe })
+    const aiMsg = {
+      id: newId(),
+      role: 'assistant',
+      author: 'Genie',
+      content: escapeHTML(reply),
+      likedByUser: false,
+      likedByGenie: false
+    }
+    setThread(prev => prev.concat(aiMsg))
   } catch (e) {
-    setThread(prev => prev.concat({ role:'assistant', content: escapeHTML("The lamp flickered. Try again.") }))
+    const errMsg = {
+      id: newId(),
+      role: 'assistant',
+      author: 'Genie',
+      content: escapeHTML("The lamp flickered. Try again."),
+      likedByUser:false, likedByGenie:false
+    }
+    setThread(prev => prev.concat(errMsg))
   }
 }
+
 
 
   const resetToNewWish = () => {
@@ -488,13 +542,16 @@ const handleSend = async (text) => {
 
 
         {/* Magical Chat */}
-        {phase === 'chat' && (
-          <ChatConsole thread={thread} onSend={handleSend} onReset={resetToNewWish} />
-        )}
-      </div>
-    </div>
-  )
-}
+{phase === 'chat' && (
+  <ChatConsole
+    thread={thread}
+    onSend={handleSend}
+    onReset={resetToNewWish}
+    onToggleLike={onToggleLike}
+    firstName={firstName}
+  />
+)}
+
 
 /* =========================
    Small UI bits
@@ -588,7 +645,41 @@ const styles = {
     boxShadow:'inset 0 0 0 1px rgba(255,255,255,0.02), 0 6px 16px rgba(0,0,0,.45)'
   },
    // In styles
-bubbleAI: {
+/* Messenger rows */
+rowAI:   { display:'flex', gap:10, alignItems:'flex-start', margin:'10px 0' },
+rowUser: { display:'flex', gap:10, alignItems:'flex-start', margin:'10px 0', flexDirection:'row-reverse' },
+avatar:  { width:32, height:32, borderRadius:'50%', background:'rgba(255,255,255,0.06)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:18 },
+nameLabel: { fontSize:12, opacity:.7, margin:'0 0 4px 4px' },
+
+reactRow: { display:'flex', gap:8, alignItems:'center', margin:'6px 6px 0 6px' },
+likeBtn: {
+  border:'1px solid rgba(255,255,255,0.14)',
+  background:'transparent',
+  color:'#e6e6ee',
+  borderRadius:999,
+  padding:'2px 8px',
+  fontSize:12,
+  cursor:'pointer'
+},
+likeBtnActive: {
+  border:'1px solid rgba(255,214,0,0.6)',
+  background:'rgba(255,214,0,0.12)',
+  color:'#ffd600',
+  borderRadius:999,
+  padding:'2px 8px',
+  fontSize:12,
+  cursor:'pointer'
+},
+likeBadge: {
+  fontSize:12,
+  color:'#ffd600',
+  background:'rgba(255,214,0,0.10)',
+  border:'1px solid rgba(255,214,0,0.35)',
+  borderRadius:999,
+  padding:'2px 8px'
+},
+
+   bubbleAI: {
   maxWidth:'85%',
   background:'rgba(255,255,255,0.04)',
   padding:'12px 14px',
