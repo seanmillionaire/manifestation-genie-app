@@ -180,10 +180,13 @@ function Checklist({ wish, micro, steps, onToggle, onComplete, onSkip }) {
 /* =========================
    Minimal Chat Console
    ========================= */
-function ChatConsole({ thread, onSend, onReset }) {
+/* =========================
+   Minimal Chat Console with Typewriter
+   ========================= */
+function ChatConsole({ thread, onSend, onReset, typingText }) {
   const [input, setInput] = useState("")
   const endRef = useRef(null)
-  useEffect(()=>{ endRef.current?.scrollIntoView({behavior:'smooth'}) }, [thread])
+  useEffect(()=>{ endRef.current?.scrollIntoView({behavior:'smooth'}) }, [thread, typingText])
 
   return (
     <div style={styles.chatWrap}>
@@ -193,6 +196,17 @@ function ChatConsole({ thread, onSend, onReset }) {
             <div style={styles.bubbleText} dangerouslySetInnerHTML={{__html: m.content}} />
           </div>
         ))}
+
+        {/* live typewriter line */}
+        {typingText && (
+          <div style={styles.bubbleAI}>
+            <div style={styles.bubbleText}>
+              <span dangerouslySetInnerHTML={{__html: typingText}} />
+              <span style={{opacity:.8}}>▌</span>
+            </div>
+          </div>
+        )}
+
         <div ref={endRef} />
       </div>
 
@@ -200,7 +214,7 @@ function ChatConsole({ thread, onSend, onReset }) {
         <input
           value={input}
           onChange={(e)=>setInput(e.target.value)}
-          placeholder="Speak to your Genie…"
+          placeholder="Speak to your Genie… 🔮"
           onKeyDown={(e)=>{ if(e.key==='Enter' && input.trim()){ onSend(input.trim()); setInput('') } }}
           style={styles.chatInput}
         />
