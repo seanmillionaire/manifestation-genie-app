@@ -40,7 +40,7 @@ export default function Login() {
 </div>
 
 <p className="text-lg text-gray-300 mb-8 text-center">
-  Your Personal AI Assistant for Turning Goals into Reality
+  Your Personal AI Genie for Manifesting Dreams into Reality
 </p>
       </header>
 
