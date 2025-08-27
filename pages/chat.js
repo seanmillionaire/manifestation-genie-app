@@ -44,6 +44,30 @@ const NAME_KEY = 'mg_first_name'
 const newId = () => Math.random().toString(36).slice(2,10)
 
 const injectName = (s, name) => (s || '').replaceAll('{firstName}', name || 'Friend')
+const STREAK_KEY = 'mg_streak'
+const LAST_DATE_KEY = 'mg_last_date'
+
+function getToday() {
+  return new Date().toISOString().slice(0,10)
+}
+
+function loadStreak() {
+  if (typeof window === 'undefined') return { count: 0, last: null }
+  try {
+    const count = parseInt(localStorage.getItem(STREAK_KEY) || '0', 10)
+    const last = localStorage.getItem(LAST_DATE_KEY)
+    return { count, last }
+  } catch {
+    return { count: 0, last: null }
+  }
+}
+
+function saveStreak(count, last) {
+  try {
+    localStorage.setItem(STREAK_KEY, String(count))
+    localStorage.setItem(LAST_DATE_KEY, last)
+  } catch {}
+}
 
 const loadState = () => {
   if (typeof window === 'undefined') return null
@@ -338,6 +362,27 @@ function toPlainMessages(thread) {
 export default function ChatPage() {
   // FIRST NAME: cache first; hydrate from Supabase (profiles → metadata → email)
   const [firstName, setFirstName] = useState(getFirstNameFromCache())
+const [streak, setStreak] = useState(0)
+
+useEffect(() => {
+  const today = getToday()
+  const { count, last } = loadStreak()
+
+  if (last === today) {
+    setStreak(count) // already counted today
+  } else if (last === getYesterday()) {
+    setStreak(count + 1) // streak continues
+    saveStreak(count + 1, today)
+  } else {
+    setStreak(1) // reset
+    saveStreak(1, today)
+  }
+}, [])
+function getYesterday() {
+  const d = new Date()
+  d.setDate(d.getDate() - 1)
+  return d.toISOString().slice(0,10)
+}
 
   // phases: welcome → vibe → resumeNew → questionnaire → checklist → chat
   const [phase, setPhase] = useState('welcome')
@@ -617,20 +662,17 @@ try {
 )}
 
 
-        {/* Magical Chat */}
-{phase === 'chat' && (
-  <ChatConsole
-    thread={thread}
-    onSend={handleSend}
-    onReset={resetToNewWish}
-    onToggleLike={onToggleLike}
-    firstName={firstName}
-  />
-)}
-      </div>
-    </div>
-  )
-}
+useEffect(() => {
+  if (phase === 'chat' && thread.length === 1) {
+    setThread(prev => prev.concat({
+      id: newId(),
+      role: 'assistant',
+      author: 'Genie',
+      content: `🔥 Lamp lit ${streak} day${streak>1?'s':''} in a row. Doors opened: ${streak * 3}. Keep the flame alive tonight. ✨`,
+      likedByUser:false, likedByGenie:false
+    }))
+  }
+}, [phase])
 
 /* =========================
    Small UI bits
