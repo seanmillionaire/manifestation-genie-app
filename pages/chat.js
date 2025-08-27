@@ -74,7 +74,7 @@ function Questionnaire({ initial, onComplete, vibe }) {
       </div>
 
       <div style={styles.card}>
-        <h3 style={styles.h3}>Your Wish Quest</h3>
+        <h3 style={styles.h3}>What is Your #1 Goal for Today?</h3>
         <p style={styles.subtle}>{GenieLang.questPrompts.wish}</p>
         <textarea
           value={wish}
