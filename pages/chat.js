@@ -420,6 +420,28 @@ function toPlainMessages(thread) {
     content: strip(m.content || '')
   }))
 }
+function createTypingMsg(html) {
+  return {
+    id: newId(),
+    role: 'assistant',
+    author: 'Genie',
+    content: '',          // what’s visible now
+    full: html,           // full HTML to type toward
+    typing: true,
+    likedByUser: false,
+    likedByGenie: false
+  };
+}
+
+function typeNextChunkOnThread(setThread, id, stepChars=2) {
+  setThread(prev => prev.map(m => {
+    if (m.id !== id || !m.typing) return m;
+    const nextLen = Math.min((m.content || '').length + stepChars, (m.full || '').length);
+    const next = (m.full || '').slice(0, nextLen);
+    const done = nextLen >= (m.full || '').length;
+    return { ...m, content: next, typing: !done };
+  }));
+}
 
 export default function ChatPage() {
   // FIRST NAME: cache first; hydrate from Supabase (profiles → metadata → email)
@@ -662,45 +684,38 @@ useEffect(() => {
   }
 
   const handleSend = async (text) => {
-    const userMsg = {
+  const userMsg = {
+    id: newId(),
+    role: 'user',
+    author: firstName || 'You',
+    content: escapeHTML(text),
+    likedByUser: false,
+    likedByGenie: false
+  };
+  setThread(prev => prev.concat(userMsg));
+  maybeGenieLikes(userMsg);
+
+  bumpStreakOnActivity();
+
+  try {
+    const reply = await genieReply({ text, thread, firstName, currentWish, vibe });
+    const topic  = (currentWish?.wish || text || 'this').toLowerCase().slice(0, 80);
+    const pretty = nl2br(escapeHTML(formatGenieReply(reply, topic)));
+
+    // enqueue typing bubble
+    const typing = createTypingMsg(pretty);
+    setThread(prev => prev.concat(typing));
+  } catch {
+    setThread(prev => prev.concat({
       id: newId(),
-      role: 'user',
-      author: firstName || 'You',
-      content: escapeHTML(text),
+      role: 'assistant',
+      author: 'Genie',
+      content: escapeHTML("The lamp flickered. Try again."),
       likedByUser: false,
       likedByGenie: false
-    }
-    setThread(prev => prev.concat(userMsg))
-    maybeGenieLikes(userMsg)
-
-    // bump streak for today's first action
-    bumpStreakOnActivity()
-
-    try {
-      const reply = await genieReply({ text, thread, firstName, currentWish, vibe })
-      const topic = (currentWish?.wish || text || 'this').toLowerCase().slice(0, 80);
-      const pretty = formatGenieReply(reply, topic);
-      const aiMsg = {
-        id: newId(),
-        role: 'assistant',
-        author: 'Genie',
-        content: nl2br(escapeHTML(pretty)),
-        likedByUser: false,
-        likedByGenie: false
-      }
-      setThread(prev => prev.concat(aiMsg))
-    } catch {
-      const errMsg = {
-        id: newId(),
-        role: 'assistant',
-        author: 'Genie',
-        content: escapeHTML("The lamp flickered. Try again."),
-        likedByUser: false,
-        likedByGenie: false
-      }
-      setThread(prev => prev.concat(errMsg))
-    }
+    }));
   }
+};
 
   const resetToNewWish = () => {
     setPhase('vibe')
@@ -793,11 +808,12 @@ useEffect(() => {
         {/* Chat */}
         {phase === 'chat' && (
           <ChatConsole
-            thread={thread}
-            onSend={handleSend}
-            onReset={resetToNewWish}
-            onToggleLike={onToggleLike}
-            firstName={firstName}
+thread={thread}
+    onSend={handleSend}
+    onReset={resetToNewWish}
+    onToggleLike={onToggleLike}
+    firstName={firstName}
+    onTypeNextChunk={(id)=> typeNextChunkOnThread(setThread, id)}
           />
         )}
       </div>
