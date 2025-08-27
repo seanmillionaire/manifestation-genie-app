@@ -193,14 +193,15 @@ function ChatConsole({ thread, onSend, onReset, onToggleLike, firstName }) {
           const isAI = m.role === 'assistant'
           return (
             <div key={m.id} style={isAI ? styles.rowAI : styles.rowUser}>
-{/* Avatar */}
-<div style={styles.avatar}>{isAI ? '🔮' : '🙂'}</div>
+{/* Avatar only for Genie */}
+{isAI && <div style={styles.avatar}>🔮</div>}
 
 <div style={{flex:1, minWidth:0}}>
-  {/* Name label (mirror) */}
+  {/* Name label (left for Genie, right for user) */}
   <div style={isAI ? styles.nameLabelAI : styles.nameLabelUser}>
     {isAI ? 'Genie' : (m.author || firstName || 'You')}
   </div>
+
 
                 {/* Name label */}
                 <div style={styles.nameLabel}>{isAI ? 'Genie' : (m.author || firstName || 'You')}</div>
