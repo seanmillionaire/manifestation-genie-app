@@ -334,33 +334,39 @@ function Checklist({ wish, micro, steps, onToggle, onComplete, onSkip }) {
 /* =========================
    Messenger-style Chat Console (labels + likes)
    ========================= */
-function ChatConsole({ thread, onSend, onReset, onToggleLike, firstName }) {
-  const [input, setInput] = useState("")
-  const endRef = useRef(null)
-  useEffect(()=>{ endRef.current?.scrollIntoView({behavior:'smooth'}) }, [thread])
+function ChatConsole({ thread, onSend, onReset, onToggleLike, firstName, onTypeNextChunk }) {
+  const [input, setInput] = useState("");
+  const endRef = useRef(null);
+
+  // Auto-scroll
+  useEffect(()=>{ endRef.current?.scrollIntoView({behavior:'smooth'}) }, [thread]);
+
+  // Typewriter driver: ask parent to feed next chunk if any message is typing
+  useEffect(() => {
+    const typingMsg = thread.find(m => m.role==='assistant' && m.typing);
+    if (!typingMsg) return;
+    const timer = setInterval(() => { onTypeNextChunk?.(typingMsg.id) }, 16); // ~60fps
+    return () => clearInterval(timer);
+  }, [thread, onTypeNextChunk]);
 
   return (
     <div style={styles.chatWrap}>
       <div style={styles.chatStream}>
         {thread.map((m) => {
-          const isAI = m.role === 'assistant'
+          const isAI = m.role === 'assistant';
           return (
             <div key={m.id} style={isAI ? styles.rowAI : styles.rowUser}>
-              {/* Avatar */}
               <div style={styles.avatar}>{isAI ? '🔮' : '🙂'}</div>
-
               <div style={{flex:1, minWidth:0}}>
-                {/* Name label (mirror) */}
                 <div style={isAI ? styles.nameLabelAI : styles.nameLabelUser}>
                   {isAI ? 'Genie' : (m.author || firstName || 'You')}
                 </div>
-
-                {/* Bubble */}
                 <div style={isAI ? styles.bubbleAI : styles.bubbleUser}>
-                  <div style={styles.bubbleText} dangerouslySetInnerHTML={{__html: m.content}} />
+                  <div
+                    style={styles.bubbleText}
+                    dangerouslySetInnerHTML={{__html: m.content + (m.typing ? '<span style="opacity:.6">▋</span>' : '')}}
+                  />
                 </div>
-
-                {/* Reactions row */}
                 <div style={styles.reactRow}>
                   {isAI ? (
                     <button
@@ -381,7 +387,6 @@ function ChatConsole({ thread, onSend, onReset, onToggleLike, firstName }) {
         <div ref={endRef} />
       </div>
 
-      {/* Composer */}
       <div style={styles.chatInputRow}>
         <input
           value={input}
@@ -396,8 +401,9 @@ function ChatConsole({ thread, onSend, onReset, onToggleLike, firstName }) {
         <button style={styles.btnGhost} onClick={onReset}>New wish</button>
       </div>
     </div>
-  )
+  );
 }
+
 
 /* =========================
    Main Page
