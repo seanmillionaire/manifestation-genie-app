@@ -128,12 +128,18 @@ function Questionnaire({ initial, onComplete, vibe, firstName }) {
 /* =========================
    3-Step Checklist (new)
    ========================= */
-function Checklist({ steps, onToggle, onComplete, onSkip }) {
+/* =========================
+   3-Step Checklist (custom to input)
+   ========================= */
+function Checklist({ wish, micro, steps, onToggle, onComplete, onSkip }) {
   const allDone = steps.length > 0 && steps.every(s => s.done)
 
   return (
     <div style={styles.card}>
-      <h3 style={styles.h3}>Do this now — then we chat</h3>
+      <h3 style={styles.h3}>
+        Do this now for: <span style={{opacity:.9}}>"{wish || 'your wish'}"</span>
+      </h3>
+
       <ul style={styles.checklist}>
         {steps.map((s, i) => (
           <li key={s.id} style={styles.checkItem}>
@@ -161,10 +167,15 @@ function Checklist({ steps, onToggle, onComplete, onSkip }) {
         <button style={styles.btnGhost} onClick={onSkip}>Skip for now</button>
       </div>
 
-      <p style={{...styles.mini, marginTop:10}}>Tip: fast beats perfect. Mark it done once the action is in motion.</p>
+      {micro ? (
+        <p style={{...styles.mini, marginTop:10}}>
+          Your micro-move: <b>{micro}</b> — mark it complete once it’s in motion.
+        </p>
+      ) : null}
     </div>
   )
 }
+
 
 /* =========================
    Minimal Chat Console
