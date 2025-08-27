@@ -15,19 +15,19 @@ const GenieLang = {
     "The stars whispered your name, {firstName}… shall we begin?",
     "The portal is open 🌌 — step inside, {firstName}."
   ],
-  vibePrompt: "Pick your signal: 🔥 Bold, 🙏 Calm, 💰 Rich. What are we riding today?",
+  vibePrompt: "Pick your vibe: 🔥 Bold, 🙏 Calm, 💰 Rich. What are we feeling today?",
   resumeOrNew: "Continue the last wish, or spark a fresh one?",
   resumeLabel: "Continue last wish",
   newLabel: "Start a new wish",
   questPrompts: {
-    wish: "What’s the outcome you’re chasing? Say it like a headline.",
-    block: "What’s the block? Drop the excuse in one line.",
-    micro: "What’s your next micro-move? One action. Today."
+    wish: "What’s the outcome you’re chasing? Say it like you mean it.",
+    block: "What’s blocking you? Drop the excuse in one line.",
+    micro: "What’s 1 micro-move you can make today? Something small."
   },
   rewards: [
-    "Bang. That’s the code. Door unlocked.",
-    "Clean. The signal’s clear — move.",
-    "Locked in. Energy up. Execute.",
+    "YES! That’s the one. Door unlocked.",
+    "Love it. The signal’s clear — time to move.",
+    "Locked in. You're ready. Execute time.",
     "Noted. The window’s open. Step through."
   ],
   closing: "The lamp dims… but the magic stays with you.",
