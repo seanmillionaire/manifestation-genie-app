@@ -18,7 +18,7 @@ const GenieLang = {
     "The portal is open 🌌 — step inside..."
   ],
   vibePrompt: "Choose your vibe: 🔥 Bold, 🙏 Calm, 💰 Rich. Which vibe shall we ride?",
-  resumeOrNew: "Keep weaving the last wish, or light a fresh one?",
+  resumeOrNew: "Sha'll we continue with your last wish, or spark a fresh one?",
   resumeLabel: "Continue last wish",
   newLabel: "Start a new wish",
   questPrompts: {
