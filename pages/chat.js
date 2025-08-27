@@ -1,24 +1,22 @@
-// pages/chat.js — Manifestation Genie: Welcome → Vibe → Resume/New → Questionnaire → Magical Chat
-// - Signature Language Kit baked in
-// - State machine flow (phase)
-// - LocalStorage persistence so the chat doesn't reset on tab switches or refresh
-// - Minimal dependencies: React (Supabase commented for future use)
+// pages/chat.js — Manifestation Genie
+// Flow: welcome → vibe → resumeNew → questionnaire → chat
+// Supabase name integration + localStorage persistence (per session)
 
-import { useEffect, useMemo, useRef, useState } from 'react'
-// import { supabase } from '../src/supabaseClient'
+import { useEffect, useRef, useState } from 'react'
+import { supabase } from '../src/supabaseClient'
 
 /* =========================
    Signature Language Kit
    ========================= */
 const GenieLang = {
   greetings: [
-    "The lamp glows… your Genie is here. ✨ What’s stirring in your heart today {firstName}?",
-    "Rub the lamp 🔮 — let’s spark some magic.",
-    "The stars whispered your name {firstName}… shall we begin?",
-    "The portal is open 🌌 — step inside..."
+    "The lamp glows… your Genie is here. ✨ What’s stirring in your heart today, {firstName}?",
+    "Rub the lamp 🔮 — let’s spark some magic, {firstName}.",
+    "The stars whispered your name, {firstName}… shall we begin?",
+    "The portal is open 🌌 — step inside, {firstName}."
   ],
   vibePrompt: "Choose your vibe: 🔥 Bold, 🙏 Calm, 💰 Rich. Which vibe shall we ride?",
-  resumeOrNew: "Sha'll we continue with your last wish, or spark a fresh one?",
+  resumeOrNew: "Shall we continue with your last wish, or spark a fresh one?",
   resumeLabel: "Continue last wish",
   newLabel: "Start a new wish",
   questPrompts: {
@@ -42,23 +40,30 @@ const GenieLang = {
 const todayStr = () => new Date().toISOString().slice(0,10)
 const pick = (arr) => arr[Math.floor(Math.random() * arr.length)]
 const STORAGE_KEY = 'mg_chat_state_v1'
+const NAME_KEY = 'mg_first_name'
 
-function loadState() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    return raw ? JSON.parse(raw) : null
-  } catch {
-    return null
-  }
+const injectName = (s, name) => (s || '').replaceAll('{firstName}', name || 'Friend')
+const loadState = () => {
+  if (typeof window === 'undefined') return null
+  try { const r = localStorage.getItem(STORAGE_KEY); return r ? JSON.parse(r) : null } catch { return null }
 }
-function saveState(state) {
+const saveState = (state) => {
+  if (typeof window === 'undefined') return
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)) } catch {}
+}
+const getFirstNameFromCache = () => {
+  if (typeof window === 'undefined') return 'Friend'
+  try {
+    const saved = localStorage.getItem(NAME_KEY)
+    if (saved && saved.trim()) return saved.trim().split(' ')[0]
+  } catch {}
+  return 'Friend'
 }
 
 /* =========================
    Minimal Questionnaire
    ========================= */
-function Questionnaire({ initial, onComplete, vibe }) {
+function Questionnaire({ initial, onComplete, vibe, firstName }) {
   const [wish, setWish]   = useState(initial?.wish || "")
   const [block, setBlock] = useState(initial?.block || "")
   const [micro, setMicro] = useState(initial?.micro || "")
@@ -67,14 +72,13 @@ function Questionnaire({ initial, onComplete, vibe }) {
 
   return (
     <>
-      {/* === Portal Header: always visible === */}
       <div style={styles.portalHeader}>
         <h1 style={styles.portalTitle}>Your Personal AI Genie ✨</h1>
         <p style={styles.portalSubtitle}>This is your daily portal to manifest your dreams into reality.</p>
       </div>
 
       <div style={styles.card}>
-        <h3 style={styles.h3}>What is Your #1 Goal for Today {firstName}?</h3>
+        <h3 style={styles.h3}>What is your #1 goal for today, {firstName}?</h3>
         <p style={styles.subtle}>{GenieLang.questPrompts.wish}</p>
         <textarea
           value={wish}
@@ -152,13 +156,37 @@ function ChatConsole({ thread, onSend, onReset }) {
    Main Page
    ========================= */
 export default function ChatPage() {
+  // first name (cache first, then hydrate from Supabase)
+  const [firstName, setFirstName] = useState(getFirstNameFromCache())
+
   // phases: welcome → vibe → resumeNew → questionnaire → chat
   const [phase, setPhase] = useState('welcome')
-  const [greeting] = useState(pick(GenieLang.greetings))
-  const [vibe, setVibe] = useState(null) // 'BOLD' | 'CALM' | 'FLOW'
+  const [vibe, setVibe] = useState(null) // 'BOLD' | 'CALM' | 'RICH'
   const [currentWish, setCurrentWish] = useState(null) // {wish, block, micro, vibe, date}
   const [lastWish, setLastWish] = useState(null)
-  const [thread, setThread] = useState([{ role:'assistant', content: safeHTML(greeting) }])
+
+  // greeting seeded with name
+  const [greeting] = useState(() => injectName(pick(GenieLang.greetings), firstName))
+  const [thread, setThread] = useState([{ role:'assistant', content: greeting }])
+
+  // hydrate first name from Supabase session (once)
+  useEffect(() => {
+    let mounted = true
+    ;(async () => {
+      const { data: { session } } = await supabase.auth.getSession()
+      const name =
+        session?.user?.user_metadata?.full_name ||
+        session?.user?.user_metadata?.name ||
+        session?.user?.email?.split('@')[0]
+      if (!mounted) return
+      if (name) {
+        const fn = String(name).trim().split(' ')[0]
+        setFirstName(fn || 'Friend')
+        try { localStorage.setItem(NAME_KEY, fn || 'Friend') } catch {}
+      }
+    })()
+    return () => { mounted = false }
+  }, [])
 
   // Load persisted state on mount
   useEffect(()=>{
@@ -168,22 +196,20 @@ export default function ChatPage() {
       setVibe(s.vibe || null)
       setCurrentWish(s.currentWish || null)
       setLastWish(s.lastWish || null)
-      setThread(s.thread?.length ? s.thread : [{role:'assistant', content: safeHTML(greeting)}])
+      setThread(s.thread?.length ? s.thread : [{role:'assistant', content: injectName(pick(GenieLang.greetings), firstName)}])
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Persist state whenever something important changes
-  useEffect(()=>{
-    saveState({ phase, vibe, currentWish, lastWish, thread })
-  }, [phase, vibe, currentWish, lastWish, thread])
+  // Persist state
+  useEffect(()=>{ saveState({ phase, vibe, currentWish, lastWish, thread }) }, [phase, vibe, currentWish, lastWish, thread])
 
   const handlePickVibe = (v) => {
     setVibe(v)
     setPhase('resumeNew')
     setThread(prev => prev.concat({
       role:'assistant',
-      content: safeHTML(`${GenieLang.vibePrompt}<br/><span style="opacity:.8">Chosen: <b>${emojiFor(v)} ${titleCase(v)}</b></span>`)
+      content: `${GenieLang.vibePrompt}<br/><span style="opacity:.8">Chosen: <b>${emojiFor(v)} ${titleCase(v)}</b></span>`
     }))
   }
 
@@ -194,18 +220,18 @@ export default function ChatPage() {
       setPhase('questionnaire')
       setThread(prev => prev.concat({
         role:'assistant',
-        content: safeHTML(`We’ll keep weaving the last wish: <b>${escapeHTML(chosen.wish)}</b>. Add a fresh micro-move to heat the lamp, then we chat.`)
+        content: `We’ll keep weaving the last wish: <b>${escapeHTML(chosen.wish)}</b>. Add a fresh micro-move to heat the lamp, then we chat.`
       }))
     } else {
       setPhase('questionnaire')
-      setThread(prev => prev.concat({ role:'assistant', content: safeHTML(`No past wish found. Let’s light a new one.`) }))
+      setThread(prev => prev.concat({ role:'assistant', content: "No past wish found. Let’s light a new one." }))
     }
   }
 
   const handleNew = () => {
     setCurrentWish(null)
     setPhase('questionnaire')
-    setThread(prev => prev.concat({ role:'assistant', content: safeHTML(`New star, new path. I’m listening…`) }))
+    setThread(prev => prev.concat({ role:'assistant', content: "New star, new path. I’m listening…" }))
   }
 
   const handleQuestComplete = (data) => {
@@ -213,23 +239,23 @@ export default function ChatPage() {
     setLastWish(data)
     setPhase('chat')
     setThread(prev => prev.concat(
-      { role:'assistant', content: safeHTML(`Wish set: <b>${escapeHTML(data.wish)}</b>.`) },
-      { role:'assistant', content: safeHTML(pick(GenieLang.rewards)) },
-      { role:'assistant', content: safeHTML(`Speak, and I’ll shape the path. ${GenieLang.tinyCTA}`) }
+      { role:'assistant', content: `Wish set: <b>${escapeHTML(data.wish)}</b>.` },
+      { role:'assistant', content: pick(GenieLang.rewards) },
+      { role:'assistant', content: `Speak, and I’ll shape the path, ${firstName}. ${GenieLang.tinyCTA}` }
     ))
   }
 
   const handleSend = async (text) => {
-    setThread(prev => prev.concat({ role:'user', content: safeHTML(escapeHTML(text)) }))
+    setThread(prev => prev.concat({ role:'user', content: escapeHTML(text) }))
     const reply = await fakeGenieReply(text, { vibe, currentWish }) // stub; replace with /api/chat
-    setThread(prev => prev.concat({ role:'assistant', content: safeHTML(reply) }))
+    setThread(prev => prev.concat({ role:'assistant', content: reply }))
   }
 
   const resetToNewWish = () => {
     setPhase('vibe')
     setVibe(null)
     setCurrentWish(null)
-    setThread([{ role:'assistant', content: safeHTML(pick(GenieLang.greetings)) }])
+    setThread([{ role:'assistant', content: injectName(pick(GenieLang.greetings), firstName) }])
   }
 
   return (
@@ -242,7 +268,7 @@ export default function ChatPage() {
             <p style={{fontSize:18, opacity:.9, marginTop:8}}>
               This is your daily portal to manifest your dreams into reality.
             </p>
-            <p style={styles.lead}>{greeting}</p>
+            <p style={styles.lead}>{injectName(pick(GenieLang.greetings), firstName)}</p>
             <button style={styles.btn} onClick={()=>setPhase('vibe')}>Rub the lamp & begin 🔮</button>
           </div>
         )}
@@ -279,7 +305,12 @@ export default function ChatPage() {
 
         {/* Questionnaire */}
         {phase === 'questionnaire' && (
-          <Questionnaire initial={currentWish} onComplete={handleQuestComplete} vibe={vibe} />
+          <Questionnaire
+            initial={currentWish}
+            onComplete={handleQuestComplete}
+            vibe={vibe}
+            firstName={firstName}
+          />
         )}
 
         {/* Magical Chat */}
@@ -355,9 +386,8 @@ const styles = {
 function emojiFor(v) {
   if (v === 'BOLD') return '🔥'
   if (v === 'CALM') return '🙏'
-  if (v === 'FLOW') return '💰'
+  if (v === 'RICH') return '💰'
   return '✨'
 }
 function titleCase(s){ return s ? s[0].toUpperCase() + s.slice(1).toLowerCase() : '' }
 function escapeHTML(s=''){ return s.replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])) }
-function safeHTML(s=''){ return s } // we already escape user input; canned strings are trusted
