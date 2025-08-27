@@ -123,20 +123,6 @@ function addCosmicOutro(s='', topic='this') {
   return `${s}\n\n${line}`;
 }
 
-// Already have toSocialLines and nl2br in your file; if not, include these:
-function toSocialLines(text='', wordsPerLine=9) {
-  const soft = text.replace(/\r/g,'').replace(/([.!?])\s+/g, '$1\n').replace(/\s+[-–—]\s+/g, '\n');
-  const out = [];
-  for (const piece of soft.split(/\n+/)) {
-    const words = piece.trim().split(/\s+/).filter(Boolean);
-    if (!words.length) continue;
-    for (let i = 0; i < words.length; i += wordsPerLine) {
-      out.push(words.slice(i, i + wordsPerLine).join(' '));
-    }
-  }
-  return out.join('\n');
-}
-function nl2br(s=''){ return s.replace(/\n/g,'<br/>') }
 
 // Final pass that we’ll call on the LLM reply
 function formatGenieReply(raw='', topic='this') {
