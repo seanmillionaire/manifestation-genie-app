@@ -254,7 +254,7 @@ export default function ChatPage() {
             <div style={styles.vibeRow}>
               <VibeButton label="BOLD" emoji="🔥" onClick={()=>handlePickVibe('BOLD')} />
               <VibeButton label="CALM" emoji="🙏" onClick={()=>handlePickVibe('CALM')} />
-              <VibeButton label="FLOW" emoji="💰" onClick={()=>handlePickVibe('RICH')} />
+              <VibeButton label="RICH" emoji="💰" onClick={()=>handlePickVibe('RICH')} />
             </div>
           </div>
         )}
