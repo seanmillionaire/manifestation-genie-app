@@ -194,7 +194,10 @@ function ChatConsole({ thread, onSend, onReset, onToggleLike, firstName }) {
           return (
             <div key={m.id} style={isAI ? styles.rowAI : styles.rowUser}>
               {/* Avatar */}
-              <div style={styles.avatar}>{isAI ? '🔮' : '🙂'}</div>
+              <div style={isAI ? styles.nameLabelAI : styles.nameLabelUser}>
+  {isAI ? 'Genie' : (m.author || firstName || 'You')}
+</div>
+
 
               <div style={{flex:1, minWidth:0}}>
                 {/* Name label */}
@@ -655,7 +658,19 @@ const styles = {
 rowAI:   { display:'flex', gap:10, alignItems:'flex-start', margin:'10px 0' },
 rowUser: { display:'flex', gap:10, alignItems:'flex-start', margin:'10px 0', flexDirection:'row-reverse' },
 avatar:  { width:32, height:32, borderRadius:'50%', background:'rgba(255,255,255,0.06)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:18 },
-nameLabel: { fontSize:12, opacity:.7, margin:'0 0 4px 4px' },
+nameLabelAI: {
+  fontSize: 12,
+  opacity: .7,
+  margin: '0 0 4px 4px',
+  textAlign: 'left'
+},
+nameLabelUser: {
+  fontSize: 12,
+  opacity: .7,
+  margin: '0 4px 4px 0',
+  textAlign: 'right'
+},
+
 
 reactRow: { display:'flex', gap:8, alignItems:'center', margin:'6px 6px 0 6px' },
 likeBtn: {
