@@ -43,6 +43,8 @@ const STORAGE_KEY = 'mg_chat_state_v1'
 const NAME_KEY = 'mg_first_name'
 const newId = () => Math.random().toString(36).slice(2,10)
 
+const nl2br = (s='') => s.replace(/\n/g, '<br/>')
+
 const injectName = (s, name) => (s || '').replaceAll('{firstName}', name || 'Friend')
 
 const loadState = () => {
@@ -452,14 +454,15 @@ const handleSend = async (text) => {
 
   try {
     const reply = await genieReply({ text, thread, firstName, currentWish, vibe })
-    const aiMsg = {
-      id: newId(),
-      role: 'assistant',
-      author: 'Genie',
-      content: escapeHTML(reply),
-      likedByUser: false,
-      likedByGenie: false
-    }
+const aiMsg = {
+  id: newId(),
+  role: 'assistant',
+  author: 'Genie',
+  content: nl2br(escapeHTML(reply)),  // preserve line breaks
+  likedByUser: false,
+  likedByGenie: false
+}
+
     setThread(prev => prev.concat(aiMsg))
   } catch (e) {
     const errMsg = {
@@ -796,7 +799,13 @@ likeBadge: {
     border:'1px solid rgba(255,214,0,0.18)',
     margin:'8px 0 8px auto'
   },
-  bubbleText: { fontSize:15, lineHeight:1.6 },
+bubbleText: { 
+  fontSize:15,
+  lineHeight:1.6,
+  whiteSpace: 'normal',     // we’re using <br/>, so normal is fine
+  wordBreak: 'break-word',  // wrap long words/URLs
+}
+
   chatInputRow: { display:'flex', gap:10, alignItems:'center' },
   chatInput: {
     flex:1,
