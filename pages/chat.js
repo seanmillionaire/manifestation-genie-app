@@ -253,13 +253,24 @@ export default function ChatPage() {
     <div style={styles.wrap}>
       <div style={styles.container}>
         {/* Welcome */}
-        {phase === 'welcome' && (
-          <div style={styles.card}>
-            <h2 style={styles.h2}>Manifestation Genie</h2>
-            <p style={styles.lead}>{greeting}</p>
-            <button style={styles.btn} onClick={()=>setPhase('vibe')}>Rub the lamp 🔮</button>
-          </div>
-        )}
+{phase === 'welcome' && (
+  <div style={styles.card}>
+    {/* 🔮 Top Header */}
+    <h1 style={{fontSize:32, fontWeight:900, margin:0}}>Your Personal AI Genie ✨</h1>
+    <p style={{fontSize:18, opacity:.9, marginTop:8}}>
+      This is your daily portal to manifest your dreams into reality.
+    </p>
+
+    {/* 🔮 Genie Greeting */}
+    <p style={styles.lead}>{greeting}</p>
+
+    {/* 🔮 Continue */}
+    <button style={styles.btn} onClick={()=>setPhase('vibe')}>
+      Rub the lamp & begin 🔮
+    </button>
+  </div>
+)}
+
 
         {/* Vibe under welcome (your request) */}
         {phase === 'vibe' && (
