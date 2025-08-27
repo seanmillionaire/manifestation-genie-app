@@ -171,12 +171,20 @@ function addCosmicOutro(s='', topic='this') {
 }
 
 function formatGenieReply(raw='', topic='this') {
-  const noNums = ensureNoNumberedLists(raw);
-  const bullets = bulletize(noNums);
-  const tight = toSocialLines(bullets, 9);
+  const noNums   = ensureNoNumberedLists(raw);
+  const bullets  = bulletize(noNums);
+
+  // Break to short lines, then inject explanations under action-y lines
+  const tight = toSocialLines(bullets, 9)
+    .split('\n')
+    .map(explainLine)
+    .join('\n');
+
   const withOutro = addCosmicOutro(tight, topic);
-  return withOutro.trim();
+  const withQuip  = `${withOutro}\n\n${wittyCloser(topic)}`;
+  return withQuip.trim();
 }
+
 
 /* =========================
    Streak Messages (Brunson-style, human + hype)
