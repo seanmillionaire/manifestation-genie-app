@@ -47,9 +47,9 @@ export default function Login() {
       <section className="card center">
         {!sent ? (
           <>
-            <h2 className="panelTitle" style={{ marginBottom: 18 }}>Sign in</h2>
+            <h2 className="panelTitle" style={{ marginBottom: 18 }}>Sign in to the portal</h2>
             <form onSubmit={handleSubmit} style={{ width: '100%', maxWidth: 520 }}>
-              <label htmlFor="email" className="label">Email</label>
+              <label htmlFor="email" className="label">Your Email</label>
               <input
                 id="email"
                 type="email"
