@@ -1,4 +1,3 @@
-
 // pages/chat.js — Manifestation Genie
 // Flow: welcome → vibe → resumeNew → questionnaire → checklist → chat
 // Supabase name integration + localStorage persistence (per session)
@@ -67,7 +66,9 @@ const getFirstNameFromCache = () => {
   } catch {}
   return 'Friend'
 }
-const STREAK_ANNOUNCED_KEY = 'mg_streak_announced_date';
+
+// Streak announce persistence (once per day)
+const STREAK_ANNOUNCED_KEY = 'mg_streak_announced_date'
 function getAnnouncedDate() {
   try { return localStorage.getItem(STREAK_ANNOUNCED_KEY) || null } catch { return null }
 }
@@ -134,6 +135,7 @@ function formatGenieReply(raw='', topic='this') {
   const withOutro = addCosmicOutro(tight, topic);
   return withOutro.trim();
 }
+
 /* =========================
    Streak Messages (Brunson-style, human + hype)
    ========================= */
@@ -453,35 +455,37 @@ export default function ChatPage() {
   // Persist state
   useEffect(()=>{ saveState({ phase, vibe, currentWish, lastWish, steps, thread }) }, [phase, vibe, currentWish, lastWish, steps, thread])
 
-// Announce streak once when entering chat (human, once per day)
-useEffect(() => {
-  if (phase !== 'chat') return;
+  // Scroll to top on phase change
+  useEffect(() => {
+    if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' })
+  }, [phase])
 
-  const today = getToday();
-  const alreadyAnnouncedToday = getAnnouncedDate() === today;
+  // Announce streak once when entering chat (human, once per day)
+  useEffect(() => {
+    if (phase !== 'chat') return
 
-  if (alreadyAnnouncedToday) {
-    // make sure local state matches storage so we don't try again this session
-    if (!hasAnnouncedStreak) setHasAnnouncedStreak(true);
-    return;
-  }
+    const today = getToday()
+    const alreadyAnnouncedToday = getAnnouncedDate() === today
 
-  if (!hasAnnouncedStreak) {
-    setThread(prev => prev.concat({
-      id: newId(),
-      role: 'assistant',
-      author: 'Genie',
-      content: nl2br(escapeHTML(
-        `${streakMessage(streak)}\nKeep the streak alive — what’s today’s micro-move?`
-      )),
-      likedByUser:false, likedByGenie:false
-    }));
-    setHasAnnouncedStreak(true);
-    setAnnouncedToday();
-  }
-}, [phase, streak, hasAnnouncedStreak]);
+    if (alreadyAnnouncedToday) {
+      if (!hasAnnouncedStreak) setHasAnnouncedStreak(true)
+      return
+    }
 
-
+    if (!hasAnnouncedStreak) {
+      setThread(prev => prev.concat({
+        id: newId(),
+        role: 'assistant',
+        author: 'Genie',
+        content: nl2br(escapeHTML(
+          `${streakMessage(streak)}\nKeep the streak alive — what’s today’s micro-move?`
+        )),
+        likedByUser:false, likedByGenie:false
+      }))
+      setHasAnnouncedStreak(true)
+      setAnnouncedToday()
+    }
+  }, [phase, streak, hasAnnouncedStreak])
 
   const handlePickVibe = (v) => {
     setVibe(v)
@@ -516,6 +520,20 @@ useEffect(() => {
     setSteps([])
     setPhase('questionnaire')
     setThread(prev => prev.concat({ role:'assistant', content: "New star, new path. I’m listening…" }))
+  }
+
+  // 👉 Questionnaire → Checklist (MISSING BEFORE — now included)
+  const handleQuestComplete = (data) => {
+    setCurrentWish(data)
+    setLastWish(data)
+    const generated = generateChecklist(data)
+    setSteps(generated)
+    setPhase('checklist')
+    setThread(prev => prev.concat(
+      { id:newId(), role:'assistant', author:'Genie', content: `Wish set: <b>${escapeHTML(data.wish)}</b>.` },
+      { id:newId(), role:'assistant', author:'Genie', content: pick(GenieLang.rewards) },
+      { id:newId(), role:'assistant', author:'Genie', content: `Do these three now, then we talk. ${firstName}, speed > perfect.` }
+    ))
   }
 
   // Checklist interactions
@@ -553,21 +571,22 @@ useEffect(() => {
     const { count, last } = loadStreak()
     const today = getToday()
     if (last === today) return count // already counted today
-    // continued streak if last was yesterday; else reset
     const next = (last === getYesterday()) ? count + 1 : 1
     saveStreak(next, today)
     setStreak(next)
-// celebrate inside chat (human)
-setThread(prev => prev.concat({
-  id: newId(),
-  role: 'assistant',
-  author: 'Genie',
-  content: nl2br(escapeHTML(
-    `New day logged. Streak: ${next}.\nDon’t break it — ship one tiny thing now.`
-  )),
-  likedByUser:false, likedByGenie:false
-}))
+    // mark that we've already announced today so the top-of-chat card doesn't duplicate
+    try { localStorage.setItem(STREAK_ANNOUNCED_KEY, today) } catch {}
 
+    // celebrate inside chat (human)
+    setThread(prev => prev.concat({
+      id: newId(),
+      role: 'assistant',
+      author: 'Genie',
+      content: nl2br(escapeHTML(
+        `New day logged. Streak: ${next}.\nDon’t break it — ship one tiny thing now.`
+      )),
+      likedByUser:false, likedByGenie:false
+    }))
     return next
   }
 
@@ -620,27 +639,26 @@ setThread(prev => prev.concat({
     }
   }
 
-const resetToNewWish = () => {
-  setPhase('vibe')
-  setVibe(null)
-  setCurrentWish(null)
-  setSteps([])
-  setThread([{
-    id:newId(),
-    role:'assistant',
-    author:'Genie',
-    content: injectName(pick(GenieLang.greetings), firstName),
-    likedByUser:false,
-    likedByGenie:false
-  }])
-  setHasAnnouncedStreak(false)
+  const resetToNewWish = () => {
+    setPhase('vibe')
+    setVibe(null)
+    setCurrentWish(null)
+    setSteps([])
+    setThread([{
+      id:newId(),
+      role:'assistant',
+      author:'Genie',
+      content: injectName(pick(GenieLang.greetings), firstName),
+      likedByUser:false,
+      likedByGenie:false
+    }])
+    setHasAnnouncedStreak(false)
 
-  // 👇 force scroll back up
-  if (typeof window !== 'undefined') {
-    window.scrollTo({ top: 0, behavior: 'smooth' })
+    // force scroll back up
+    if (typeof window !== 'undefined') {
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+    }
   }
-}
-
 
   return (
     <div style={styles.wrap}>
