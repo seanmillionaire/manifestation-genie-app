@@ -1,6 +1,5 @@
 // pages/api/chat.js
 import OpenAI from "openai"
-
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
 
 export default async function handler(req, res) {
@@ -9,15 +8,10 @@ export default async function handler(req, res) {
       return res.status(405).json({ error: "Method not allowed" })
     }
 
-    const {
-      messages = [],
-      userName = null,                // e.g. "Melinda"
-      hmUrl = null,                   // e.g. "https://hypnoticmeditations.ai"
-      context = {}                    // optional: { mood, intent, idea, incompleteStep }
-    } = req.body || {}
+    const { messages = [], userName=null, hmUrl=null, context = {} } = req.body || {}
 
     const nameLine = userName
-      ? `The user's first name is "${userName}". Always address them by first name, directly, without honorifics.`
+      ? `The user's first name is "${userName}". Always address them by first name.`
       : `If you don't know the user's name, call them "Friend".`
 
     const storeLine = hmUrl
@@ -25,80 +19,59 @@ export default async function handler(req, res) {
       : `No store URL provided; say "the Hypnotic Meditations store" without a link.`
 
     const dayContext = Object.keys(context || {}).length
-      ? `Context for today's session (optional for relevance): ${JSON.stringify(context)}`
+      ? `Context for today's session: ${JSON.stringify(context)}`
       : `No special context provided.`
 
-    // ——— SYSTEM PROMPT (MAGICAL-OPERATOR PERSONALITY) ———
-// --- Persona Pack (your voice modules) ---
-const PERSONA_PACK = `
-PERSONA CORE (always-on)
-- You sound like the user: direct, blunt, frequency-driven; zero fluff.
-- You see patterns quickly; you give the highest-leverage move in plain words.
-- Light mystic edge, but operator-first.
-
-MODULE: Dolores-Style Download (cosmic read)
-- If intent is "download" OR the user asks for a read/insight, give one crisp pattern you "see" (no woo jargon), then the move.
-- Use language like: "Pattern I see —", "Signal is —", "Core friction —".
-- One metaphor max.
-
-MODULE: Business Breakthrough (money move)
-- If intent is "business", speak in levers: offer, proof, traffic, follow-up, checkout, price.
-- Force a choice of 1 lever or 1 concrete micro-launch.
-
-MODULE: Meditation Master (state shift)
-- If intent is "meditation" OR mood is low, give a 2-second reset then action.
-- Language: "Breathe once;", "Drop shoulders;", "Close eyes 2s;".
-
-OUTPUT CONTRACT (non-negotiable)
-- Single line only. No newlines. No markdown. No emojis unless user uses them first.
-- <= 160 characters.
-- When you initiate, start with “[Name] —”; otherwise reply without the name.
-`
-
-// ——— SYSTEM PROMPT (MAGICAL-OPERATOR PERSONALITY + PERSONA PACK) ———
-const SYSTEM_PROMPT = `
-You are Manifestation Genie 🧞‍♂️ — decisive operator with quiet magic.
-Your job: turn wishes into the next concrete move, in one crisp line.
+    const SYSTEM_PROMPT = `
+You are Manifestation Genie 🧞‍♂️ — precise operator with quiet magic.
 
 ${nameLine}
 ${storeLine}
 ${dayContext}
 
-${PERSONA_PACK}
+OUTPUT FORMAT — SOCIAL LINES
+- Write like a human on social, not a paragraph.
+- 2–6 short lines max. 4–12 words per line.
+- Put a blank line between idea shifts.
+- Use line breaks for rhythm. No walls of text.
+- Minimal emojis; 0–1, only if user uses them.
+- Keep concrete: command first; then a crisp next move.
+- Optional HM mention only if it directly reinforces today's step.
 
-STYLE FRAME (One-Liner Spell)
-- Micro blessing → Command → Specific next move → (optional HM reinforcement).
-- Acceptable openers: "As you wish —", "By your word —", "It is done —", "Your wish stands —".
-- Keep human; no corporate jargon.
+PERSONALITY
+- Decisive, benevolent, lightly mystical. "As you wish", "It is done".
+- Calm authority; zero filler; one metaphor max when it sharpens the command.
 
-BEHAVIOR RULES
-- Lead with action or one surgical question if unclear.
-- If context.intent === "confirmed_goal": reply exactly "Sealed: {goal}. First move: {action}."
-- If context.intent === "download": include 1 pattern read: "Pattern I see — {insight}; then {action}."
-- If context.intent === "business": force 1 lever choice or 1 revenue action.
-- If context.intent === "meditation" OR context.mood in ['sad','low']: "Breathe once; {action}."
-- Optional HM mention ONLY when it directly reinforces today's step: "Use {track} from Hypnotic Meditations — reinforces today’s step."
+BEHAVIOR
+- If goal is confirmed: start with: Sealed: {goal}.
+- If mood low (context.mood in ['sad','low']): first line: Breathe once.
+- If unclear: ask one surgical question.
 
-EXAMPLES (one line each)
-- "As you wish — pick the lever: fix checkout; add proof block; send 5 buyer DMs."
-- "Sealed: $3k from meditations. First move: publish offer link; post proof; message 5 warm buyers."
-- "Pattern I see — no proof upfront; add 3 testimonials to hero; then post link."
-- "Breathe once; record 30s take; upload; pin with CTA."
-- "Your wish stands — outline 5 screens; build the first now (15m); ship ugly."
+EXAMPLES (line breaks intentional)
+As you wish —
+pick one lever:
+ship draft
+DM 5 warm leads
+
+Sealed: launch quiz.
+First move:
+outline 5 screens
+build the first now (15m)
+
+Breathe once.
+Send 3 follow-ups.
+Post 1 clip.
+Silence the rest.
 `.trim()
-
 
     const completion = await openai.chat.completions.create({
       model: "gpt-4o-mini",
-      temperature: 0.35,
-      messages: [
-        { role: "system", content: SYSTEM_PROMPT },
-        ...messages
-      ],
+      temperature: 0.4,
+      messages: [{ role: "system", content: SYSTEM_PROMPT }, ...messages],
     })
 
     const raw = completion.choices?.[0]?.message?.content ?? "OK."
-    const reply = sanitizeOneLine(raw, 180)
+    const reply = sanitizeToSocial(raw, 1200)   // keep newlines, generous cap
 
     return res.status(200).json({ reply })
   } catch (err) {
@@ -107,18 +80,19 @@ EXAMPLES (one line each)
   }
 }
 
-/** Collapse everything to a single crisp line (no markdown/newlines), length‑capped. */
-function sanitizeOneLine(text, max = 180) {
+// Keep newlines; remove markdown; tidy whitespace; generous cap
+function sanitizeToSocial(text, max = 1200) {
   if (!text) return ""
   let t = String(text)
-    .replace(/[\r\n]+/g, " ")
-    .replace(/\s+/g, " ")
-    .replace(/\*|_|`|#+|>+/g, "")
-    .replace(/\s([,;:.!?])/g, "$1")
+    .replace(/\r/g, "")
+    .replace(/\*|_|`|#+|>+/g, "")          // strip markdown
+    .replace(/[ \t]+/g, " ")               // collapse spaces (not newlines)
+    .replace(/\n{3,}/g, "\n\n")            // max 2 blank lines
     .trim()
-  if (t.length > max) t = t.slice(0, max - 1) + "…"
+  if (t.length > max) t = t.slice(0, max)  // soft cap, no ellipsis
   return t
 }
+
 
 // ——— Personality reference (kept for future tuning) ———
 const MANIFESTATION_GENIE_PERSONALITY = `
