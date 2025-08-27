@@ -2,10 +2,9 @@
 // - Signature Language Kit baked in
 // - State machine flow (phase)
 // - LocalStorage persistence so the chat doesn't reset on tab switches or refresh
-// - Minimal dependencies: React + (optional) Supabase import kept for future use
+// - Minimal dependencies: React (Supabase commented for future use)
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-// If you want to persist to DB later, uncomment supabase and wire it where marked
 // import { supabase } from '../src/supabaseClient'
 
 /* =========================
@@ -18,10 +17,8 @@ const GenieLang = {
     "The stars whispered your name… shall we begin?",
     "The portal is open 🌌 — step inside, Friend."
   ],
-  vibePrompt:
-    "Choose your flame: 🔥 Bold, 💧 Calm, 🌬️ Flowing. Which vibe shall we ride?",
-  resumeOrNew:
-    "Keep weaving the last wish, or light a fresh one?",
+  vibePrompt: "Choose your vibe: 🔥 Bold, 🙏 Calm, 💰 Rich. Which vibe shall we ride?",
+  resumeOrNew: "Keep weaving the last wish, or light a fresh one?",
   resumeLabel: "Continue last wish",
   newLabel: "Start a new wish",
   questPrompts: {
@@ -54,11 +51,8 @@ function loadState() {
     return null
   }
 }
-
 function saveState(state) {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state))
-  } catch {}
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)) } catch {}
 }
 
 /* =========================
@@ -72,48 +66,49 @@ function Questionnaire({ initial, onComplete, vibe }) {
   const canSubmit = wish.trim() && micro.trim()
 
   return (
+    <>
+      {/* === Portal Header: always visible === */}
+      <div style={styles.portalHeader}>
+        <h1 style={styles.portalTitle}>Your Personal AI Genie ✨</h1>
+        <p style={styles.portalSubtitle}>This is your daily portal to manifest your dreams into reality.</p>
+      </div>
 
-     {/* === Portal Header: always visible === */}
-<div style={styles.portalHeader}>
-  <h1 style={styles.portalTitle}>Your Personal AI Genie ✨</h1>
-  <p style={styles.portalSubtitle}>This is your daily portal to manifest your dreams into reality.</p>
-</div>
+      <div style={styles.card}>
+        <h3 style={styles.h3}>Your Wish Quest</h3>
+        <p style={styles.subtle}>{GenieLang.questPrompts.wish}</p>
+        <textarea
+          value={wish}
+          onChange={e=>setWish(e.target.value)}
+          placeholder="Speak it simply, like a headline for your life."
+          style={styles.textarea}
+          rows={3}
+        />
+        <p style={{...styles.subtle, marginTop:16}}>{GenieLang.questPrompts.block}</p>
+        <textarea
+          value={block}
+          onChange={e=>setBlock(e.target.value)}
+          placeholder="Name the snag. No drama, just truth."
+          style={styles.textarea}
+          rows={2}
+        />
+        <p style={{...styles.subtle, marginTop:16}}>{GenieLang.questPrompts.micro}</p>
+        <input
+          value={micro}
+          onChange={e=>setMicro(e.target.value)}
+          placeholder="e.g., Send the email / 10-minute brainstorm / Outline offer"
+          style={styles.input}
+        />
 
-    <div style={styles.card}>
-      <h3 style={styles.h3}>Your Wish Quest</h3>
-      <p style={styles.subtle}>{GenieLang.questPrompts.wish}</p>
-      <textarea
-        value={wish}
-        onChange={e=>setWish(e.target.value)}
-        placeholder="Speak it simply, like a headline for your life."
-        style={styles.textarea}
-        rows={3}
-      />
-      <p style={{...styles.subtle, marginTop:16}}>{GenieLang.questPrompts.block}</p>
-      <textarea
-        value={block}
-        onChange={e=>setBlock(e.target.value)}
-        placeholder="Name the snag. No drama, just truth."
-        style={styles.textarea}
-        rows={2}
-      />
-      <p style={{...styles.subtle, marginTop:16}}>{GenieLang.questPrompts.micro}</p>
-      <input
-        value={micro}
-        onChange={e=>setMicro(e.target.value)}
-        placeholder="e.g., Send the email / 10-minute brainstorm / Outline offer"
-        style={styles.input}
-      />
-
-      <button
-        style={{...styles.btn, marginTop:16, opacity: canSubmit ? 1 : 0.6, cursor: canSubmit ? 'pointer' : 'not-allowed'}}
-        disabled={!canSubmit}
-        onClick={() => onComplete({wish:wish.trim(), block:block.trim(), micro:micro.trim(), vibe, date: todayStr()})}
-      >
-        Grant this step →
-      </button>
-      <p style={{...styles.mini, marginTop:12}}>{pick(GenieLang.rewards)}</p>
-    </div>
+        <button
+          style={{...styles.btn, marginTop:16, opacity: canSubmit ? 1 : 0.6, cursor: canSubmit ? 'pointer' : 'not-allowed'}}
+          disabled={!canSubmit}
+          onClick={() => onComplete({wish:wish.trim(), block:block.trim(), micro:micro.trim(), vibe, date: todayStr()})}
+        >
+          Grant this step →
+        </button>
+        <p style={{...styles.mini, marginTop:12}}>{pick(GenieLang.rewards)}</p>
+      </div>
+    </>
   )
 }
 
@@ -123,7 +118,6 @@ function Questionnaire({ initial, onComplete, vibe }) {
 function ChatConsole({ thread, onSend, onReset }) {
   const [input, setInput] = useState("")
   const endRef = useRef(null)
-
   useEffect(()=>{ endRef.current?.scrollIntoView({behavior:'smooth'}) }, [thread])
 
   return (
@@ -164,9 +158,7 @@ export default function ChatPage() {
   const [vibe, setVibe] = useState(null) // 'BOLD' | 'CALM' | 'FLOW'
   const [currentWish, setCurrentWish] = useState(null) // {wish, block, micro, vibe, date}
   const [lastWish, setLastWish] = useState(null)
-  const [thread, setThread] = useState([
-    { role:'assistant', content: safeHTML(greeting) }
-  ])
+  const [thread, setThread] = useState([{ role:'assistant', content: safeHTML(greeting) }])
 
   // Load persisted state on mount
   useEffect(()=>{
@@ -178,7 +170,6 @@ export default function ChatPage() {
       setLastWish(s.lastWish || null)
       setThread(s.thread?.length ? s.thread : [{role:'assistant', content: safeHTML(greeting)}])
     }
-    // Avoid accidental remount resets in StrictMode: nothing else needed; we persist on each change below
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -186,9 +177,6 @@ export default function ChatPage() {
   useEffect(()=>{
     saveState({ phase, vibe, currentWish, lastWish, thread })
   }, [phase, vibe, currentWish, lastWish, thread])
-
-  // Visibility/tab switches shouldn’t reset; localStorage covers it.
-  // If you ever see resets in dev: turn off HMR/fast refresh or test production build.
 
   const handlePickVibe = (v) => {
     setVibe(v)
@@ -200,37 +188,29 @@ export default function ChatPage() {
   }
 
   const handleResume = () => {
-    // If we have a last wish, bring it forward
     const chosen = lastWish || currentWish
     if (chosen) {
       setCurrentWish(chosen)
-      setPhase('questionnaire') // allow them to refresh micro-step before chat
+      setPhase('questionnaire')
       setThread(prev => prev.concat({
         role:'assistant',
         content: safeHTML(`We’ll keep weaving the last wish: <b>${escapeHTML(chosen.wish)}</b>. Add a fresh micro-move to heat the lamp, then we chat.`)
       }))
     } else {
-      // No last wish; fall back to new
       setPhase('questionnaire')
-      setThread(prev => prev.concat({
-        role:'assistant',
-        content: safeHTML(`No past wish found. Let’s light a new one.`)
-      }))
+      setThread(prev => prev.concat({ role:'assistant', content: safeHTML(`No past wish found. Let’s light a new one.`) }))
     }
   }
 
   const handleNew = () => {
     setCurrentWish(null)
     setPhase('questionnaire')
-    setThread(prev => prev.concat({
-      role:'assistant',
-      content: safeHTML(`New star, new path. I’m listening…`)
-    }))
+    setThread(prev => prev.concat({ role:'assistant', content: safeHTML(`New star, new path. I’m listening…`) }))
   }
 
   const handleQuestComplete = (data) => {
     setCurrentWish(data)
-    setLastWish(data) // cache as last wish for future resumes
+    setLastWish(data)
     setPhase('chat')
     setThread(prev => prev.concat(
       { role:'assistant', content: safeHTML(`Wish set: <b>${escapeHTML(data.wish)}</b>.`) },
@@ -241,11 +221,7 @@ export default function ChatPage() {
 
   const handleSend = async (text) => {
     setThread(prev => prev.concat({ role:'user', content: safeHTML(escapeHTML(text)) }))
-
-    // === CALL YOUR /api/chat HERE ===
-    // Send: { messages: thread+newUserMsg, context: { vibe, currentWish } }
-    // For now we’ll simulate a magical reply based on vibe + wish.
-    const reply = await fakeGenieReply(text, { vibe, currentWish })
+    const reply = await fakeGenieReply(text, { vibe, currentWish }) // stub; replace with /api/chat
     setThread(prev => prev.concat({ role:'assistant', content: safeHTML(reply) }))
   }
 
@@ -260,33 +236,25 @@ export default function ChatPage() {
     <div style={styles.wrap}>
       <div style={styles.container}>
         {/* Welcome */}
-{phase === 'welcome' && (
-  <div style={styles.card}>
-    {/* 🔮 Top Header */}
-    <h1 style={{fontSize:32, fontWeight:900, margin:0}}>Your Personal AI Genie ✨</h1>
-    <p style={{fontSize:18, opacity:.9, marginTop:8}}>
-      This is your daily portal to manifest your dreams into reality.
-    </p>
+        {phase === 'welcome' && (
+          <div style={styles.card}>
+            <h1 style={{fontSize:32, fontWeight:900, margin:0}}>Your Personal AI Genie ✨</h1>
+            <p style={{fontSize:18, opacity:.9, marginTop:8}}>
+              This is your daily portal to manifest your dreams into reality.
+            </p>
+            <p style={styles.lead}>{greeting}</p>
+            <button style={styles.btn} onClick={()=>setPhase('vibe')}>Rub the lamp & begin 🔮</button>
+          </div>
+        )}
 
-    {/* 🔮 Genie Greeting */}
-    <p style={styles.lead}>{greeting}</p>
-
-    {/* 🔮 Continue */}
-    <button style={styles.btn} onClick={()=>setPhase('vibe')}>
-      Rub the lamp & begin 🔮
-    </button>
-  </div>
-)}
-
-
-        {/* Vibe under welcome (your request) */}
+        {/* Vibe under welcome */}
         {phase === 'vibe' && (
           <div style={styles.card}>
             <p style={styles.lead}>{GenieLang.vibePrompt}</p>
             <div style={styles.vibeRow}>
-              <VibeButton label="BOLD"  emoji="🔥" onClick={()=>handlePickVibe('BOLD')} />
-              <VibeButton label="CALM"  emoji="💧" onClick={()=>handlePickVibe('CALM')} />
-              <VibeButton label="FLOW"  emoji="🌬️" onClick={()=>handlePickVibe('FLOW')} />
+              <VibeButton label="BOLD" emoji="🔥" onClick={()=>handlePickVibe('BOLD')} />
+              <VibeButton label="CALM" emoji="💧" onClick={()=>handlePickVibe('CALM')} />
+              <VibeButton label="FLOW" emoji="🌬️" onClick={()=>handlePickVibe('FLOW')} />
             </div>
           </div>
         )}
@@ -316,11 +284,7 @@ export default function ChatPage() {
 
         {/* Magical Chat */}
         {phase === 'chat' && (
-          <ChatConsole
-            thread={thread}
-            onSend={handleSend}
-            onReset={resetToNewWish}
-          />
+          <ChatConsole thread={thread} onSend={handleSend} onReset={resetToNewWish} />
         )}
       </div>
     </div>
@@ -341,12 +305,11 @@ function VibeButton({ label, emoji, onClick }) {
 
 /* =========================
    Fake reply (stub)
-   Replace with real /api/chat call that uses your system prompt (DNA)
+   Replace with real /api/chat call
    ========================= */
 async function fakeGenieReply(text, { vibe, currentWish }) {
   const vibeLine = vibe ? `${emojiFor(vibe)} ${titleCase(vibe)} ` : ''
   const wishLine = currentWish?.wish ? `Your star is <b>${escapeHTML(currentWish.wish)}</b>. ` : ''
-  // Playful, fourth-grade, mystical
   return `${vibeLine}I hear you. ${wishLine}You’re rubbing the right side of the lamp now. 
   Here’s the path that shimmers: take your tiny move (“<i>${escapeHTML(currentWish?.micro || 'one small step')}</i>”) in the next hour. 
   Then return and say: <b>“Genie, the pebble is in the pond.”</b> I’ll open the next door. ✨`
@@ -356,22 +319,9 @@ async function fakeGenieReply(text, { vibe, currentWish }) {
    Styles (inline for portability)
    ========================= */
 const styles = {
-   portalHeader: { 
-  textAlign:'left', 
-  marginBottom:16 
-},
-portalTitle: { 
-  fontSize:32, 
-  fontWeight:900, 
-  margin:0, 
-  color:'#ffd600', 
-  letterSpacing:.2 
-},
-portalSubtitle: { 
-  fontSize:18, 
-  opacity:.9, 
-  marginTop:6 
-},
+  portalHeader: { textAlign:'left', marginBottom:16 },
+  portalTitle: { fontSize:32, fontWeight:900, margin:0, color:'#ffd600', letterSpacing:.2 },
+  portalSubtitle: { fontSize:18, opacity:.9, marginTop:6 },
 
   wrap: { minHeight:'100vh', background:'#0b0b12', color:'#eee', padding:'24px' },
   container: { maxWidth: 820, margin:'0 auto' },
@@ -383,41 +333,20 @@ portalSubtitle: {
   mini: { fontSize:13, opacity:.8 },
   row: { display:'flex', gap:12, marginTop:12, flexWrap:'wrap' },
   vibeRow: { display:'grid', gridTemplateColumns:'repeat(3, 1fr)', gap:12, marginTop:12 },
-  vibeBtn: {
-    padding:'14px 16px', borderRadius:12, border:'1px solid #292b3a',
-    background:'#0f1017', color:'#fff', cursor:'pointer', textAlign:'center',
-    boxShadow:'inset 0 0 0 1px rgba(255,255,255,0.02)'
-  },
-  input: {
-    width:'100%', padding:'12px 14px', borderRadius:10, border:'1px solid #2a2d3b',
-    background:'#0f1017', color:'#fff', outline:'none'
-  },
-  textarea: {
-    width:'100%', padding:'12px 14px', borderRadius:10, border:'1px solid #2a2d3b',
-    background:'#0f1017', color:'#fff', outline:'none', resize:'vertical'
-  },
-  btn: {
-    padding:'12px 16px', borderRadius:12, border:'2px solid #ffd600', background:'#111',
-    color:'#ffd600', fontWeight:900, cursor:'pointer', letterSpacing:.2
-  },
-  btnGhost: {
-    padding:'12px 16px', borderRadius:12, border:'1px solid #3a3c4d', background:'transparent',
-    color:'#ddd', fontWeight:800, cursor:'pointer'
-  },
+  vibeBtn: { padding:'14px 16px', borderRadius:12, border:'1px solid #292b3a', background:'#0f1017', color:'#fff', cursor:'pointer', textAlign:'center', boxShadow:'inset 0 0 0 1px rgba(255,255,255,0.02)' },
+  input: { width:'100%', padding:'12px 14px', borderRadius:10, border:'1px solid #2a2d3b', background:'#0f1017', color:'#fff', outline:'none' },
+  textarea: { width:'100%', padding:'12px 14px', borderRadius:10, border:'1px solid #2a2d3b', background:'#0f1017', color:'#fff', outline:'none', resize:'vertical' },
+  btn: { padding:'12px 16px', borderRadius:12, border:'2px solid #ffd600', background:'#111', color:'#ffd600', fontWeight:900, cursor:'pointer', letterSpacing:.2 },
+  btnGhost: { padding:'12px 16px', borderRadius:12, border:'1px solid #3a3c4d', background:'transparent', color:'#ddd', fontWeight:800, cursor:'pointer' },
   lastWish: { marginTop:12, padding:12, border:'1px dashed #34374a', borderRadius:12, background:'#0d0f17' },
 
   chatWrap: { display:'flex', flexDirection:'column', gap:12 },
-  chatStream: {
-    background:'#0f1119', border:'1px solid #222433', borderRadius:16, padding:16, minHeight:360, maxHeight:520, overflowY:'auto'
-  },
+  chatStream: { background:'#0f1119', border:'1px solid #222433', borderRadius:16, padding:16, minHeight:360, maxHeight:520, overflowY:'auto' },
   bubbleAI: { maxWidth:'85%', background:'#121422', padding:'12px 14px', borderRadius:12, border:'1px solid #2a2d3b', margin:'8px 0' },
   bubbleUser: { maxWidth:'85%', background:'#0a0c14', padding:'12px 14px', borderRadius:12, border:'1px solid #2a2d3b', margin:'8px 0 8px auto' },
   bubbleText: { fontSize:15, lineHeight:1.6 },
   chatInputRow: { display:'flex', gap:10, alignItems:'center' },
-  chatInput: {
-    flex:1, padding:'12px 14px', borderRadius:10, border:'1px solid #2a2d3b',
-    background:'#0f1017', color:'#fff', outline:'none'
-  },
+  chatInput: { flex:1, padding:'12px 14px', borderRadius:10, border:'1px solid #2a2d3b', background:'#0f1017', color:'#fff', outline:'none' },
 }
 
 /* =========================
@@ -425,8 +354,8 @@ portalSubtitle: {
    ========================= */
 function emojiFor(v) {
   if (v === 'BOLD') return '🔥'
-  if (v === 'CALM') return '💧'
-  if (v === 'FLOW') return '🌬️'
+  if (v === 'CALM') return '🙏'
+  if (v === 'FLOW') return '💰'
   return '✨'
 }
 function titleCase(s){ return s ? s[0].toUpperCase() + s.slice(1).toLowerCase() : '' }
