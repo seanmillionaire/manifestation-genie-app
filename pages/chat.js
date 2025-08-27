@@ -72,6 +72,13 @@ function Questionnaire({ initial, onComplete, vibe }) {
   const canSubmit = wish.trim() && micro.trim()
 
   return (
+
+     {/* === Portal Header: always visible === */}
+<div style={styles.portalHeader}>
+  <h1 style={styles.portalTitle}>Your Personal AI Genie ✨</h1>
+  <p style={styles.portalSubtitle}>This is your daily portal to manifest your dreams into reality.</p>
+</div>
+
     <div style={styles.card}>
       <h3 style={styles.h3}>Your Wish Quest</h3>
       <p style={styles.subtle}>{GenieLang.questPrompts.wish}</p>
@@ -349,6 +356,23 @@ async function fakeGenieReply(text, { vibe, currentWish }) {
    Styles (inline for portability)
    ========================= */
 const styles = {
+   portalHeader: { 
+  textAlign:'left', 
+  marginBottom:16 
+},
+portalTitle: { 
+  fontSize:32, 
+  fontWeight:900, 
+  margin:0, 
+  color:'#ffd600', 
+  letterSpacing:.2 
+},
+portalSubtitle: { 
+  fontSize:18, 
+  opacity:.9, 
+  marginTop:6 
+},
+
   wrap: { minHeight:'100vh', background:'#0b0b12', color:'#eee', padding:'24px' },
   container: { maxWidth: 820, margin:'0 auto' },
   card: { background:'#11121a', border:'1px solid #222433', borderRadius:16, padding:24, boxShadow:'0 10px 30px rgba(0,0,0,.35)' },
