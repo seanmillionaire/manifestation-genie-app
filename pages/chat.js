@@ -85,6 +85,69 @@ const toSocialLines = (text='', wordsPerLine=9) => {
 };
 const nl2br = (s='') => s.replace(/\n/g, '<br/>');
 
+// --- Pretty + cosmic formatting for Genie replies ---
+const cosmicOutros = [
+  "The stars tilt toward {topic}. ✨",
+  "Orbit set; trajectory locked. 🔮",
+  "The lamp hums in your direction. 🌙",
+  "Gravity favors your move. 🌌",
+  "Signals aligned; door unlocked. 🗝️"
+];
+
+function ensureNoNumberedLists(s='') {
+  // Replace leading "1. / 2." etc with emoji bullets
+  return s
+    .replace(/^\s*\d+\.\s*/gm, '• ')
+    .replace(/^\s*-\s*/gm, '• ');
+}
+
+function bulletize(s='') {
+  // Turn lines that read like steps into emoji bullets
+  return s.split(/\n+/).map(line => {
+    const L = line.trim();
+    if (!L) return '';
+    if (/^(•|\*|–|-)/.test(L)) return L.replace(/^(•|\*|–|-)\s*/, ''); // strip markers
+    if (/^(step|do|try|next|then|now|contact|create|assess|visualize|message|record|post|ship|book)\b/i.test(L)) {
+      // looks like an action line → emoji anchor
+      const anchors = ["🌌","🔑","💰","🌀","✨"];
+      return `${anchors[Math.floor(Math.random()*anchors.length)]} ${L}`;
+    }
+    return L;
+  }).join('\n');
+}
+
+function addCosmicOutro(s='', topic='this') {
+  const line = cosmicOutros[Math.floor(Math.random()*cosmicOutros.length)].replace('{topic}', topic);
+  // Avoid double outro if one already exists
+  if (/(star|orbit|cosmos|universe|galaxy|gravity|lamp|portal)/i.test(s.split('\n').slice(-2).join(' '))) return s;
+  return `${s}\n\n${line}`;
+}
+
+// Already have toSocialLines and nl2br in your file; if not, include these:
+function toSocialLines(text='', wordsPerLine=9) {
+  const soft = text.replace(/\r/g,'').replace(/([.!?])\s+/g, '$1\n').replace(/\s+[-–—]\s+/g, '\n');
+  const out = [];
+  for (const piece of soft.split(/\n+/)) {
+    const words = piece.trim().split(/\s+/).filter(Boolean);
+    if (!words.length) continue;
+    for (let i = 0; i < words.length; i += wordsPerLine) {
+      out.push(words.slice(i, i + wordsPerLine).join(' '));
+    }
+  }
+  return out.join('\n');
+}
+function nl2br(s=''){ return s.replace(/\n/g,'<br/>') }
+
+// Final pass that we’ll call on the LLM reply
+function formatGenieReply(raw='', topic='this') {
+  const noNums = ensureNoNumberedLists(raw);
+  const bullets = bulletize(noNums);
+  const tight = toSocialLines(bullets, 9);      // short, chatty lines
+  const withOutro = addCosmicOutro(tight, topic);
+  return withOutro.trim();
+}
+
+
 /* =========================
    Minimal Questionnaire
    ========================= */
