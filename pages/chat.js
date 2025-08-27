@@ -278,7 +278,10 @@ export default function ChatPage() {
 
   // greeting seeded with name
   const [greeting] = useState(() => injectName(pick(GenieLang.greetings), firstName))
-  const [thread, setThread] = useState([{ role:'assistant', content: greeting }])
+const [thread, setThread] = useState([
+  { id:newId(), role:'assistant', author:'Genie', content:greeting, likedByUser:false, likedByGenie:false }
+])
+
 
   // Supabase name hydration
   useEffect(() => {
@@ -551,7 +554,10 @@ const handleSend = async (text) => {
     firstName={firstName}
   />
 )}
-
+      </div>
+    </div>
+  )
+}
 
 /* =========================
    Small UI bits
