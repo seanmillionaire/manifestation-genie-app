@@ -513,14 +513,33 @@ function VibeButton({ label, emoji, onClick }) {
    Replace with real /api/chat call
    ========================= */
 /* Hit /api/chat (your one-liner operator Genie) */
-async function genieReply({ text, thread, firstName, currentWish, vibe }) {
-  // Build context object the API expects
+async function genieReply({ text, thread, firstName, currentWish, vibe, intent }) {
   const context = {
-    vibe: vibe || null,
+    intent: intent || null,
+    mood: null, // set if you detect
     wish: currentWish?.wish || null,
     block: currentWish?.block || null,
     micro: currentWish?.micro || null,
+    vibe: vibe || null,
   }
+
+  const resp = await fetch('/api/chat', {
+    method:'POST',
+    headers:{ 'Content-Type':'application/json' },
+    body: JSON.stringify({
+      userName: firstName || null,
+      hmUrl: 'https://hypnoticmeditations.ai',
+      context,
+      messages: [
+        ...toPlainMessages(thread),
+        { role:'user', content:text }
+      ]
+    })
+  })
+  const data = await resp.json()
+  return data.reply
+}
+
 
   const resp = await fetch('/api/chat', {
     method: 'POST',
