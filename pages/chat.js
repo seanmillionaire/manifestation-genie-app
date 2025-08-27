@@ -68,6 +68,24 @@ const getFirstNameFromCache = () => {
   } catch {}
   return 'Friend'
 }
+const toSocialLines = (text='', wordsPerLine=9) => {
+  const soft = text
+    .replace(/\r/g,'')
+    // add breaks after sentence ends or dashes if missing
+    .replace(/([.!?])\s+/g, '$1\n')
+    .replace(/\s+[-–—]\s+/g, '\n');
+
+  const lines = [];
+  for (const piece of soft.split(/\n+/)) {
+    const words = piece.trim().split(/\s+/).filter(Boolean);
+    if (!words.length) continue;
+    for (let i = 0; i < words.length; i += wordsPerLine) {
+      lines.push(words.slice(i, i + wordsPerLine).join(' '));
+    }
+  }
+  return lines.join('\n');
+};
+const nl2br = (s='') => s.replace(/\n/g, '<br/>');
 
 /* =========================
    Minimal Questionnaire
@@ -204,10 +222,6 @@ function ChatConsole({ thread, onSend, onReset, onToggleLike, firstName }) {
     {isAI ? 'Genie' : (m.author || firstName || 'You')}
   </div>
 
-
-
-                {/* Name label */}
-                <div style={styles.nameLabel}>{isAI ? 'Genie' : (m.author || firstName || 'You')}</div>
 
                 {/* Bubble */}
                 <div style={isAI ? styles.bubbleAI : styles.bubbleUser}>
@@ -454,14 +468,15 @@ const handleSend = async (text) => {
 
   try {
     const reply = await genieReply({ text, thread, firstName, currentWish, vibe })
-const aiMsg = {
-  id: newId(),
-  role: 'assistant',
-  author: 'Genie',
-  content: nl2br(escapeHTML(reply)),  // preserve line breaks
-  likedByUser: false,
-  likedByGenie: false
-}
++ const social = toSocialLines(reply, 9);            // wrap to short lines
++ const aiMsg = {
++   id: newId(),
++   role: 'assistant',
++   author: 'Genie',
++   content: nl2br(escapeHTML(social)),
++   likedByUser: false,
++   likedByGenie: false
++ }
 
     setThread(prev => prev.concat(aiMsg))
   } catch (e) {
@@ -799,12 +814,13 @@ likeBadge: {
     border:'1px solid rgba(255,214,0,0.18)',
     margin:'8px 0 8px auto'
   },
-bubbleText: { 
-  fontSize:15,
-  lineHeight:1.6,
-  whiteSpace: 'normal',     // we’re using <br/>, so normal is fine
-  wordBreak: 'break-word',  // wrap long words/URLs
-}
+bubbleText: {
+  fontSize: 15,
+  lineHeight: 1.6,
+  whiteSpace: 'normal',  // we’re using <br/>
+  wordBreak: 'break-word',
+},
+
 
   chatInputRow: { display:'flex', gap:10, alignItems:'center' },
   chatInput: {
