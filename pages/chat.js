@@ -529,12 +529,13 @@ const handleSend = async (text) => {
 
 try {
   const reply = await genieReply({ text, thread, firstName, currentWish, vibe })
-  const social = toSocialLines(reply, 9) // wrap to short, chatty lines
+  const topic = (currentWish?.wish || text || 'this').toLowerCase().slice(0, 80);
+  const pretty = formatGenieReply(reply, topic);
   const aiMsg = {
     id: newId(),
     role: 'assistant',
     author: 'Genie',
-    content: nl2br(escapeHTML(social)),  // preserve line breaks for rendering
+    content: nl2br(escapeHTML(pretty)),  // keep <br/> for lines
     likedByUser: false,
     likedByGenie: false
   }
@@ -783,7 +784,7 @@ likeBadge: {
   padding:'2px 8px'
 },
 
-   bubbleAI: {
+bubbleAI: {
   maxWidth:'85%',
   background:'rgba(255,255,255,0.04)',
   padding:'12px 14px',
@@ -791,9 +792,11 @@ likeBadge: {
   border:'1px solid rgba(255,255,255,0.08)',
   margin:'8px 0',
   backdropFilter:'blur(2px)',
-  fontWeight: 700,                 // <— punchier
-  letterSpacing: .1
+  fontWeight: 600,          // was 700
+  letterSpacing: .1,
+  lineHeight: 1.7           // more air for short lines
 },
+
 
   btn: {
     padding:'12px 16px',
