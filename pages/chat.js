@@ -1,4 +1,4 @@
-// pages/chat.js — Chat + Gate with GenieFlow (Hormozi + Becker upgrade)
+// pages/chat.js — Chat + Gate with GenieFlow (Hormozi + Becker upgrade, full file)
 import Questionnaire from '../components/Questionnaire'
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../src/supabaseClient'
@@ -7,7 +7,7 @@ const todayStr = () => new Date().toISOString().slice(0,10)
 const HM_STORE_URL = 'https://hypnoticmeditations.ai'
 const PAYHIP_URL = 'https://hypnoticmeditations.ai/b/U7Z5m'
 
-// ---------- One‑liner + tone helpers ----------
+// ---------- One-liner + tone helpers ----------
 function toOneLiner(text, max = 160) {
   if (!text) return ''
   let t = String(text)
@@ -91,8 +91,11 @@ export default function Chat() {
   // today's intent memory
   const [todayIntent, setTodayIntent] = useState(null)
 
-  // NEW: restart / continue choice banner
+  // UI choice bar
   const [showReturnChoice, setShowReturnChoice] = useState(false)
+
+  // lightweight vibe check state
+  const [vibe, setVibe] = useState(null)
 
   async function continueToday() {
     setShowReturnChoice(false)
@@ -136,7 +139,17 @@ export default function Chat() {
     ])
   }
 
-  // AUTO‑SCROLL: scroll the chat container, not the page
+  // Vibe quick set
+  function handleVibePick(val) {
+    setVibe(val)
+    setMessages(m => [
+      ...m,
+      { role: 'user', content: `Vibe: ${val}` },
+      { role: 'assistant', content: enforceTone('Noted. I’ll match your pace. Ready when you are.') }
+    ])
+  }
+
+  // AUTO-SCROLL: scroll the chat container, not the page
   useEffect(() => {
     const el = listRef.current
     if (!el) return
@@ -167,7 +180,7 @@ export default function Chat() {
       if (event === 'SIGNED_OUT') {
         setSession(null); setHasName(false); setWizardDone(false)
         setProfile(null); setProfileLoaded(false)
-        setMessages([]); setBootGreeted(false); setTodayIntent(null)
+        setMessages([]); setBootGreeted(false); setTodayIntent(null); setVibe(null)
         return
       }
       if (event === 'SIGNED_IN' && cur !== nxt) {
@@ -177,7 +190,7 @@ export default function Chat() {
         setHasName(localStorage.getItem(nameKey) === 'true')
         setWizardDone(localStorage.getItem(wizKey)  === 'true')
         setProfile(null); setProfileLoaded(false)
-        setMessages([]); setBootGreeted(false); setTodayIntent(null)
+        setMessages([]); setBootGreeted(false); setTodayIntent(null); setVibe(null)
       }
     })
     return () => subscription.unsubscribe()
@@ -244,7 +257,7 @@ export default function Chat() {
       if (!hasName) {
         body = `Add your name to personalize.`
       } else if (!wizardDone) {
-        body = `Resume today’s quick setup.`
+        body = `Quick check-in first. Then we’ll start your 6-step ritual.`
       } else if (intentRow?.intent) {
         body = `Continue with “${intentRow.intent}”?`
       } else if (firstIncomplete) {
@@ -324,7 +337,7 @@ export default function Chat() {
       const yesish = /^(y|ya|yes|yep|sure|ok|okay)$/i.test(input.trim())
       if (yesish && (todayIntent || input)) {
         const goal = todayIntent || input
-        const line = `Locked: “${goal}”. First move: list the 3 highest‑leverage actions.`
+        const line = `Locked: “${goal}”. First move: list the 3 highest-leverage actions.`
         setMessages([...next, { role: 'assistant', content: line }])
         setSending(false); inputRef.current?.focus()
         return
@@ -379,13 +392,36 @@ export default function Chat() {
 
   return (
     <div className="wrap">
-  <header className="hero">
-  <p className="welcome">🧞‍♂️ Welcome back, {userName}</p>
-  <p className="sub">Your genie has opened today’s portal — let’s manifest ✨</p>
-</header>
+      {/* Header with Logout moved to top-right */}
+      <header className="hero">
+        <div className="heroRow">
+          <div className="heroText">
+            <p className="welcome">🧞‍♂️ Welcome back, {userName}</p>
+            <p className="sub">Your genie has opened today’s portal — let’s manifest ✨</p>
+          </div>
+          <div className="heroActions">
+            <button type="button" className="ghost" onClick={() => supabase.auth.signOut()}>Logout</button>
+          </div>
+        </div>
+      </header>
 
+      {/* Vibe check FIRST — lightweight ritual entry */}
+      <section className="card vibeCard">
+        <div className="vibeRow">
+          <div className="vibeCopy">
+            <strong>Quick check-in</strong>
+            <span className="hint">How’s your vibe today?</span>
+          </div>
+          <div className="vibeActions">
+            <button type="button" onClick={() => handleVibePick('Good')}>🙂 Good</button>
+            <button type="button" onClick={() => handleVibePick('Okay')}>😌 Okay</button>
+            <button type="button" onClick={() => handleVibePick('Low')}>😕 Low</button>
+          </div>
+        </div>
+        {vibe && <p className="sub small" style={{marginTop:10}}>Vibe saved: <strong>{vibe}</strong></p>}
+      </section>
 
-      {/* --- Restart vs Continue bar (Hormozi stack + Becker flow) --- */}
+      {/* Restart vs Continue bar — 1 strong CTA + secondary pills */}
       {showReturnChoice && hasName && (
         <section className="card choiceBar">
           <div className="choiceRow">
@@ -394,25 +430,20 @@ export default function Chat() {
               <span className="hint">Choose your path — today’s ritual, or a new goal.</span>
             </div>
             <div className="choiceActions">
-              <button type="button" className="linkBtn" onClick={restartQuestionnaire}>
-                + New Goal
-              </button>
-              <button type="button" className="btn btn-primary" onClick={continueToday}>
-                Start My Manifestation
-              </button>
+              <button type="button" className="linkBtn" onClick={restartQuestionnaire}>+ New Goal</button>
+              <button type="button" className="btn btn-primary" onClick={continueToday}>Start My Manifestation</button>
             </div>
           </div>
 
-          {/* Mini value stack */}
           <ul className="stack">
             <li><strong>6 guided steps</strong> • ~3 min</li>
             <li><strong>Instant clarity reset</strong></li>
-            <li><strong>Subconscious lock‑in ritual</strong></li>
+            <li><strong>Subconscious lock-in ritual</strong></li>
           </ul>
         </section>
       )}
 
-      {/* Step 2: Flow gate */}
+      {/* Wizard flow (Step 1 of 6) */}
       {hasName && !wizardDone && (
         <section className="card wizardCard">
           <div className="chipRow">
@@ -424,11 +455,10 @@ export default function Chat() {
           <div className="wizardScope">
             <Questionnaire session={session} onDone={handleWizardDone} />
           </div>
-          <div className="microNote"></div>
         </section>
       )}
 
-      {/* Chat console */}
+      {/* Chat console after wizard is done */}
       {hasName && wizardDone && (
         <section className="card chatCard">
           <h2 className="panelTitle">Chat with the Genie</h2>
@@ -475,12 +505,9 @@ export default function Chat() {
         </section>
       )}
 
+      {/* Static social proof (no live ticker) */}
       <div className="fomoLine">
         <p>🔥 <strong>108</strong> manifestors activated their Genie today — join the current.</p>
-      </div>
-
-      <div className="bottomRight">
-        <button type="button" className="ghost" onClick={() => supabase.auth.signOut()}>Logout</button>
       </div>
 
       <Style />
@@ -505,10 +532,23 @@ function Style() {
     <style jsx global>{`
       * { box-sizing: border-box; }
       :root { --gold:#FFD600; --green:#19E28A; --white:#fff; }
-      .wrap { max-width: 960px; margin: 48px auto 72px; padding: 0 24px; }
-      .hero { text-align: center; margin-bottom: 28px; }
-      .sub { margin: 10px auto 0; font-size: 18px; color: rgba(255,255,255,0.9); max-width: 68ch; line-height: 1.6; }
+      .wrap { max-width: 960px; margin: 24px auto 64px; padding: 0 24px; } /* tighter top space */
+
+      .hero { margin-bottom: 16px; }
+      .heroRow { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+      .welcome{ font-size: 22px; font-weight: 800; margin: 0 0 6px; color: var(--white); }
+      .sub { margin: 0; font-size: 18px; color: rgba(255,255,255,0.9); max-width: 68ch; line-height: 1.6; }
       .sub.small { font-size: 16px; color: rgba(255,255,255,0.78); }
+
+      .heroActions .ghost{
+        background: transparent;
+        border: 1px solid rgba(255,255,255,0.2);
+        color: rgba(255,255,255,0.92);
+        padding: 8px 12px;
+        border-radius: 10px;
+        font-weight: 800;
+        cursor: pointer;
+      }
 
       /* Cards */
       .card {
@@ -516,15 +556,37 @@ function Style() {
         color: var(--white);
         border: 1px solid rgba(255,255,255,0.10);
         border-radius: 16px;
-        padding: 22px;
-        margin-bottom: 22px;
+        padding: 18px;
+        margin-bottom: 18px;
         backdrop-filter: blur(6px);
         box-shadow: 0 10px 28px rgba(0,0,0,.25);
       }
       .center { display:flex; flex-direction:column; align-items:center; text-align:center; }
 
+      /* Vibe */
+      .vibeRow { display:flex; align-items:center; justify-content:space-between; gap:14px; flex-wrap:wrap; }
+      .vibeCopy { display:flex; flex-direction:column; gap:4px; }
+      .vibeCopy .hint { font-size:13px; color: rgba(255,255,255,0.72); }
+      .vibeActions { display:flex; gap:10px; flex-wrap:wrap; }
+      .vibeCard button{
+        position: relative;
+        border-radius: 12px;
+        padding: 10px 14px;
+        font-weight: 800;
+        background: linear-gradient(180deg, #ffffff, #E9EEF3);
+        color: #0D1B2A;
+        border: 1px solid rgba(13,27,42,.18);
+        box-shadow: inset 0 1px 0 #fff, 0 4px 14px rgba(0,0,0,.18);
+        transition: transform .16s ease, box-shadow .16s ease, filter .16s ease;
+        cursor:pointer;
+      }
+      .vibeCard button:hover{
+        transform: translateY(-1px);
+        box-shadow: inset 0 1px 0 #fff, 0 8px 18px rgba(0,0,0,.22), 0 0 22px rgba(102,51,204,.25);
+      }
+
       /* Choice bar */
-      .choiceBar { padding: 16px 16px 12px; margin-top: 16px; }
+      .choiceBar { padding: 16px 16px 12px; }
       .choiceRow { display:flex; align-items:center; justify-content:space-between; gap:14px; flex-wrap:wrap; }
       .choiceCopy { display:flex; flex-direction:column; gap:4px; }
       .choiceCopy .hint { font-size:13px; color: rgba(255,255,255,0.72); }
@@ -571,7 +633,7 @@ function Style() {
       .btn.btn-primary:hover { background: #F8D200; }
       .btn.btn-primary:active { transform: translateY(0); box-shadow: 0 4px 14px rgba(0,0,0,.28); }
 
-      /* === CTA shimmer + aura === */
+      /* CTA shimmer + aura */
       .btn.btn-primary::before{
         content:"";
         position:absolute; inset:0;
@@ -581,10 +643,7 @@ function Style() {
         animation: sheen 2.4s linear infinite;
         pointer-events:none;
       }
-      @keyframes sheen{
-        0%   { background-position: 200% 0; }
-        100% { background-position: -200% 0; }
-      }
+      @keyframes sheen{ 0%{background-position:200% 0} 100%{background-position:-200% 0} }
       .btn.btn-primary::after{
         content:"";
         position:absolute; inset:-2px;
@@ -592,8 +651,7 @@ function Style() {
         background:
           radial-gradient(140px 60px at 30% -40%, rgba(255,214,0,.45), transparent 70%),
           radial-gradient(140px 60px at 80% 140%, rgba(102,51,204,.35), transparent 70%);
-        opacity:0; transition: opacity .18s ease;
-        pointer-events:none;
+        opacity:0; transition: opacity .18s ease; pointer-events:none;
       }
       .btn.btn-primary:hover{
         transform: translateY(-1px);
@@ -618,17 +676,10 @@ function Style() {
         overflow: hidden;
         border-radius: 16px;
         border: 1px solid rgba(255,255,255,0.10);
-        background:
-          radial-gradient(1200px 400px at 20% -20%, rgba(255,255,255,0.06), transparent 60%),
-          rgba(255,255,255,0.03);
+        background: radial-gradient(1200px 400px at 20% -20%, rgba(255,255,255,0.06), transparent 60%), rgba(255,255,255,0.03);
       }
       .chatCard .panelTitle {
-        margin: 0;
-        padding: 16px 18px 8px;
-        font-size: 16px;
-        font-weight: 800;
-        letter-spacing: .6px;
-        color: var(--gold);
+        margin: 0; padding: 16px 18px 8px; font-size: 16px; font-weight: 800; letter-spacing: .6px; color: var(--gold);
       }
 
       /* Chat list */
@@ -647,7 +698,6 @@ function Style() {
       .row { display:flex; gap:12px; margin:10px 4px; }
       .row.me { justify-content: flex-end; }
       .avatar { font-size: 20px; line-height: 1; margin-top: 4px; }
-
       .bubble {
         max-width: 62ch;
         padding: 14px 16px;
@@ -659,19 +709,7 @@ function Style() {
         font-size: 15.5px;
         box-shadow: 0 3px 10px rgba(0,0,0,0.18);
       }
-      .bubble.user {
-        background: #FFE169;
-        color: #0D1B2A;
-        border-color: #FFE169;
-      }
-
-      .welcome{
-        font-size: 22px;
-        font-weight: 800;
-        margin: 0 0 8px;
-        color: var(--white);
-      }
-
+      .bubble.user { background: #FFE169; color: #0D1B2A; border-color: #FFE169; }
       .tag { font-size: 11px; font-weight: 800; margin-bottom: 6px; opacity:.7; }
       .row.me .tag { color: #0D1B2A; opacity:.85; }
       .msg { white-space: pre-wrap; }
@@ -703,48 +741,11 @@ function Style() {
       .dots span:nth-child(3){ animation-delay:.3s }
       @keyframes blink { 0%,80%,100%{opacity:.25} 40%{opacity:1} }
 
-      .fomoLine { text-align:center; font-weight:800; margin: 20px 0 6px; font-size:15px; color: rgba(255,255,255,0.86); }
-      .bottomRight { display:flex; justify-content:flex-end; margin-top: 16px; }
-
-      /* === Vibe Pills (Good / Okay / Low) — white→grey gradient + mystical aura === */
-      .wizardCard button:not(.btn):not(.linkBtn){
-        position: relative;
-        border-radius: 12px;
-        padding: 10px 14px;
-        font-weight: 800;
-        background: linear-gradient(180deg, #ffffff, #E9EEF3);
-        color: #0D1B2A;
-        border: 1px solid rgba(13,27,42,.18);
-        box-shadow:
-          inset 0 1px 0 #fff,
-          0 4px 14px rgba(0,0,0,.18);
-        transition: transform .16s ease, box-shadow .16s ease, filter .16s ease;
-      }
-      .wizardCard button:not(.btn):not(.linkBtn):hover{
-        transform: translateY(-1px);
-        box-shadow:
-          inset 0 1px 0 #fff,
-          0 8px 18px rgba(0,0,0,.22),
-          0 0 22px rgba(102,51,204,.25);
-      }
-      .wizardCard button:not(.btn):not(.linkBtn):active{
-        transform: translateY(0);
-        filter: saturate(1.04);
-      }
-      .wizardCard button:not(.btn):not(.linkBtn)::after{
-        content:"";
-        position:absolute; inset:-2px; border-radius:12px;
-        background:
-          radial-gradient(120px 60px at 30% -20%, rgba(102,51,204,.28), transparent 70%),
-          radial-gradient(120px 60px at 80% 120%, rgba(255,214,0,.35), transparent 70%);
-        opacity:0; transition: opacity .18s ease;
-        pointer-events:none;
-      }
-      .wizardCard button:not(.btn):not(.linkBtn):hover::after{ opacity:.6; }
+      .fomoLine { text-align:center; font-weight:800; margin: 12px 0 6px; font-size:15px; color: rgba(255,255,255,0.86); }
 
       /* Mobile */
       @media (max-width: 560px) {
-        .wrap { margin: 32px auto 56px; padding: 0 16px; }
+        .wrap { margin: 16px auto 48px; padding: 0 16px; }
         .chatCard .panelTitle { padding: 14px 14px 6px; }
         .list { padding: 6px 10px 12px; max-height: 52vh; }
       }
