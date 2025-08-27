@@ -1,3 +1,4 @@
+
 // pages/chat.js — Manifestation Genie
 // Flow: welcome → vibe → resumeNew → questionnaire → checklist → chat
 // Supabase name integration + localStorage persistence (per session)
@@ -125,6 +126,17 @@ function formatGenieReply(raw='', topic='this') {
   const tight = toSocialLines(bullets, 9);
   const withOutro = addCosmicOutro(tight, topic);
   return withOutro.trim();
+}
+/* =========================
+   Streak Messages (Brunson-style, human + hype)
+   ========================= */
+function streakMessage(count) {
+  if (count === 1) return "Day 1 — you showed up. Momentum just started.";
+  if (count === 2) return "2 days in a row. That’s a pattern forming. Keep it alive.";
+  if (count === 3) return "3-day streak. You’re building a muscle. Don’t break it tonight.";
+  if (count >= 4 && count < 7) return `${count} days straight — proof this isn’t luck. Keep stacking wins.`;
+  if (count >= 7 && count < 30) return `${count} days. Weekly habit formed — imagine what 30 does.`;
+  return `${count} days strong — this isn’t a streak anymore, it’s who you are.`;
 }
 
 /* =========================
@@ -434,21 +446,22 @@ export default function ChatPage() {
   // Persist state
   useEffect(()=>{ saveState({ phase, vibe, currentWish, lastWish, steps, thread }) }, [phase, vibe, currentWish, lastWish, steps, thread])
 
-  // Announce streak once when entering chat
-  useEffect(() => {
-    if (phase === 'chat' && !hasAnnouncedStreak) {
-     setThread(prev => prev.concat({
-  id: newId(),
-  role: 'assistant',
-  author: 'Genie',
-  content: nl2br(escapeHTML(streakMessage(streakCount))),
-  likedByUser: false,
-  likedByGenie: false
-}))
+// Announce streak once when entering chat (human)
+useEffect(() => {
+  if (phase === 'chat' && !hasAnnouncedStreak) {
+    setThread(prev => prev.concat({
+      id: newId(),
+      role: 'assistant',
+      author: 'Genie',
+      content: nl2br(escapeHTML(
+        `${streakMessage(streak)}\nKeep the streak alive — what’s today’s micro-move?`
+      )),
+      likedByUser:false, likedByGenie:false
+    }))
+    setHasAnnouncedStreak(true)
+  }
+}, [phase, streak, hasAnnouncedStreak])
 
-      setHasAnnouncedStreak(true)
-    }
-  }, [phase, streak, hasAnnouncedStreak])
 
   const handlePickVibe = (v) => {
     setVibe(v)
@@ -524,31 +537,20 @@ export default function ChatPage() {
     const next = (last === getYesterday()) ? count + 1 : 1
     saveStreak(next, today)
     setStreak(next)
-    // celebrate inside chat
-    setThread(prev => prev.concat({
-      id: newId(),
-      role: 'assistant',
-      author: 'Genie',
-      content: nl2br(`⚡ Daily ignition detected.\nNew streak: <b>${next}</b>.\nKeep shipping today’s micro-move. 🚀`),
-      likedByUser:false, likedByGenie:false
-    }))
+// celebrate inside chat (human)
+setThread(prev => prev.concat({
+  id: newId(),
+  role: 'assistant',
+  author: 'Genie',
+  content: nl2br(escapeHTML(
+    `New day logged. Streak: ${next}.\nDon’t break it — ship one tiny thing now.`
+  )),
+  likedByUser:false, likedByGenie:false
+}))
+
     return next
   }
 
-/* =========================
-   Streak Messages (Brunson-style, human + hype)
-   ========================= */
-function streakMessage(count) {
-  if (count === 1) return "Day 1 streak! You showed up today — momentum just started.";
-  if (count === 2) return "2 days in a row. That’s a pattern forming. Keep the fire burning.";
-  if (count === 3) return "3-day streak! You’re building a muscle. Don’t break it tonight.";
-  if (count >= 4 && count < 7) return `${count} days in a row — you’re proving this isn’t luck. Keep stacking wins.`;
-  if (count >= 7 && count < 30) return `${count} days straight. That’s a weekly habit now — imagine what 30 will do.`;
-  if (count >= 30) return `${count} days strong! This isn’t a streak anymore, it’s who you are.`;
-  return `${count} days locked in. Don’t stop now.`;
-}
-
-   
   const maybeGenieLikes = (msg) => {
     const t = (msg.content || '').toLowerCase()
     const isWin = /(done|shipped|published|posted|sold|launched|emailed|uploaded|completed|locked in)/.test(t)
