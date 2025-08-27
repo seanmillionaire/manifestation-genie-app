@@ -253,8 +253,8 @@ export default function ChatPage() {
             <p style={styles.lead}>{GenieLang.vibePrompt}</p>
             <div style={styles.vibeRow}>
               <VibeButton label="BOLD" emoji="🔥" onClick={()=>handlePickVibe('BOLD')} />
-              <VibeButton label="CALM" emoji="💧" onClick={()=>handlePickVibe('CALM')} />
-              <VibeButton label="FLOW" emoji="🌬️" onClick={()=>handlePickVibe('FLOW')} />
+              <VibeButton label="CALM" emoji="🙏" onClick={()=>handlePickVibe('CALM')} />
+              <VibeButton label="FLOW" emoji="💰" onClick={()=>handlePickVibe('RICH')} />
             </div>
           </div>
         )}
