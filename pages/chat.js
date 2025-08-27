@@ -66,10 +66,10 @@ const getFirstNameFromCache = () => {
   } catch {}
   return 'Friend'
 }
+
 const toSocialLines = (text='', wordsPerLine=9) => {
   const soft = text
     .replace(/\r/g,'')
-    // add breaks after sentence ends or dashes if missing
     .replace(/([.!?])\s+/g, '$1\n')
     .replace(/\s+[-–—]\s+/g, '\n');
 
@@ -95,20 +95,17 @@ const cosmicOutros = [
 ];
 
 function ensureNoNumberedLists(s='') {
-  // Replace leading "1. / 2." etc with emoji bullets
   return s
     .replace(/^\s*\d+\.\s*/gm, '• ')
     .replace(/^\s*-\s*/gm, '• ');
 }
 
 function bulletize(s='') {
-  // Turn lines that read like steps into emoji bullets
   return s.split(/\n+/).map(line => {
     const L = line.trim();
     if (!L) return '';
-    if (/^(•|\*|–|-)/.test(L)) return L.replace(/^(•|\*|–|-)\s*/, ''); // strip markers
-    if (/^(step|do|try|next|then|now|contact|create|assess|visualize|message|record|post|ship|book)\b/i.test(L)) {
-      // looks like an action line → emoji anchor
+    if (/^(•|\*|–|-)/.test(L)) return L.replace(/^(•|\*|–|-)\s*/, '');
+    if (/^(step|do|try|next|then|now|contact|create|assess|visualize|message|record|post|ship|book|schedule|prepare|explore)\b/i.test(L)) {
       const anchors = ["🌌","🔑","💰","🌀","✨"];
       return `${anchors[Math.floor(Math.random()*anchors.length)]} ${L}`;
     }
@@ -118,21 +115,43 @@ function bulletize(s='') {
 
 function addCosmicOutro(s='', topic='this') {
   const line = cosmicOutros[Math.floor(Math.random()*cosmicOutros.length)].replace('{topic}', topic);
-  // Avoid double outro if one already exists
   if (/(star|orbit|cosmos|universe|galaxy|gravity|lamp|portal)/i.test(s.split('\n').slice(-2).join(' '))) return s;
   return `${s}\n\n${line}`;
 }
 
-
-// Final pass that we’ll call on the LLM reply
 function formatGenieReply(raw='', topic='this') {
   const noNums = ensureNoNumberedLists(raw);
   const bullets = bulletize(noNums);
-  const tight = toSocialLines(bullets, 9);      // short, chatty lines
+  const tight = toSocialLines(bullets, 9);
   const withOutro = addCosmicOutro(tight, topic);
   return withOutro.trim();
 }
 
+/* =========================
+   Brunson Daily Streak (localStorage)
+   ========================= */
+const STREAK_KEY = 'mg_streak'
+const LAST_DATE_KEY = 'mg_last_date'
+
+function getToday() { return new Date().toISOString().slice(0,10) }
+function getYesterday() {
+  const d = new Date(); d.setDate(d.getDate() - 1);
+  return d.toISOString().slice(0,10)
+}
+function loadStreak() {
+  if (typeof window === 'undefined') return { count: 0, last: null }
+  try {
+    const count = parseInt(localStorage.getItem(STREAK_KEY) || '0', 10)
+    const last = localStorage.getItem(LAST_DATE_KEY)
+    return { count: isNaN(count) ? 0 : count, last }
+  } catch { return { count: 0, last: null } }
+}
+function saveStreak(count, last) {
+  try {
+    localStorage.setItem(STREAK_KEY, String(count))
+    localStorage.setItem(LAST_DATE_KEY, last)
+  } catch {}
+}
 
 /* =========================
    Minimal Questionnaire
@@ -194,9 +213,6 @@ function Questionnaire({ initial, onComplete, vibe, firstName }) {
 }
 
 /* =========================
-   3-Step Checklist (new)
-   ========================= */
-/* =========================
    3-Step Checklist (custom to input)
    ========================= */
 function Checklist({ wish, micro, steps, onToggle, onComplete, onSkip }) {
@@ -244,7 +260,6 @@ function Checklist({ wish, micro, steps, onToggle, onComplete, onSkip }) {
   )
 }
 
-
 /* =========================
    Messenger-style Chat Console (labels + likes)
    ========================= */
@@ -260,15 +275,14 @@ function ChatConsole({ thread, onSend, onReset, onToggleLike, firstName }) {
           const isAI = m.role === 'assistant'
           return (
             <div key={m.id} style={isAI ? styles.rowAI : styles.rowUser}>
-{/* Avatar */}
-<div style={styles.avatar}>{isAI ? '🔮' : '🙂'}</div>
+              {/* Avatar */}
+              <div style={styles.avatar}>{isAI ? '🔮' : '🙂'}</div>
 
-<div style={{flex:1, minWidth:0}}>
-  {/* Name label (mirror) */}
-  <div style={isAI ? styles.nameLabelAI : styles.nameLabelUser}>
-    {isAI ? 'Genie' : (m.author || firstName || 'You')}
-  </div>
-
+              <div style={{flex:1, minWidth:0}}>
+                {/* Name label (mirror) */}
+                <div style={isAI ? styles.nameLabelAI : styles.nameLabelUser}>
+                  {isAI ? 'Genie' : (m.author || firstName || 'You')}
+                </div>
 
                 {/* Bubble */}
                 <div style={isAI ? styles.bubbleAI : styles.bubbleUser}>
@@ -278,7 +292,6 @@ function ChatConsole({ thread, onSend, onReset, onToggleLike, firstName }) {
                 {/* Reactions row */}
                 <div style={styles.reactRow}>
                   {isAI ? (
-                    // You can like Genie messages
                     <button
                       style={m.likedByUser ? styles.likeBtnActive : styles.likeBtn}
                       onClick={() => onToggleLike(m.id, 'user')}
@@ -287,7 +300,6 @@ function ChatConsole({ thread, onSend, onReset, onToggleLike, firstName }) {
                       👍 {m.likedByUser ? 'Liked' : 'Like'}
                     </button>
                   ) : (
-                    // Genie may like yours; show badge if so
                     m.likedByGenie ? <span style={styles.likeBadge}>Genie liked this 👍</span> : null
                   )}
                 </div>
@@ -316,42 +328,42 @@ function ChatConsole({ thread, onSend, onReset, onToggleLike, firstName }) {
   )
 }
 
-
 /* =========================
    Main Page
    ========================= */
-/* Convert UI thread (which may contain HTML) into plain OpenAI messages */
 function toPlainMessages(thread) {
   const strip = (s='') => s
     .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/<\/?[^>]+(>|$)/g, '') // strip tags
+    .replace(/<\/?[^>]+(>|$)/g, '')
     .replace(/\s+/g, ' ')
     .trim()
 
   return thread.map(m => ({
-    role: m.role,                           // 'user' or 'assistant'
+    role: m.role,
     content: strip(m.content || '')
   }))
 }
 
-           
 export default function ChatPage() {
   // FIRST NAME: cache first; hydrate from Supabase (profiles → metadata → email)
   const [firstName, setFirstName] = useState(getFirstNameFromCache())
 
-  // phases: welcome → vibe → resumeNew → questionnaire → checklist → chat
+  // phases
   const [phase, setPhase] = useState('welcome')
   const [vibe, setVibe] = useState(null) // 'BOLD' | 'CALM' | 'RICH'
   const [currentWish, setCurrentWish] = useState(null) // {wish, block, micro, vibe, date}
   const [lastWish, setLastWish] = useState(null)
-  const [steps, setSteps] = useState([]) // checklist steps
+  const [steps, setSteps] = useState([])
+
+  // streak state
+  const [streak, setStreak] = useState(0)
+  const [hasAnnouncedStreak, setHasAnnouncedStreak] = useState(false)
 
   // greeting seeded with name
   const [greeting] = useState(() => injectName(pick(GenieLang.greetings), firstName))
-const [thread, setThread] = useState([
-  { id:newId(), role:'assistant', author:'Genie', content:greeting, likedByUser:false, likedByGenie:false }
-])
-
+  const [thread, setThread] = useState([
+    { id:newId(), role:'assistant', author:'Genie', content:greeting, likedByUser:false, likedByGenie:false }
+  ])
 
   // Supabase name hydration
   useEffect(() => {
@@ -363,7 +375,6 @@ const [thread, setThread] = useState([
         if (!alive || !user) return
         let fn = null
 
-        // profiles.full_name
         try {
           const { data: p } = await supabase
             .from('profiles')
@@ -373,7 +384,6 @@ const [thread, setThread] = useState([
           if (p?.full_name) fn = String(p.full_name).trim().split(' ')[0]
         } catch {}
 
-        // metadata fallbacks
         if (!fn) {
           const meta = user.user_metadata || {}
           fn =
@@ -383,7 +393,6 @@ const [thread, setThread] = useState([
             null
         }
 
-        // email fallback
         if (!fn) fn = (user.email || '').split('@')[0] || 'Friend'
 
         if (alive) {
@@ -406,11 +415,38 @@ const [thread, setThread] = useState([
       setSteps(s.steps || [])
       setThread(s.thread?.length ? s.thread : [{role:'assistant', content: injectName(pick(GenieLang.greetings), firstName)}])
     }
+
+    // hydrate streak
+    const { count, last } = loadStreak()
+    const today = getToday()
+    if (last === today) {
+      setStreak(count)
+    } else if (last === getYesterday()) {
+      setStreak(count + 1)
+      saveStreak(count + 1, today)
+    } else {
+      setStreak(1)
+      saveStreak(1, today)
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // Persist state
   useEffect(()=>{ saveState({ phase, vibe, currentWish, lastWish, steps, thread }) }, [phase, vibe, currentWish, lastWish, steps, thread])
+
+  // Announce streak once when entering chat
+  useEffect(() => {
+    if (phase === 'chat' && !hasAnnouncedStreak) {
+      setThread(prev => prev.concat({
+        id: newId(),
+        role: 'assistant',
+        author: 'Genie',
+        content: nl2br(`🔥 Lamp lit <b>${streak}</b> day${streak>1?'s':''} in a row.\nDoors opened: <b>${streak*3}</b>.\nProtect the flame tonight. ✨`),
+        likedByUser:false, likedByGenie:false
+      }))
+      setHasAnnouncedStreak(true)
+    }
+  }, [phase, streak, hasAnnouncedStreak])
 
   const handlePickVibe = (v) => {
     setVibe(v)
@@ -425,7 +461,6 @@ const [thread, setThread] = useState([
     const chosen = lastWish || currentWish
     if (chosen) {
       setCurrentWish(chosen)
-      // go straight to checklist if we already had steps; else questionnaire
       if ((steps || []).length) {
         setPhase('checklist')
       } else {
@@ -448,20 +483,6 @@ const [thread, setThread] = useState([
     setThread(prev => prev.concat({ role:'assistant', content: "New star, new path. I’m listening…" }))
   }
 
-  // Questionnaire → Checklist
-  const handleQuestComplete = (data) => {
-    setCurrentWish(data)
-    setLastWish(data)
-    const generated = generateChecklist(data)
-    setSteps(generated)
-    setPhase('checklist')
-    setThread(prev => prev.concat(
-      { role:'assistant', content: `Wish set: <b>${escapeHTML(data.wish)}</b>.` },
-      { role:'assistant', content: pick(GenieLang.rewards) },
-      { role:'assistant', content: `Do these three now, then we talk. ${firstName}, speed > perfect.` }
-    ))
-  }
-
   // Checklist interactions
   const toggleStep = (id) => {
     setSteps(prev => prev.map(s => s.id === id ? {...s, done: !s.done} : s))
@@ -482,71 +503,92 @@ const [thread, setThread] = useState([
       content: `We’ll refine live. Tell me where you’re stuck on “${escapeHTML(currentWish?.wish || 'your goal')}”.`
     }))
   }
-const onToggleLike = (id, who) => {
-  setThread(prev => prev.map(m => {
-    if (m.id !== id) return m
-    if (who === 'user') return { ...m, likedByUser: !m.likedByUser }
-    if (who === 'genie') return { ...m, likedByGenie: !m.likedByGenie }
-    return m
-  }))
-}
 
-// Genie sometimes likes your message (wins or at random)
-const maybeGenieLikes = (msg) => {
-  const t = (msg.content || '').toLowerCase()
-  const isWin = /(done|shipped|published|posted|sold|launched|emailed|uploaded|completed|locked in)/.test(t)
-  const shouldLike = isWin || Math.random() < 0.25
-  if (!shouldLike) return
-  // flip likedByGenie on that message id
-  setThread(prev => prev.map(m => m.id === msg.id ? ({ ...m, likedByGenie:true }) : m))
-}
-
-const handleSend = async (text) => {
-  const userMsg = {
-    id: newId(),
-    role: 'user',
-    author: firstName || 'You',
-    content: escapeHTML(text),
-    likedByUser: false,
-    likedByGenie: false
+  const onToggleLike = (id, who) => {
+    setThread(prev => prev.map(m => {
+      if (m.id !== id) return m
+      if (who === 'user') return { ...m, likedByUser: !m.likedByUser }
+      if (who === 'genie') return { ...m, likedByGenie: !m.likedByGenie }
+      return m
+    }))
   }
-  setThread(prev => prev.concat(userMsg))
-  maybeGenieLikes(userMsg)
 
-try {
-  const reply = await genieReply({ text, thread, firstName, currentWish, vibe })
-  const topic = (currentWish?.wish || text || 'this').toLowerCase().slice(0, 80);
-  const pretty = formatGenieReply(reply, topic);
-  const aiMsg = {
-    id: newId(),
-    role: 'assistant',
-    author: 'Genie',
-    content: nl2br(escapeHTML(pretty)),  // keep <br/> for lines
-    likedByUser: false,
-    likedByGenie: false
+  // Streak bump on first activity of a new day
+  function bumpStreakOnActivity() {
+    const { count, last } = loadStreak()
+    const today = getToday()
+    if (last === today) return count // already counted today
+    // continued streak if last was yesterday; else reset
+    const next = (last === getYesterday()) ? count + 1 : 1
+    saveStreak(next, today)
+    setStreak(next)
+    // celebrate inside chat
+    setThread(prev => prev.concat({
+      id: newId(),
+      role: 'assistant',
+      author: 'Genie',
+      content: nl2br(`⚡ Daily ignition detected.\nNew streak: <b>${next}</b>.\nKeep shipping today’s micro-move. 🚀`),
+      likedByUser:false, likedByGenie:false
+    }))
+    return next
   }
-  setThread(prev => prev.concat(aiMsg))
-} catch (e) {
-  const errMsg = {
-    id: newId(),
-    role: 'assistant',
-    author: 'Genie',
-    content: escapeHTML("The lamp flickered. Try again."),
-    likedByUser: false,
-    likedByGenie: false
+
+  const maybeGenieLikes = (msg) => {
+    const t = (msg.content || '').toLowerCase()
+    const isWin = /(done|shipped|published|posted|sold|launched|emailed|uploaded|completed|locked in)/.test(t)
+    const shouldLike = isWin || Math.random() < 0.25
+    if (!shouldLike) return
+    setThread(prev => prev.map(m => m.id === msg.id ? ({ ...m, likedByGenie:true }) : m))
   }
-  setThread(prev => prev.concat(errMsg))
-}
-}
 
+  const handleSend = async (text) => {
+    const userMsg = {
+      id: newId(),
+      role: 'user',
+      author: firstName || 'You',
+      content: escapeHTML(text),
+      likedByUser: false,
+      likedByGenie: false
+    }
+    setThread(prev => prev.concat(userMsg))
+    maybeGenieLikes(userMsg)
 
+    // bump streak for today's first action
+    bumpStreakOnActivity()
+
+    try {
+      const reply = await genieReply({ text, thread, firstName, currentWish, vibe })
+      const topic = (currentWish?.wish || text || 'this').toLowerCase().slice(0, 80);
+      const pretty = formatGenieReply(reply, topic);
+      const aiMsg = {
+        id: newId(),
+        role: 'assistant',
+        author: 'Genie',
+        content: nl2br(escapeHTML(pretty)),
+        likedByUser: false,
+        likedByGenie: false
+      }
+      setThread(prev => prev.concat(aiMsg))
+    } catch {
+      const errMsg = {
+        id: newId(),
+        role: 'assistant',
+        author: 'Genie',
+        content: escapeHTML("The lamp flickered. Try again."),
+        likedByUser: false,
+        likedByGenie: false
+      }
+      setThread(prev => prev.concat(errMsg))
+    }
+  }
 
   const resetToNewWish = () => {
     setPhase('vibe')
     setVibe(null)
     setCurrentWish(null)
     setSteps([])
-    setThread([{ role:'assistant', content: injectName(pick(GenieLang.greetings), firstName) }])
+    setThread([{ id:newId(), role:'assistant', author:'Genie', content: injectName(pick(GenieLang.greetings), firstName), likedByUser:false, likedByGenie:false }])
+    setHasAnnouncedStreak(false)
   }
 
   return (
@@ -564,7 +606,7 @@ try {
           </div>
         )}
 
-        {/* Vibe under welcome */}
+        {/* Vibe */}
         {phase === 'vibe' && (
           <div style={styles.card}>
             <p style={styles.lead}>{GenieLang.vibePrompt}</p>
@@ -604,29 +646,28 @@ try {
           />
         )}
 
-        {/* NEW: Checklist */}
-{phase === 'checklist' && (
-  <Checklist
-    wish={currentWish?.wish}
-    micro={currentWish?.micro}
-    steps={steps}
-    onToggle={toggleStep}
-    onComplete={completeChecklist}
-    onSkip={skipChecklist}
-  />
-)}
+        {/* Checklist */}
+        {phase === 'checklist' && (
+          <Checklist
+            wish={currentWish?.wish}
+            micro={currentWish?.micro}
+            steps={steps}
+            onToggle={toggleStep}
+            onComplete={completeChecklist}
+            onSkip={skipChecklist}
+          />
+        )}
 
-
-        {/* Magical Chat */}
-{phase === 'chat' && (
-  <ChatConsole
-    thread={thread}
-    onSend={handleSend}
-    onReset={resetToNewWish}
-    onToggleLike={onToggleLike}
-    firstName={firstName}
-  />
-)}
+        {/* Chat */}
+        {phase === 'chat' && (
+          <ChatConsole
+            thread={thread}
+            onSend={handleSend}
+            onReset={resetToNewWish}
+            onToggleLike={onToggleLike}
+            firstName={firstName}
+          />
+        )}
       </div>
     </div>
   )
@@ -673,17 +714,14 @@ async function genieReply({ text, thread, firstName, currentWish, vibe, intent }
   return data.reply || 'OK.'
 }
 
-
 /* =========================
    Styles (inline for portability)
    ========================= */
 const styles = {
-  /* ===== Portal Header ===== */
   portalHeader: { textAlign:'left', marginBottom:18 },
   portalTitle: { fontSize:34, fontWeight:900, margin:0, color:'#ffd600', letterSpacing:.3 },
   portalSubtitle: { fontSize:18, opacity:.92, marginTop:6 },
 
-  /* ===== Page + Container ===== */
   wrap: {
     minHeight:'100vh',
     color:'#f2f2f6',
@@ -692,7 +730,6 @@ const styles = {
   },
   container: { maxWidth: 860, margin:'0 auto' },
 
-  /* ===== Cards ===== */
   card: {
     background:'#171826',
     border:'1px solid rgba(255,255,255,0.06)',
@@ -701,18 +738,15 @@ const styles = {
     boxShadow:'0 18px 40px rgba(0,0,0,.45), inset 0 0 0 1px rgba(255,255,255,0.02)'
   },
 
-  /* ===== Typography ===== */
   h2: { margin:0, fontSize:28, fontWeight:900, letterSpacing:.3 },
   h3: { marginTop:0, fontSize:22, fontWeight:850 },
   lead: { fontSize:18, opacity:.96, lineHeight:1.45 },
   subtle: { fontSize:15, opacity:.86, lineHeight:1.45 },
   mini: { fontSize:13, opacity:.82 },
 
-  /* ===== Layout bits ===== */
   row: { display:'flex', gap:12, marginTop:12, flexWrap:'wrap' },
   vibeRow: { display:'grid', gridTemplateColumns:'repeat(3, 1fr)', gap:12, marginTop:12 },
 
-  /* ===== Buttons ===== */
   vibeBtn: {
     padding:'14px 16px',
     borderRadius:14,
@@ -723,66 +757,54 @@ const styles = {
     textAlign:'center',
     boxShadow:'inset 0 0 0 1px rgba(255,255,255,0.02), 0 6px 16px rgba(0,0,0,.45)'
   },
-   // In styles
-/* Messenger rows */
-rowAI:   { display:'flex', gap:10, alignItems:'flex-start', margin:'10px 0' },
-rowUser: { display:'flex', gap:10, alignItems:'flex-start', margin:'10px 0', flexDirection:'row-reverse' },
-avatar:  { width:32, height:32, borderRadius:'50%', background:'rgba(255,255,255,0.06)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:18 },
-nameLabelAI: {
-  fontSize: 12,
-  opacity: .7,
-  margin: '0 0 4px 4px',
-  textAlign: 'left'
-},
-nameLabelUser: {
-  fontSize: 12,
-  opacity: .7,
-  margin: '0 4px 4px 0',
-  textAlign: 'right'
-},
 
+  // Messenger rows
+  rowAI:   { display:'flex', gap:10, alignItems:'flex-start', margin:'10px 0' },
+  rowUser: { display:'flex', gap:10, alignItems:'flex-start', margin:'10px 0', flexDirection:'row-reverse' },
+  avatar:  { width:32, height:32, borderRadius:'50%', background:'rgba(255,255,255,0.06)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:18 },
+  nameLabelAI: { fontSize: 12, opacity: .7, margin: '0 0 4px 4px', textAlign: 'left' },
+  nameLabelUser: { fontSize: 12, opacity: .7, margin: '0 4px 4px 0', textAlign: 'right' },
 
-reactRow: { display:'flex', gap:8, alignItems:'center', margin:'6px 6px 0 6px' },
-likeBtn: {
-  border:'1px solid rgba(255,255,255,0.14)',
-  background:'transparent',
-  color:'#e6e6ee',
-  borderRadius:999,
-  padding:'2px 8px',
-  fontSize:12,
-  cursor:'pointer'
-},
-likeBtnActive: {
-  border:'1px solid rgba(255,214,0,0.6)',
-  background:'rgba(255,214,0,0.12)',
-  color:'#ffd600',
-  borderRadius:999,
-  padding:'2px 8px',
-  fontSize:12,
-  cursor:'pointer'
-},
-likeBadge: {
-  fontSize:12,
-  color:'#ffd600',
-  background:'rgba(255,214,0,0.10)',
-  border:'1px solid rgba(255,214,0,0.35)',
-  borderRadius:999,
-  padding:'2px 8px'
-},
+  reactRow: { display:'flex', gap:8, alignItems:'center', margin:'6px 6px 0 6px' },
+  likeBtn: {
+    border:'1px solid rgba(255,255,255,0.14)',
+    background:'transparent',
+    color:'#e6e6ee',
+    borderRadius:999,
+    padding:'2px 8px',
+    fontSize:12,
+    cursor:'pointer'
+  },
+  likeBtnActive: {
+    border:'1px solid rgba(255,214,0,0.6)',
+    background:'rgba(255,214,0,0.12)',
+    color:'#ffd600',
+    borderRadius:999,
+    padding:'2px 8px',
+    fontSize:12,
+    cursor:'pointer'
+  },
+  likeBadge: {
+    fontSize:12,
+    color:'#ffd600',
+    background:'rgba(255,214,0,0.10)',
+    border:'1px solid rgba(255,214,0,0.35)',
+    borderRadius:999,
+    padding:'2px 8px'
+  },
 
-bubbleAI: {
-  maxWidth:'85%',
-  background:'rgba(255,255,255,0.04)',
-  padding:'12px 14px',
-  borderRadius:12,
-  border:'1px solid rgba(255,255,255,0.08)',
-  margin:'8px 0',
-  backdropFilter:'blur(2px)',
-  fontWeight: 600,          // was 700
-  letterSpacing: .1,
-  lineHeight: 1.7           // more air for short lines
-},
-
+  bubbleAI: {
+    maxWidth:'85%',
+    background:'rgba(255,255,255,0.04)',
+    padding:'12px 14px',
+    borderRadius:12,
+    border:'1px solid rgba(255,255,255,0.08)',
+    margin:'8px 0',
+    backdropFilter:'blur(2px)',
+    fontWeight: 600,
+    letterSpacing: .1,
+    lineHeight: 1.7
+  },
 
   btn: {
     padding:'12px 16px',
@@ -805,7 +827,6 @@ bubbleAI: {
     cursor:'pointer'
   },
 
-  /* ===== Inputs ===== */
   input: {
     width:'100%',
     padding:'12px 14px',
@@ -828,7 +849,6 @@ bubbleAI: {
     boxShadow:'0 0 14px rgba(255,214,0,0.07)'
   },
 
-  /* ===== Last Wish pill ===== */
   lastWish: {
     marginTop:12,
     padding:12,
@@ -837,13 +857,11 @@ bubbleAI: {
     background:'linear-gradient(180deg, rgba(255,214,0,0.05), rgba(255,214,0,0.02))'
   },
 
-  /* ===== Checklist ===== */
   checklist: { listStyle:'none', paddingLeft:0, margin:'8px 0 12px' },
   checkItem: { padding:'10px 12px', borderRadius:12, background:'rgba(255,255,255,0.03)', marginBottom:8, border:'1px solid rgba(255,255,255,0.06)' },
   checkLabel: { display:'flex', gap:10, alignItems:'center', cursor:'pointer' },
   checkbox: { width:18, height:18, accentColor:'#ffd600' },
 
-  /* ===== Chat ===== */
   chatWrap: { display:'flex', flexDirection:'column', gap:12 },
   chatStream: {
     background:'linear-gradient(180deg, #101221 0%, #0b0c15 100%)',
@@ -855,7 +873,7 @@ bubbleAI: {
     overflowY:'auto',
     boxShadow:'0 14px 34px rgba(0,0,0,.45)'
   },
- 
+
   bubbleUser: {
     maxWidth:'85%',
     background:'rgba(255,214,0,0.08)',
@@ -864,14 +882,13 @@ bubbleAI: {
     border:'1px solid rgba(255,214,0,0.18)',
     margin:'8px 0 8px auto'
   },
-bubbleText: {
-  fontSize: 15,
-  lineHeight: 1.6,
-  whiteSpace: 'normal',  // we’re using <br/>
-  wordBreak: 'break-word',
-   overflowWrap: 'anywhere',
-},
-
+  bubbleText: {
+    fontSize: 15,
+    lineHeight: 1.6,
+    whiteSpace: 'normal',
+    wordBreak: 'break-word',
+    overflowWrap: 'anywhere',
+  },
 
   chatInputRow: { display:'flex', gap:10, alignItems:'center' },
   chatInput: {
@@ -898,9 +915,6 @@ function titleCase(s){ return s ? s[0].toUpperCase() + s.slice(1).toLowerCase() 
 function escapeHTML(s=''){ return s.replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])) }
 
 /* =========================
-   Checklist generation (simple, sharp)
-   ========================= */
-/* =========================
    Checklist generation — references wish, block, micro
    ========================= */
 function generateChecklist({ wish='', block='', micro='' }) {
@@ -910,7 +924,6 @@ function generateChecklist({ wish='', block='', micro='' }) {
   const w = W.toLowerCase()
   const b = B.toLowerCase()
 
-  // Intent classifier (very lightweight)
   const has = (s, keys) => keys.some(k => s.includes(k))
   const intent =
     has(w, ['revenue','sales','sell','checkout','order','buy','customers','aov','payhip','shopify','product','offer']) ? 'sales' :
@@ -923,54 +936,28 @@ function generateChecklist({ wish='', block='', micro='' }) {
     has(w, ['meditation','audio','track','hypnosis','bundle'])                                                   ? 'product' :
     'generic'
 
-  // Step 1 — remove friction tied to the block, explicitly reference it
   let step1 = B
     ? `Neutralize the block “${B}”. Set a 30-minute focus window and remove one friction (phone off / tab close / clear desk).`
     : `Set a 30-minute focus window. Phone on DND. One tab only.`
 
   if (has(b, ['overwhelm','busy','time']))      step1 = `Calendar 30 minutes for "${W}". Phone on DND. One tab only.`
-  if (has(b, ['fear','scared','doubt','confidence']))
-                                                step1 = `2-minute pre-game: breathe, visualize "${W}" done, press go.`
-  if (has(b, ['tech','setup','domain','pixel','tracking']))
-                                                step1 = `Open the tool you need for "${W}". Complete one required field. Save once.`
+  if (has(b, ['fear','scared','doubt','confidence'])) step1 = `2-minute pre-game: breathe, visualize "${W}" done, press go.`
+  if (has(b, ['tech','setup','domain','pixel','tracking'])) step1 = `Open the tool you need for "${W}". Complete one required field. Save once.`
   if (has(b, ['money','budget','cost']))        step1 = `Pick the $0 version to advance "${W}". Ship first, upgrade later.`
-  if (has(b, ['perfection','perfect','procrast'])) 
-                                                step1 = `Draft ugly first for "${W}". 15-minute limit. Done > perfect.`
+  if (has(b, ['perfection','perfect','procrast'])) step1 = `Draft ugly first for "${W}". 15-minute limit. Done > perfect.`
 
-  // Step 2 — force the user’s micro-move (always referenced)
   const step2 = M ? `Do your micro-move now: "${M}". Start timer (15m).` : `Choose the smallest action toward “${W}” and do it now (15m).`
 
-  // Step 3 — intent-specific publish/proof step (referencing the wish)
   let step3 = `Publish proof of progress for “${W}” (one message, one person, one platform).`
-
   switch (intent) {
-    case 'sales':
-      step3 = `Publish one offer link for “${W}” (story/post/email). First line = CTA.`;
-      break
-    case 'video':
-      step3 = `Record one 30–45s clip about “${W}”. Upload with first-line CTA.`;
-      break
-    case 'email':
-      step3 = `Send one 5-sentence email about “${W}” with a single CTA link.`;
-      break
-    case 'ads':
-      step3 = `Launch 1 ad set for “${W}”: 1 audience, 1 creative. Turn it on.`;
-      break
-    case 'landing':
-      step3 = `Ship the page for “${W}”: add hero headline + one gold CTA. Go live.`;
-      break
-    case 'seo':
-      step3 = `Publish an outline post for “${W}” (H1/H2 + 200 words). Link it in nav.`;
-      break
-    case 'social':
-      step3 = `Post one social update about “${W}” with a hard CTA in line 1.`;
-      break
-    case 'product':
-      step3 = `Update the product page for “${W}”: 3 bullets + hero image + buy link. Publish.`;
-      break
-    default:
-      // keep default above
-      break
+    case 'sales':   step3 = `Publish one offer link for “${W}” (story/post/email). First line = CTA.`; break
+    case 'video':   step3 = `Record one 30–45s clip about “${W}”. Upload with first-line CTA.`; break
+    case 'email':   step3 = `Send one 5-sentence email about “${W}” with a single CTA link.`; break
+    case 'ads':     step3 = `Launch 1 ad set for “${W}”: 1 audience, 1 creative. Turn it on.`; break
+    case 'landing': step3 = `Ship the page for “${W}”: add hero headline + one gold CTA. Go live.`; break
+    case 'seo':     step3 = `Publish an outline post for “${W}” (H1/H2 + 200 words). Link it in nav.`; break
+    case 'social':  step3 = `Post one social update about “${W}” with a hard CTA in line 1.`; break
+    case 'product': step3 = `Update the product page for “${W}”: 3 bullets + hero image + buy link. Publish.`; break
   }
 
   return [
