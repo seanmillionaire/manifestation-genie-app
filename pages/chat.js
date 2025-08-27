@@ -12,7 +12,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
    ========================= */
 const GenieLang = {
   greetings: [
-    "The lamp glows… your Genie is here. ✨ What’s stirring in your heart today?",
+    "The lamp glows… your Genie is here. ✨ What’s stirring in your heart today {firstName}?",
     "Rub the lamp 🔮 — let’s spark some magic.",
     "The stars whispered your name… shall we begin?",
     "The portal is open 🌌 — step inside, Friend."
@@ -74,7 +74,7 @@ function Questionnaire({ initial, onComplete, vibe }) {
       </div>
 
       <div style={styles.card}>
-        <h3 style={styles.h3}>What is Your #1 Goal for Today?</h3>
+        <h3 style={styles.h3}>What is Your #1 Goal for Today {firstName}?</h3>
         <p style={styles.subtle}>{GenieLang.questPrompts.wish}</p>
         <textarea
           value={wish}
