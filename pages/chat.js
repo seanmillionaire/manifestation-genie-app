@@ -41,44 +41,7 @@ const todayStr = () => new Date().toISOString().slice(0,10)
 const pick = (arr) => arr[Math.floor(Math.random() * arr.length)]
 const STORAGE_KEY = 'mg_chat_state_v1'
 const NAME_KEY = 'mg_first_name'
-// Put this inside ChatPage, after: const [firstName, setFirstName] = useState(getFirstNameFromCache())
-useEffect(() => {
-  let mounted = true
-  ;(async () => {
-    const { data: { session } } = await supabase.auth.getSession()
-    const userId = session?.user?.id
-    let fn = null
 
-    // 1) Try your app profile table (best source)
-    if (userId) {
-      const { data: p } = await supabase
-        .from('profiles')
-        .select('full_name')
-        .eq('id', userId)
-        .maybeSingle()
-      if (p?.full_name) fn = String(p.full_name).trim().split(' ')[0]
-    }
-
-    // 2) Fallbacks to auth metadata if profile is empty
-    if (!fn) {
-      const meta = session?.user?.user_metadata || {}
-      fn =
-        (meta.full_name?.trim().split(' ')[0]) ||
-        (meta.name?.trim().split(' ')[0]) ||
-        meta.given_name || // some providers use this
-        null
-    }
-
-    // 3) Final fallback to email local part
-    if (!fn) fn = session?.user?.email?.split('@')[0] || 'Friend'
-
-    if (mounted) {
-      setFirstName(fn)
-      try { localStorage.setItem('mg_first_name', fn) } catch {}
-    }
-  })()
-  return () => { mounted = false }
-}, [])
 
 const injectName = (s, name) => (s || '').replaceAll('{firstName}', name || 'Friend')
 const loadState = () => {
