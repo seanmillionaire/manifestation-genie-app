@@ -230,6 +230,21 @@ function ChatConsole({ thread, onSend, onReset, typingText }) {
 /* =========================
    Main Page
    ========================= */
+/* Convert UI thread (which may contain HTML) into plain OpenAI messages */
+function toPlainMessages(thread) {
+  const strip = (s='') => s
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/?[^>]+(>|$)/g, '') // strip tags
+    .replace(/\s+/g, ' ')
+    .trim()
+
+  return thread.map(m => ({
+    role: m.role,                           // 'user' or 'assistant'
+    content: strip(m.content || '')
+  }))
+}
+
+           
 export default function ChatPage() {
   // FIRST NAME: cache first; hydrate from Supabase (profiles → metadata → email)
   const [firstName, setFirstName] = useState(getFirstNameFromCache())
@@ -375,11 +390,26 @@ export default function ChatPage() {
     }))
   }
 
-  const handleSend = async (text) => {
-    setThread(prev => prev.concat({ role:'user', content: escapeHTML(text) }))
-    const reply = await fakeGenieReply(text, { vibe, currentWish }) // stub; replace with /api/chat
-    setThread(prev => prev.concat({ role:'assistant', content: reply }))
+const handleSend = async (text) => {
+  // Show the user message immediately
+  setThread(prev => prev.concat({ role:'user', content: escapeHTML(text) }))
+
+  try {
+    const reply = await genieReply({
+      text,
+      thread,                // current thread BEFORE adding assistant reply
+      firstName,
+      currentWish,
+      vibe
+    })
+
+    // API already returns a one-liner (no HTML). Escape before rendering.
+    setThread(prev => prev.concat({ role:'assistant', content: escapeHTML(reply) }))
+  } catch (e) {
+    setThread(prev => prev.concat({ role:'assistant', content: escapeHTML("The lamp flickered. Try again.") }))
   }
+}
+
 
   const resetToNewWish = () => {
     setPhase('vibe')
@@ -482,12 +512,34 @@ function VibeButton({ label, emoji, onClick }) {
    Fake reply (stub)
    Replace with real /api/chat call
    ========================= */
-async function fakeGenieReply(text, { vibe, currentWish }) {
-  const vibeLine = vibe ? `${emojiFor(vibe)} ${titleCase(vibe)} ` : ''
-  const wishLine = currentWish?.wish ? `Your target is <b>${escapeHTML(currentWish.wish)}</b>. ` : ''
-  return `${vibeLine}Got it. ${wishLine}Do the next small move (“<i>${escapeHTML(currentWish?.micro || 'one small step')}</i>”). 
-  Then say: <b>“Genie, step done.”</b> I’ll open the next door. ✨`
+/* Hit /api/chat (your one-liner operator Genie) */
+async function genieReply({ text, thread, firstName, currentWish, vibe }) {
+  // Build context object the API expects
+  const context = {
+    vibe: vibe || null,
+    wish: currentWish?.wish || null,
+    block: currentWish?.block || null,
+    micro: currentWish?.micro || null,
+  }
+
+  const resp = await fetch('/api/chat', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      userName: firstName || null,                 // <-- your API uses this
+      hmUrl: 'https://hypnoticmeditations.ai',     // optional; pass if you want HM mentions
+      context,                                     // optional context
+      messages: [
+        ...toPlainMessages(thread),
+        { role: 'user', content: text }
+      ]
+    })
+  })
+  const data = await resp.json()
+  if (!resp.ok) throw new Error(data?.error || 'API error')
+  return data.reply || 'OK.'
 }
+
 
 /* =========================
    Styles (inline for portability)
@@ -538,6 +590,19 @@ const styles = {
     textAlign:'center',
     boxShadow:'inset 0 0 0 1px rgba(255,255,255,0.02), 0 6px 16px rgba(0,0,0,.45)'
   },
+   // In styles
+bubbleAI: {
+  maxWidth:'85%',
+  background:'rgba(255,255,255,0.04)',
+  padding:'12px 14px',
+  borderRadius:12,
+  border:'1px solid rgba(255,255,255,0.08)',
+  margin:'8px 0',
+  backdropFilter:'blur(2px)',
+  fontWeight: 700,                 // <— punchier
+  letterSpacing: .1
+},
+
   btn: {
     padding:'12px 16px',
     borderRadius:14,
