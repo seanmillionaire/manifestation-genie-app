@@ -92,15 +92,16 @@ function Style(){
         text-align:center;
       }
 
-      .panelTitle{
-        margin:0 0 16px;
-        font-size:15px;
-        line-height:1;
-        font-weight:900;
-        text-transform:uppercase;
-        letter-spacing:.12em;
-        color:#B58900; /* subtle golden heading */
-      }
+.panelTitle {
+  margin:0 0 16px;
+  font-size:15px;
+  line-height:1;
+  font-weight:900;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  color:#FFD600; /* match Send button color */
+}
+
 
       /* Form */
       .login-form{ width:100%; max-width:520px; margin:6px auto 0; }
