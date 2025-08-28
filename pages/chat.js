@@ -1,9 +1,13 @@
-// pages/chat.js — Manifestation Genie (Light Theme, Likes + New Wish -> Vibe Select, no logout)
+// pages/chat.js — Manifestation Genie
+// Flow: welcome → vibe → resumeNew → questionnaire → checklist → chat
+// Supabase name integration + localStorage persistence (per session)
 
 import { useEffect, useRef, useState } from 'react'
-import { useRouter } from 'next/router'
 import { supabase } from '../src/supabaseClient'
 
+/* =========================
+   Signature Language Kit
+   ========================= */
 const GenieLang = {
   greetings: [
     "The lamp glows… your Genie is here. ✨ What’s stirring in your heart today, {firstName}?",
@@ -11,273 +15,107 @@ const GenieLang = {
     "The stars whispered your name, {firstName}… shall we begin?",
     "The portal is open 🌌 — step inside, {firstName}."
   ],
-  smallNudge:
-    "Tip: Ask for one thing in one sentence. Short, specific, alive. I’ll handle the heavy lifting.",
+  vibePrompt: "Pick your vibe: 🔥 Bold, 🙏 Calm, 💰 Rich. What are we feeling today?",
+  resumeOrNew: "Continue the last wish, or spark a fresh one?",
+  resumeLabel: "Continue last wish",
+  newLabel: "Start a new wish",
+  questPrompts: {
+    wish:  "What’s the #1 thing you want to manifest? Say it like you mean it.",
+    block: "What’s blocking you? Drop the excuse in one line.",
+    micro: "What’s 1 micro-move you can make today? Something small."
+  },
+  rewards: [
+    "YES! That’s the one. Door unlocked.",
+    "Love it. The signal’s clear — time to move.",
+    "Locked in. You're ready. Execute time.",
+    "Noted. The window’s open. Step through."
+  ],
+  closing: "The lamp dims… but the magic stays with you.",
+  tinyCTA: "New wish or keep walking the path we opened?"
 }
 
-/* Storage keys — do NOT touch Supabase auth keys (they start with `sb-...`) */
-const STORAGE_KEY = 'mg_chat_history_v3'
-const NAME_KEY = 'mg_first_name'
-
-const newId = () => Math.random().toString(36).slice(2,10)
+/* =========================
+   Helpers
+   ========================= */
+const todayStr = () => new Date().toISOString().slice(0,10)
 const pick = (arr) => arr[Math.floor(Math.random() * arr.length)]
-const injectName = (t, name='Friend') => t.replaceAll('{firstName}', name)
-const escapeHTML = (s='') =>
-  s.replace(/[&<>"]/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[m]))
+const STORAGE_KEY = 'mg_chat_state_v1'
+const NAME_KEY = 'mg_first_name'
+const newId = () => Math.random().toString(36).slice(2,10)
+const injectName = (s, name) => (s || '').replaceAll('{firstName}', name || 'Friend')
 
-function loadNameFallback() {
-  try { return localStorage.getItem(NAME_KEY) || 'Friend' } catch { return 'Friend' }
+const loadState = () => {
+  if (typeof window === 'undefined') return null
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null') } catch { return null }
 }
-function loadHistory() {
-  try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]') } catch { return [] }
+const saveState = (state) => {
+  if (typeof window === 'undefined') return
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)) } catch {}
 }
-function saveHistory(messages=[]) {
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(messages)) } catch {}
+const getFirstNameFromCache = () => {
+  if (typeof window === 'undefined') return 'Friend'
+  try {
+    const saved = localStorage.getItem(NAME_KEY)
+    if (saved && saved.trim()) return saved.trim().split(' ')[0]
+  } catch {}
+  return 'Friend'
 }
 
-export default function ChatPage() {
-  const router = useRouter()
-  const [firstName, setFirstName] = useState('Friend')
-  const [messages, setMessages] = useState([])
-  const [input, setInput] = useState('')
-  const [loading, setLoading] = useState(false)
-  const streamRef = useRef(null)
+// streak announce key (once/day message)
+const STREAK_ANNOUNCED_KEY = 'mg_streak_announced_date'
+function getAnnouncedDate(){ try { return localStorage.getItem(STREAK_ANNOUNCED_KEY) || null } catch { return null } }
+function setAnnouncedToday(){ try { localStorage.setItem(STREAK_ANNOUNCED_KEY, getToday()) } catch {} }
 
-  // Load name from profile or localStorage
-  useEffect(() => {
-    let mounted = true
-    ;(async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession()
-        if (session?.user?.id) {
-          const { data, error } = await supabase
-            .from('profiles')
-            .select('first_name')
-            .eq('id', session.user.id)
-            .single()
-          if (!error && data?.first_name && mounted) {
-            setFirstName(data.first_name)
-            try { localStorage.setItem(NAME_KEY, data.first_name) } catch {}
-            return
-          }
-        }
-      } catch {}
-      if (mounted) setFirstName(loadNameFallback())
-    })()
-    return () => { mounted = false }
-  }, [])
-
-  // Load / seed conversation
-  useEffect(() => {
-    const hist = loadHistory()
-    if (hist.length) setMessages(hist)
-    else {
-      const seed = [
-        { id:newId(), role:'assistant', content:injectName(pick(GenieLang.greetings), loadNameFallback()) },
-        { id:newId(), role:'assistant', content:GenieLang.smallNudge },
-      ]
-      setMessages(seed); saveHistory(seed)
-    }
-  }, [])
-
-  // Auto-scroll
-  useEffect(() => {
-    if (streamRef.current) streamRef.current.scrollTop = streamRef.current.scrollHeight
-  }, [messages, loading])
-
-  // Send message
-  async function handleSend() {
-    const text = input.trim()
-    if (!text || loading) return
-    const userMsg = { id:newId(), role:'user', content:text }
-    const next = [...messages, userMsg]
-    setMessages(next); saveHistory(next); setInput(''); setLoading(true)
-    try {
-      const res = await fetch('/api/chat', {
-        method:'POST',
-        headers:{ 'Content-Type':'application/json' },
-        body: JSON.stringify({
-          message: text,
-          history: next.map(({ role, content }) => ({ role, content })),
-          firstName
-        })
-      })
-      if (!res.ok) throw new Error('Network error')
-      const data = await res.json()
-      const reply = (data?.reply || '').trim() || "✨ Noted. Give me one line: What’s the exact outcome you want?"
-      const botMsg = { id:newId(), role:'assistant', content:reply }
-      const newer = [...next, botMsg]
-      setMessages(newer); saveHistory(newer)
-    } catch {
-      const errMsg = { id:newId(), role:'assistant', content:"⚠️ The lamp flickered. Try again in a moment." }
-      const newer = [...next, errMsg]
-      setMessages(newer); saveHistory(newer)
-    } finally {
-      setLoading(false)
-    }
+// formatting helpers
+const toSocialLines = (text='', wordsPerLine=9) => {
+  const soft = text.replace(/\r/g,'').replace(/([.!?])\s+/g,'$1\n').replace(/\s+[-–—]\s+/g,'\n')
+  const out = []
+  for (const block of soft.split(/\n+/)) {
+    const words = block.trim().split(/\s+/).filter(Boolean)
+    for (let i=0; i<words.length; i+=wordsPerLine) out.push(words.slice(i,i+wordsPerLine).join(' '))
   }
-
-  // Like toggle (persisted)
-  function toggleLike(id) {
-    const newer = messages.map(m => m.id === id ? { ...m, liked: !m.liked } : m)
-    setMessages(newer); saveHistory(newer)
-  }
-
-  // New Wish -> clear only our chat thread and navigate to the flow entry
-  function handleNewWish() {
-    try { localStorage.removeItem(STORAGE_KEY) } catch {}
-    setMessages([]); setInput('')
-    // Navigate to the Vibe Select entry without touching auth
-    // Your index page should read ?start=vibe and show the vibe screen,
-    // then progress to questionnaire -> checklist -> chat.
-    router.push('/flow')
-  }
-
-  function handleKey(e) {
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend() }
-  }
-
-  return (
-    <div style={styles.wrap}>
-      <div style={styles.container}>
-        <header style={styles.portalHeader}>
-          <h1 style={styles.portalTitle}>Your Personal AI Genie ✨</h1>
-          <p style={styles.portalSubtitle}>This is your daily portal to manifest your dreams into reality.</p>
-        </header>
-
-        <div style={styles.chatWrap}>
-          <div style={styles.chatStream} ref={streamRef}>
-            {messages.map(m => {
-              const isUser = m.role === 'user'
-              return (
-                <div key={m.id} style={isUser ? styles.rowUser : styles.rowAI}>
-                  {!isUser && (
-                    <img
-                      alt="Genie"
-                      src="https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/svg/1f9de.svg"
-                      style={styles.avatar}
-                    />
-                  )}
-                  <div style={isUser ? styles.bubbleUser : styles.bubbleAI}>
-                    {!isUser && <div style={styles.nameLabelAI}>Genie</div>}
-                    {isUser && <div style={styles.nameLabelUser}>{firstName}</div>}
-                    <div style={styles.bubbleText} dangerouslySetInnerHTML={{ __html: escapeHTML(m.content) }} />
-                    {!isUser && (
-                      <div style={{ marginTop: 8 }}>
-                        <button
-                          type="button"
-                          style={{ ...styles.likeBtn, ...(m.liked ? styles.likeBtnActive : {}) }}
-                          onClick={() => toggleLike(m.id)}
-                          aria-pressed={m.liked ? 'true' : 'false'}
-                        >
-                          👍 Like
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )
-            })}
-            {loading && (
-              <div style={styles.rowAI}>
-                <img
-                  alt="Genie"
-                  src="https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/svg/1f9de.svg"
-                  style={styles.avatar}
-                />
-                <div style={styles.bubbleAI}>
-                  <div style={styles.nameLabelAI}>Genie</div>
-                  <div style={styles.bubbleText}>…typing magic</div>
-                </div>
-              </div>
-            )}
-          </div>
-
-          <div style={styles.chatInputRow}>
-            <input
-              style={styles.chatInput}
-              placeholder="Speak to your Genie… 🧞‍♀️"
-              value={input}
-              onChange={(e)=>setInput(e.target.value)}
-              onKeyDown={handleKey}
-              disabled={loading}
-            />
-            <button style={styles.btn} onClick={handleSend} disabled={loading || !input.trim()}>
-              {loading ? 'Sending…' : 'Send'}
-            </button>
-            <button style={styles.btnGhost} onClick={handleNewWish} disabled={loading}>
-              New wish
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  )
+  return out.join('\n')
 }
+const nl2br = (s='') => s.replace(/\n/g,'<br/>')
 
-const styles = {
-  wrap: { minHeight:'100vh', background:'#ffffff', color:'#111111', padding:'24px' },
-  container: { maxWidth: 980, margin: '0 auto' },
-
-  portalHeader: { textAlign:'left', marginBottom:18 },
-  portalTitle: { fontSize:32, fontWeight:900, margin:0, color:'#111', letterSpacing:.2 },
-  portalSubtitle: { fontSize:16, color:'#475569', marginTop:6 },
-
-  chatWrap: {
-    background:'#fff',
-    border:'1px solid #e5e7eb',
-    borderRadius:20,
-    boxShadow:'0 18px 44px rgba(0,0,0,.08)',
-    overflow:'hidden',
-  },
-  chatStream: {
-    padding:20,
-    maxHeight:'calc(100vh - 280px)',
-    overflowY:'auto',
-    background:'#fff'
-  },
-
-  rowAI:   { display:'flex', gap:10, alignItems:'flex-start', margin:'8px 0' },
-  rowUser: { display:'flex', gap:10, alignItems:'flex-start', margin:'8px 0', justifyContent:'flex-end' },
-
-  avatar: { width:28, height:28, borderRadius:'50%', flex:'0 0 auto' },
-  nameLabelAI: { fontSize:12, color:'#475569', margin:'0 0 4px' },
-  nameLabelUser: { fontSize:12, color:'#475569', textAlign:'right', margin:'0 0 4px' },
-
-  bubbleAI: {
-    maxWidth:'86%', background:'#f8fafc', border:'1px solid #e5e7eb',
-    color:'#0f172a', padding:'12px 14px', borderRadius:12
-  },
-  bubbleUser: {
-    maxWidth:'86%', background:'rgba(255,214,0,0.12)',
-    border:'1px solid rgba(255,214,0,0.35)', color:'#111111',
-    padding:'12px 14px', borderRadius:12
-  },
-  bubbleText: { fontSize:15, lineHeight:1.6, wordBreak:'break-word', overflowWrap:'anywhere' },
-
-  likeBtn: {
-    display:'inline-flex', alignItems:'center', gap:6,
-    background:'#fff', border:'1px solid #e5e7eb',
-    borderRadius:999, padding:'4px 10px', fontSize:12, cursor:'pointer'
-  },
-  likeBtnActive:{ background:'rgba(255,214,0,0.18)', border:'1px solid rgba(255,214,0,0.35)' },
-
-  chatInputRow: {
-    display:'flex', gap:10, alignItems:'center',
-    padding:12, borderTop:'1px solid #e5e7eb', background:'#fff'
-  },
-  chatInput: {
-    flex:1, border:'1px solid #e5e7eb', borderRadius:12,
-    padding:'12px 14px', outline:'none', background:'#fff', color:'#111'
-  },
-
-  btn: {
-    padding:'12px 16px', borderRadius:14, border:'2px solid #000',
-    background:'#FFD600', color:'#111', fontWeight:900, letterSpacing:.2,
-    cursor:'pointer', boxShadow:'0 18px 40px rgba(0,0,0,.10)'
-  },
-  btnGhost:{
-    padding:'12px 16px', borderRadius:14, border:'1px solid #e5e7eb',
-    background:'#fff', color:'#111', fontWeight:800, letterSpacing:.2, cursor:'pointer'
-  },
+const cosmicOutros = [
+  "The stars tilt toward {topic}. ✨",
+  "Orbit set; trajectory locked. 🔮",
+  "The lamp hums in your direction. 🌙",
+  "Gravity favors your move. 🌌",
+  "Signals aligned; door unlocked. 🗝️"
+]
+const COSMIC_METAPHORS = [
+  ['visualize','Like plotting stars before a voyage—see it, then sail.'],
+  ['assess','Numbers are telescope lenses—clean them and the path sharpens.'],
+  ['schedule','Calendars are gravity; what you schedule, orbits you.'],
+  ['contact','Knock and the door vibrates; knock twice and it opens.'],
+  ['record','One take beats zero takes—silence never went viral.'],
+  ['post','Ship the signal so your tribe can find its frequency.'],
+  ['email','A good subject line is a comet tail—impossible to ignore.'],
+  ['apply','Forms are portals; boring but they warp reality when complete.'],
+  ['practice','Reps are runways—every pass smooths the landing.'],
+  ['learn','Knowledge is dark matter—unseen, but it holds your galaxy.']
+]
+function explainLine(line=''){
+  const L = line.trim(); if(!L) return ''
+  if (/(The lamp|orbit|stars|gravity|cosmos|Signals aligned)/i.test(L)) return L
+  let add = null
+  for (const [k,meta] of COSMIC_METAPHORS){ if (new RegExp(`\\b${k}\\b`,'i').test(L)){ add = meta; break } }
+  if (!add) add = 'Do it small and soon—momentum makes its own magic.'
+  const hasEmoji = /^[^\w\s]/.test(L)
+  const base = hasEmoji ? L : `✨ ${L}`
+  return `${base}\n<span style="opacity:.8">— ${add}</span>`
 }
+function wittyCloser(topic='this'){
+  const z = [
+    `I’ll hold the lamp; you push the door on “${topic}.”`,
+    `Pro tip: perfection is a black hole—aim for orbit.`,
+    `If the muse calls, let it go to voicemail—ship first.`,
+    `Cosmos math: tiny action × today > giant plan × someday.`,
+  ]
+  return z[Math.floor(Math.random()*z.length)]
+}
+function ensureNoNumberedLists(s=''){ return s.replace(/^\s*\d+\.\s*/gm,'• ').replace(/^\s*-\s*/gm,'• ') }
+function bulletize(s=''){
+  return sassistantជា
