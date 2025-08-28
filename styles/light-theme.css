@@ -1,0 +1,159 @@
+/* styles/light-theme.css — Manifestation Genie • LIGHT SKIN */
+
+/* 0) Theme tokens */
+:root{
+  --bg: #ffffff;
+  --bg-soft: #f8fafc;            /* very light panel bg */
+  --card: #ffffff;
+  --text: #111111;
+  --text-dim: #334155;
+  --muted: #475569;
+  --border: #e5e7eb;
+  --ring: #94a3b8;
+
+  --primary: #FFD600;            /* gold */
+  --primary-text: #111111;       /* dark text on gold */
+  --secondary: #6633CC;          /* purple */
+  --secondary-text: #ffffff;     /* white text on purple */
+  --danger: #ef4444;
+  --success: #16a34a;
+
+  --radius: 14px;
+  --shadow-sm: 0 1px 2px rgba(0,0,0,.05);
+  --shadow-md: 0 6px 24px rgba(0,0,0,.08);
+  --shadow-lg: 0 18px 44px rgba(0,0,0,.10);
+
+  --font: Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+}
+
+/* 1) Global reset to light */
+html, body{
+  background: var(--bg) !important;
+  color: var(--text) !important;
+  font-family: var(--font);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+*{ box-sizing:border-box }
+
+/* Kill left-over dark gradients/panels from old skin */
+[class*="bg-"], .bg, .panel, .container, .layout, .shell {
+  background: unset;
+}
+.hr, hr{ border:0; border-top:1px solid var(--border) }
+
+/* 2) Layout helpers */
+.container, .wrap, .content{
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 24px;
+}
+.card{
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-md);
+}
+
+/* 3) Headings & text */
+h1,h2,h3,h4,h5{ color: var(--text); margin:0 0 8px; line-height:1.2; font-weight:800 }
+p{ color: var(--text-dim); margin:0 0 12px }
+.muted{ color: var(--muted) }
+
+/* 4) Inputs */
+input, select, textarea{
+  width: 100%;
+  background: #fff;
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px 14px;
+  outline: none;
+  box-shadow: var(--shadow-sm);
+  transition: border-color .15s, box-shadow .15s;
+}
+input::placeholder, textarea::placeholder{ color:#64748b }
+input:focus, select:focus, textarea:focus{
+  border-color: var(--ring);
+  box-shadow: 0 0 0 3px rgba(148,163,184,.25);
+}
+
+/* 5) Buttons */
+.button, button, .ui-button, .hm-btn{
+  display:inline-flex; align-items:center; justify-content:center;
+  padding: 12px 18px;
+  border-radius: 12px;
+  border: 2px solid #000;           /* black border = pop on white */
+  font-weight: 800; letter-spacing:.2px;
+  cursor:pointer; text-decoration:none;
+  transition: transform .05s ease, box-shadow .2s;
+}
+.button:active, button:active{ transform: translateY(1px) }
+
+.button--primary, .ui-button-primary, .hm-btn-primary{
+  background: var(--primary);
+  color: var(--primary-text);
+  box-shadow: var(--shadow-lg);
+}
+.button--primary:hover{ filter: brightness(.98) }
+
+.button--secondary, .ui-button-secondary, .hm-btn-secondary{
+  background: var(--secondary);
+  color: var(--secondary-text);
+  border-color: transparent;
+  box-shadow: var(--shadow-md);
+}
+.button--ghost, .ui-button-ghost{
+  background:#fff; color: var(--text);
+  border:1px solid var(--border);
+}
+
+/* 6) Auth / Login panel */
+.auth-card, .login-box, .supabase-auth-ui{
+  background: var(--card) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius) !important;
+  box-shadow: var(--shadow-md) !important;
+  padding: 28px !important;
+}
+.auth-title{ text-align:center; font-size:14px; letter-spacing:.12em; color:#0f172a }
+
+/* 7) Nav & footer */
+.navbar{
+  background:#fff; border-bottom:1px solid var(--border);
+}
+.footer{
+  background:#fff; border-top:1px solid var(--border);
+  color: var(--muted);
+}
+
+/* 8) Widgets */
+.hm-embed{
+  background:#fff !important;
+  border:1px solid var(--border) !important;
+  border-radius:16px !important;
+  box-shadow: var(--shadow-md) !important;
+}
+.hm-preview h2{ color:#0f172a }
+.hm-preview p{ color:var(--muted) }
+.hm-audio-preview{ background:#fff; border:1px solid var(--border) }
+
+/* 9) Chat console / message bubbles */
+.chat-shell{ background:#fff; border:1px solid var(--border); border-radius:16px; box-shadow:var(--shadow-md) }
+.msg-user{ background:#0ea5e9; color:#fff; border-radius:12px; padding:10px 12px }
+.msg-genie{ background:#f1f5f9; color:#0f172a; border:1px solid var(--border); border-radius:12px; padding:10px 12px }
+
+/* 10) Links */
+a{ color:#0b67ff; text-underline-offset:3px }
+a:hover{ text-decoration:underline }
+
+/* 11) Utilities */
+.shadow-md{ box-shadow: var(--shadow-md) }
+.border{ border:1px solid var(--border) }
+.round{ border-radius: var(--radius) }
+.bg-soft{ background: var(--bg-soft) }
+
+/* 12) Hard kill known dark leftovers */
+body, .app, .main, .page, .section, .hero, .chat-console{
+  background: var(--bg) !important;
+}
