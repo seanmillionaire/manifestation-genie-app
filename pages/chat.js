@@ -473,6 +473,22 @@ function toPlainMessages(thread) {
 export default function ChatPage() {
   // FIRST NAME: cache first; hydrate from Supabase (profiles → metadata → email)
   const [firstName, setFirstName] = useState(getFirstNameFromCache())
+{/* Oath Gate — must agree before anything else */}
+{phase === 'oath' && (
+  <ManifestationOath
+    onAgree={()=>{
+      markOathAccepted()
+      // After agreeing, if you want to ALWAYS go to vibe:
+      setPhase('vibe')
+      // Or, if you want to resume last saved phase:
+      // const s = loadState(); setPhase(s?.phase || 'vibe')
+    }}
+    onSkip={()=>{
+      // optional: allow skipping to vibe once (you can remove this to enforce)
+      setPhase('vibe')
+    }}
+  />
+)}
 
   // phases
   const [phase, setPhase] = useState('oath') // gate first, then continue
@@ -526,7 +542,12 @@ useEffect(() => {
         try { localStorage.setItem(NAME_KEY, fn) } catch {}
 
         // 👉 NEW: on login, if no vibe selected yet, show the Vibe screen first
-        setPhase(prev => (prev !== 'chat' && prev !== 'checklist' && prev !== 'questionnaire' && !vibe) ? 'vibe' : prev)
+       + // After login: if oath not accepted, force oath first. Otherwise keep current logic.
+ setPhase(prev => {
+   if (!hasOathAccepted()) return 'oath'
+   // if we already accepted the oath, keep existing behavior:
+   return (prev !== 'chat' && prev !== 'checklist' && prev !== 'questionnaire' && !vibe) ? 'vibe' : prev
+ })
       }
     } catch {}
   })()
@@ -541,6 +562,11 @@ useEffect(() => {
     const s = loadState()
     if (s) {
       setPhase(s.phase || 'welcome')
+       +   if (!hasOathAccepted()) {
+     setPhase('oath')
+   } else {
+     setPhase(s.phase || 'welcome')
+   }
       setVibe(s.vibe || null)
       setCurrentWish(s.currentWish || null)
       setLastWish(s.lastWish || null)
