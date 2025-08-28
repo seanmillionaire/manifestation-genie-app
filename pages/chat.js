@@ -277,16 +277,20 @@ function Questionnaire({ initial, onComplete, vibe, firstName }) {
 }
 
 /* =========================
-   3-Step Checklist (custom to input)
+   Cosmic Checklist (human + metaphor)
    ========================= */
 function Checklist({ wish, micro, steps, onToggle, onComplete, onSkip }) {
   const allDone = steps.length > 0 && steps.every(s => s.done)
 
   return (
-    <div style={styles.card}>
-      <h3 style={styles.h3}>
-        Do this now for: <span style={{opacity:.9}}>"{wish || 'your wish'}"</span>
-      </h3>
+    <div style={styles.cosmicCard}>
+      <div style={styles.scrollHeader}>
+        <div style={styles.scrollBadge}>🔮 Cosmic Scroll</div>
+        <h3 style={styles.scrollTitle}>
+          Do this now for: <span style={{opacity:.9}}>"{wish || 'your wish'}"</span>
+        </h3>
+        <p style={styles.scrollSub}>Three precise moves, each with a reason. Small + soon beats big + later.</p>
+      </div>
 
       <ul style={styles.checklist}>
         {steps.map((s, i) => (
@@ -298,7 +302,10 @@ function Checklist({ wish, micro, steps, onToggle, onComplete, onSkip }) {
                 onChange={() => onToggle(s.id)}
                 style={styles.checkbox}
               />
-              <span>{i+1}. {s.text}</span>
+              <div>
+                <div style={styles.stepTitle}>{i+1}. {s.title}</div>
+                {s.why ? <div style={styles.stepWhy}>↳ {s.why}</div> : null}
+              </div>
             </label>
           </li>
         ))}
@@ -323,6 +330,7 @@ function Checklist({ wish, micro, steps, onToggle, onComplete, onSkip }) {
     </div>
   )
 }
+
 
 /* =========================
    Messenger-style Chat Console (labels + likes)
