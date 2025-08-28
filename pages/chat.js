@@ -724,136 +724,17 @@ useEffect(() => {
           </div>
         )}
 
-{/* VIBE — MAGIC DROP-IN (paste this in place of your current {phase === 'vibe' && ( ... )} block) */}
-{phase === 'vibe' && (() => {
-  // tiny, self-contained styling + helpers (no external deps, no refactors)
-  const v = {
-    card: { position:'relative', overflow:'hidden', ...styles.card, padding:28 },
-    header: { display:'flex', alignItems:'center', justifyContent:'space-between', gap:12, flexWrap:'wrap' },
-    title: { ...styles.h2, letterSpacing:.2 },
-    sub: { ...styles.subtle, marginTop:6 },
-    recPill: {
-      display:'inline-flex', alignItems:'center', gap:6,
-      border:'1px solid rgba(255,214,0,.5)', background:'rgba(255,214,0,.12)',
-      color:'#7A5A00', borderRadius:999, padding:'6px 10px', fontSize:12, fontWeight:800
-    },
-    auraBackdrop: {
-      position:'absolute', inset:-80, pointerEvents:'none',
-      background: 'radial-gradient(60% 60% at 70% 20%, rgba(255,214,0,.22), rgba(255,214,0,0) 60%), radial-gradient(50% 50% at 20% 80%, rgba(147, 51, 234,.18), rgba(147, 51, 234,0) 60%)',
-      filter:'blur(18px)'
-    },
-    vibeRow: { display:'grid', gridTemplateColumns:'repeat(3, minmax(0,1fr))', gap:12, marginTop:16 },
-    vibeBtn: (active) => ({
-      position:'relative',
-      padding:'16px 16px 14px',
-      borderRadius:16,
-      border:'1px solid rgba(17,17,17,0.10)',
-      background:'#FFFFFF',
-      color:'#0B0D12',
-      textAlign:'left',
-      cursor:'pointer',
-      boxShadow: active ? '0 10px 26px rgba(255,214,0,.25), 0 6px 14px rgba(17,17,17,.08)' : '0 6px 14px rgba(17,17,17,0.06)',
-      transition:'transform .08s ease, box-shadow .16s ease, border-color .16s ease',
-    }),
-    vibeBtnHover: { transform:'translateY(-1px)' },
-    emoji: { fontSize:28, lineHeight:1, marginBottom:8 },
-    labelRow: { display:'flex', alignItems:'center', justifyContent:'space-between' },
-    label: { fontWeight:900, letterSpacing:.4, fontSize:14 },
-    recTag: {
-      display:'inline-flex', alignItems:'center', gap:6,
-      border:'1px solid rgba(255,214,0,.5)', background:'rgba(255,214,0,.14)',
-      color:'#7A5A00', borderRadius:999, padding:'2px 8px', fontSize:11, fontWeight:900
-    },
-    desc: { ...styles.mini, marginTop:8 },
-    footer: { display:'flex', alignItems:'center', justifyContent:'space-between', marginTop:16, flexWrap:'wrap', gap:10 },
-    tip: { ...styles.mini },
-    countdown: { ...styles.mini, border:'1px dashed rgba(255,214,0,.55)', background:'rgba(255,214,0,.10)', padding:'6px 8px', borderRadius:10, fontWeight:800 },
-    miniCta: { ...styles.mini, marginTop:12, opacity:.9 }
-  }
-
-  // “FOMO” countdown (resets at local midnight)
-  const now = new Date()
-  const midnight = new Date(now); midnight.setHours(24,0,0,0)
-  const remMs = Math.max(0, midnight - now)
-  const remH = String(Math.floor(remMs/3.6e6)).padStart(2,'0')
-  const remM = String(Math.floor((remMs%3.6e6)/6e4)).padStart(2,'0')
-
-  // soft recommendation (random) — purely presentational
-  const vibes = ['BOLD','CALM','RICH']
-  const rec = vibes[Math.floor(Math.random()*vibes.length)]
-  const recEmoji = (v) => v==='BOLD'?'🔥':(v==='CALM'?'🙏':'💰')
-  const copy = {
-    head: `Choose your aura for today, ${firstName || 'Friend'}.`,
-    sub: "Your vibe tunes the Genie’s advice, tone and push level for the next steps.",
-    desc: {
-      BOLD: "Fearless action. Expect hard pushes, direct prompts and momentum.",
-      CALM: "Clarity + steady focus. Softer prompts, more grounding and decompression.",
-      RICH: "Money moves. Offers, pricing nudges, and revenue-forward guidance."
-    }
-  }
-
-  const VibeCard = ({ label, emoji, desc, highlight }) => (
-    <button
-      onClick={() => handlePickVibe(label)}
-      style={v.vibeBtn(highlight)}
-      onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-1px)'}
-      onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}
-    >
-      <div style={v.emoji}>{emoji}</div>
-      <div style={v.labelRow}>
-        <div style={v.label}>{label}</div>
-        {highlight ? <span style={v.recTag}>Genie recommends</span> : null}
-      </div>
-      <div style={v.desc}>{desc}</div>
-    </button>
-  )
-
-  return (
-    <div style={v.card}>
-      <div style={v.auraBackdrop} />
-
-      <div style={v.header}>
-        <div>
-          <h2 style={v.title}>✨ The Genie awaits…</h2>
-          <p style={v.sub}>{copy.sub}</p>
-        </div>
-        <div style={v.recPill}>
-          <span>Today’s alignment:</span>
-          <span>{recEmoji(rec)} <b>{rec}</b></span>
-        </div>
-      </div>
-
-      <div style={v.vibeRow}>
-        <VibeCard
-          label="BOLD"
-          emoji="🔥"
-          desc={copy.desc.BOLD}
-          highlight={rec === 'BOLD'}
-        />
-        <VibeCard
-          label="CALM"
-          emoji="🙏"
-          desc={copy.desc.CALM}
-          highlight={rec === 'CALM'}
-        />
-        <VibeCard
-          label="RICH"
-          emoji="💰"
-          desc={copy.desc.RICH}
-          highlight={rec === 'RICH'}
-        />
-      </div>
-
-      <div style={v.footer}>
-        <div style={v.tip}>You can switch vibes tomorrow if needed. Choose what serves today’s goal.</div>
-        <div style={v.countdown}>Energy resets in {remH}:{remM}</div>
-      </div>
-
-      <div style={v.miniCta}>Pro tip: hover the vibes to feel their pull, then lock one in to continue →</div>
-    </div>
-  )
-})()}
-
+        {/* Vibe */}
+        {phase === 'vibe' && (
+          <div style={styles.card}>
+            <p style={styles.lead}>{GenieLang.vibePrompt}</p>
+            <div style={styles.vibeRow}>
+              <VibeButton label="BOLD" emoji="🔥" onClick={()=>handlePickVibe('BOLD')} />
+              <VibeButton label="CALM" emoji="🙏" onClick={()=>handlePickVibe('CALM')} />
+              <VibeButton label="RICH" emoji="💰" onClick={()=>handlePickVibe('RICH')} />
+            </div>
+          </div>
+        )}
 
         {/* Resume or New */}
         {phase === 'resumeNew' && (
