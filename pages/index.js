@@ -1,14 +1,15 @@
 // pages/index.js
-export default function Home() {
-  return null;
-}
+import { useEffect } from 'react'
+import { useRouter } from 'next/router'
+import { supabase } from '../src/supabaseClient'
 
-// Redirect anyone hitting "/" to /login (change to /chat if you prefer)
-export async function getServerSideProps() {
-  return {
-    redirect: {
-      destination: '/login', // or '/chat'
-      permanent: false,
-    },
-  };
+export default function Home() {
+  const router = useRouter()
+  useEffect(() => {
+    (async () => {
+      const { data: { session } } = await supabase.auth.getSession()
+      router.replace(session ? '/chat' : '/login')
+    })()
+  }, [router])
+  return null
 }
