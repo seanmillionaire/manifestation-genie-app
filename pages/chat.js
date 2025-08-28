@@ -1,6 +1,5 @@
-// pages/chat.js — Manifestation Genie (Light Theme, Full File)
-// Flow: clean chat console with white shell, left/right bubbles, gold CTA,
-// uses /api/chat for replies, and persists session history locally.
+// pages/chat.js — Manifestation Genie (Light Theme, Likes + New Wish)
+// Full file. No patches needed.
 
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../src/supabaseClient'
@@ -22,7 +21,7 @@ const GenieLang = {
 /* =========================
    Helpers
    ========================= */
-const STORAGE_KEY = 'mg_chat_history_v2'
+const STORAGE_KEY = 'mg_chat_history_v3'
 const NAME_KEY = 'mg_first_name'
 const newId = () => Math.random().toString(36).slice(2,10)
 const pick = (arr) => arr[Math.floor(Math.random() * arr.length)]
@@ -35,7 +34,6 @@ function loadNameFallback() {
   } catch {}
   return 'Friend'
 }
-
 function loadHistory() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
@@ -45,6 +43,15 @@ function loadHistory() {
 }
 function saveHistory(messages=[]) {
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(messages)) } catch {}
+}
+function seedGreeting(name) {
+  return [
+    { id:newId(), role:'assistant', content:injectName(pick(GenieLang.greetings), name) },
+    { id:newId(), role:'assistant', content:GenieLang.smallNudge },
+  ]
+}
+function escapeHTML(s=''){
+  return s.replace(/[&<>"]/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[m]))
 }
 
 /* =========================
@@ -57,7 +64,7 @@ export default function ChatPage() {
   const [loading, setLoading] = useState(false)
   const streamRef = useRef(null)
 
-  // 1) Load name from profile or localStorage
+  // Load name from profile or localStorage
   useEffect(() => {
     let mounted = true
     ;(async () => {
@@ -76,35 +83,30 @@ export default function ChatPage() {
           }
         }
       } catch {}
-      // fallback
       if (mounted) setFirstName(loadNameFallback())
     })()
     return () => { mounted = false }
   }, [])
 
-  // 2) Load / seed conversation
+  // Load / seed conversation
   useEffect(() => {
     const hist = loadHistory()
     if (hist.length) {
       setMessages(hist)
     } else {
-      const greeting = injectName(pick(GenieLang.greetings), loadNameFallback())
-      const seed = [
-        { id:newId(), role:'assistant', content:greeting },
-        { id:newId(), role:'assistant', content:GenieLang.smallNudge },
-      ]
+      const seed = seedGreeting(loadNameFallback())
       setMessages(seed)
       saveHistory(seed)
     }
   }, [])
 
-  // 3) Auto-scroll
+  // Auto-scroll
   useEffect(() => {
     if (!streamRef.current) return
     streamRef.current.scrollTop = streamRef.current.scrollHeight
   }, [messages, loading])
 
-  // 4) Send logic
+  // Send message
   async function handleSend() {
     const text = input.trim()
     if (!text || loading) return
@@ -141,6 +143,22 @@ export default function ChatPage() {
     }
   }
 
+  // Like toggle (persisted)
+  function toggleLike(id) {
+    const newer = messages.map(m => m.id === id ? { ...m, liked: !m.liked } : m)
+    setMessages(newer)
+    saveHistory(newer)
+  }
+
+  // New Wish (reset thread)
+  function handleNewWish() {
+    const seed = seedGreeting(firstName || loadNameFallback())
+    setMessages(seed)
+    saveHistory(seed)
+    setInput('')
+    if (streamRef.current) streamRef.current.scrollTop = 0
+  }
+
   function handleKey(e) {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
@@ -158,7 +176,7 @@ export default function ChatPage() {
         </header>
 
         <div style={styles.chatWrap}>
-          {/* Scrollable message stream */}
+          {/* Stream */}
           <div style={styles.chatStream} ref={streamRef}>
             {messages.map((m) => {
               const isUser = m.role === 'user'
@@ -174,11 +192,18 @@ export default function ChatPage() {
                   <div style={isUser ? styles.bubbleUser : styles.bubbleAI}>
                     {!isUser && <div style={styles.nameLabelAI}>Genie</div>}
                     {isUser && <div style={styles.nameLabelUser}>{firstName}</div>}
-                    <div style={styles.bubbleText} dangerouslySetInnerHTML={{ __html: escape(m.content) }} />
-                    {/* Like badge (placeholder) */}
+                    <div
+                      style={styles.bubbleText}
+                      dangerouslySetInnerHTML={{ __html: escapeHTML(m.content) }}
+                    />
                     {!isUser && (
                       <div style={{ marginTop: 8 }}>
-                        <button type="button" style={styles.likeBtn}>
+                        <button
+                          type="button"
+                          style={{ ...styles.likeBtn, ...(m.liked ? styles.likeBtnActive : {}) }}
+                          onClick={() => toggleLike(m.id)}
+                          aria-pressed={m.liked ? 'true' : 'false'}
+                        >
                           👍 Like
                         </button>
                       </div>
@@ -212,6 +237,9 @@ export default function ChatPage() {
               onKeyDown={handleKey}
               disabled={loading}
             />
+            <button style={styles.btnGhost} onClick={handleNewWish} disabled={loading}>
+              New wish
+            </button>
             <button style={styles.btn} onClick={handleSend} disabled={loading || !input.trim()}>
               {loading ? 'Sending…' : 'Send'}
             </button>
@@ -221,14 +249,6 @@ export default function ChatPage() {
       </div>
     </div>
   )
-}
-
-/* =========================
-   Tiny utility
-   ========================= */
-function escape(s=''){
-  // very light HTML escaping; server should already sanitize
-  return s.replace(/[&<>"]/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]))
 }
 
 /* =========================
@@ -295,6 +315,10 @@ const styles = {
     borderRadius:999, padding:'4px 10px',
     fontSize:12, cursor:'pointer'
   },
+  likeBtnActive:{
+    background:'rgba(255,214,0,0.18)',
+    border:'1px solid rgba(255,214,0,0.35)'
+  },
 
   /* Input */
   chatInputRow: {
@@ -317,5 +341,15 @@ const styles = {
     letterSpacing:.2,
     cursor:'pointer',
     boxShadow:'0 18px 40px rgba(0,0,0,.10)'
-  }
+  },
+  btnGhost:{
+    padding:'12px 16px',
+    borderRadius:14,
+    border:'1px solid #e5e7eb',
+    background:'#fff',
+    color:'#111',
+    fontWeight:800,
+    letterSpacing:.2,
+    cursor:'pointer'
+  },
 }
