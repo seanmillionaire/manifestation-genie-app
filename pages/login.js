@@ -136,12 +136,16 @@ function Style(){
       .btn[disabled]{ opacity:.6; cursor:not-allowed; }
       .btn.full{ width:100%; }
 
-      .btn-primary{
-        background: var(--primary);
-        color: var(--primary-text);
-        box-shadow: var(--shadow-lg);
-      }
-      .btn-primary:hover{ filter:brightness(.98); }
+ .btn-primary {
+  background: #FFD600; /* Same as chat Send button */
+  color: #000;        /* Black text like in chat */
+  border: none;       /* Remove black border */
+  box-shadow: var(--shadow-lg);
+}
+.btn-primary:hover {
+  filter: brightness(.95);
+}
+
 
       .sub{ margin:12px auto 0; font-size:15px; color:var(--text-dim); max-width:60ch; line-height:1.55; }
       .microNote{ margin:14px auto 0; font-size:13px; color:var(--muted); }
