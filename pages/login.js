@@ -99,8 +99,9 @@ function Style(){
   font-weight:900;
   text-transform:uppercase;
   letter-spacing:.12em;
-  color:#FFD600; /* match Send button color */
+  color: var(--text-dim); /* match tagline color */
 }
+
 
 
       /* Form */
