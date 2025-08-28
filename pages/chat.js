@@ -1,3 +1,4 @@
+
 // pages/chat.js — Manifestation Genie
 // Flow: welcome → vibe → resumeNew → questionnaire → checklist → chat
 // Supabase name integration + localStorage persistence (per session)
@@ -42,21 +43,6 @@ const pick = (arr) => arr[Math.floor(Math.random() * arr.length)]
 const STORAGE_KEY = 'mg_chat_state_v1'
 const NAME_KEY = 'mg_first_name'
 const newId = () => Math.random().toString(36).slice(2,10)
-/* =========================
-   Oath Gate (local persistence)
-   ========================= */
-const OATH_KEY = 'mg_oath_ok'                 // 'yes' when accepted
-const OATH_DATE_KEY = 'mg_oath_date'          // optional: track acceptance date (YYYY-MM-DD)
-
-function hasOathAccepted() {
-  try { return localStorage.getItem(OATH_KEY) === 'yes' } catch { return false }
-}
-function markOathAccepted() {
-  try {
-    localStorage.setItem(OATH_KEY, 'yes')
-    localStorage.setItem(OATH_DATE_KEY, new Date().toISOString().slice(0,10))
-  } catch {}
-}
 
 const injectName = (s, name) => (s || '').replaceAll('{firstName}', name || 'Friend')
 
@@ -406,53 +392,6 @@ function ChatConsole({ thread, onSend, onReset, onToggleLike, firstName }) {
     </div>
   )
 }
-/* =========================
-   Manifestation Oath Gate
-   ========================= */
-function ManifestationOath({ onAgree, onSkip }) {
-  const secrets = [
-    "Action magnetizes luck. Tiny act now > perfect plan later.",
-    "Emotion is the engine of manifestation—feel it first, then move.",
-    "Clarity compresses time. Name the target in one line.",
-    "Energy follows attention—guard your focus like treasure.",
-    "Identity precedes outcome: act as the person who already owns the result."
-  ]
-  const secret = secrets[Math.floor(Math.random()*secrets.length)]
-
-  const [checked, setChecked] = useState(false)
-
-  return (
-    <div style={styles.card}>
-      <h2 style={styles.h2}>Before we begin 🔮</h2>
-      <p style={styles.lead}>"{secret}"</p>
-
-      <div style={{marginTop:14, padding:12, border:'1px solid rgba(0,0,0,0.12)', borderRadius:12, background:'#fff'}}>
-        <label style={{display:'flex', gap:10, alignItems:'flex-start', cursor:'pointer'}}>
-          <input
-            type="checkbox"
-            checked={checked}
-            onChange={e=>setChecked(e.target.checked)}
-            style={{ width:18, height:18, marginTop:3, accentColor:'#ffd600' }}
-          />
-          <span style={{color:'#111'}}>
-            I agree to use this Genie for good, growth, and non-harmful intent. I accept full responsibility for my actions.
-          </span>
-        </label>
-      </div>
-
-      <div style={styles.row}>
-        <button
-          style={{...styles.btn, opacity: checked ? 1 : .6, cursor: checked ? 'pointer' : 'not-allowed'}}
-          disabled={!checked}
-          onClick={onAgree}
-        >
-          I Agree — Enter →
-        </button>
-        <button style={styles.btnGhost} onClick={onSkip}>Remind me later</button>
-      </div>
-    </div>
-  )
-}
 
 /* =========================
    Main Page
@@ -473,25 +412,9 @@ function toPlainMessages(thread) {
 export default function ChatPage() {
   // FIRST NAME: cache first; hydrate from Supabase (profiles → metadata → email)
   const [firstName, setFirstName] = useState(getFirstNameFromCache())
-{/* Oath Gate — must agree before anything else */}
-{phase === 'oath' && (
-  <ManifestationOath
-    onAgree={()=>{
-      markOathAccepted()
-      // After agreeing, if you want to ALWAYS go to vibe:
-      setPhase('vibe')
-      // Or, if you want to resume last saved phase:
-      // const s = loadState(); setPhase(s?.phase || 'vibe')
-    }}
-    onSkip={()=>{
-      // optional: allow skipping to vibe once (you can remove this to enforce)
-      setPhase('vibe')
-    }}
-  />
-)}
 
   // phases
-  const [phase, setPhase] = useState('oath') // gate first, then continue
+  const [phase, setPhase] = useState('welcome')
   const [vibe, setVibe] = useState(null) // 'BOLD' | 'CALM' | 'RICH'
   const [currentWish, setCurrentWish] = useState(null) // {wish, block, micro, vibe, date}
   const [lastWish, setLastWish] = useState(null)
@@ -542,12 +465,7 @@ useEffect(() => {
         try { localStorage.setItem(NAME_KEY, fn) } catch {}
 
         // 👉 NEW: on login, if no vibe selected yet, show the Vibe screen first
-       + // After login: if oath not accepted, force oath first. Otherwise keep current logic.
- setPhase(prev => {
-   if (!hasOathAccepted()) return 'oath'
-   // if we already accepted the oath, keep existing behavior:
-   return (prev !== 'chat' && prev !== 'checklist' && prev !== 'questionnaire' && !vibe) ? 'vibe' : prev
- })
+        setPhase(prev => (prev !== 'chat' && prev !== 'checklist' && prev !== 'questionnaire' && !vibe) ? 'vibe' : prev)
       }
     } catch {}
   })()
@@ -562,11 +480,6 @@ useEffect(() => {
     const s = loadState()
     if (s) {
       setPhase(s.phase || 'welcome')
-       +   if (!hasOathAccepted()) {
-     setPhase('oath')
-   } else {
-     setPhase(s.phase || 'welcome')
-   }
       setVibe(s.vibe || null)
       setCurrentWish(s.currentWish || null)
       setLastWish(s.lastWish || null)
