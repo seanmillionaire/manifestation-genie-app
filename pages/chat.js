@@ -1,11 +1,12 @@
-// pages/chat.js — Manifestation Genie (White Theme + Oath Gate)
-// Flow: oath → vibe → resumeNew → questionnaire → checklist → chat
+// pages/chat.js — Manifestation Genie
+// Flow: welcome → vibe → resumeNew → questionnaire → checklist → chat
+// Supabase name integration + localStorage persistence (per session)
 
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../src/supabaseClient'
 
 /* =========================
-   Config / Language
+   Signature Language Kit
    ========================= */
 const GenieLang = {
   greetings: [
@@ -29,6 +30,7 @@ const GenieLang = {
     "Locked in. You're ready. Execute time.",
     "Noted. The window’s open. Step through."
   ],
+  closing: "The lamp dims… but the magic stays with you.",
   tinyCTA: "New wish or keep walking the path we opened?"
 }
 
@@ -40,29 +42,162 @@ const pick = (arr) => arr[Math.floor(Math.random() * arr.length)]
 const STORAGE_KEY = 'mg_chat_state_v1'
 const NAME_KEY = 'mg_first_name'
 const newId = () => Math.random().toString(36).slice(2,10)
-
 const injectName = (s, name) => (s || '').replaceAll('{firstName}', name || 'Friend')
 
 const loadState = () => {
   if (typeof window === 'undefined') return null
-  try { const r = localStorage.getItem(STORAGE_KEY); return r ? JSON.parse(r) : null } catch { return null }
+  try {
+    const r = localStorage.getItem(STORAGE_KEY)
+    return r ? JSON.parse(r) : null
+  } catch { return null }
 }
-const saveState = (state) => { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)) } catch {} }
+const saveState = (state) => {
+  if (typeof window === 'undefined') return
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)) } catch {}
+}
+
 const getFirstNameFromCache = () => {
+  if (typeof window === 'undefined') return 'Friend'
   try {
     const saved = localStorage.getItem(NAME_KEY)
     if (saved && saved.trim()) return saved.trim().split(' ')[0]
   } catch {}
   return 'Friend'
 }
-function escapeHTML(s=''){ return s.replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])) }
+
+// Streak announce persistence (once per day)
+const STREAK_ANNOUNCED_KEY = 'mg_streak_announced_date'
+function getAnnouncedDate() {
+  try { return localStorage.getItem(STREAK_ANNOUNCED_KEY) || null } catch { return null }
+}
+function setAnnouncedToday() {
+  try { localStorage.setItem(STREAK_ANNOUNCED_KEY, getToday()) } catch {}
+}
+
+const toSocialLines = (text='', wordsPerLine=9) => {
+  const soft = text
+    .replace(/\r/g,'')
+    .replace(/([.!?])\s+/g, '$1\n')
+    .replace(/\s+[-–—]\s+/g, '\n');
+
+  const lines = [];
+  for (const piece of soft.split(/\n+/)) {
+    const words = piece.trim().split(/\s+/).filter(Boolean);
+    if (!words.length) continue;
+    for (let i = 0; i < words.length; i += wordsPerLine) {
+      lines.push(words.slice(i, i + wordsPerLine).join(' '));
+    }
+  }
+  return lines.join('\n');
+};
+const nl2br = (s='') => s.replace(/\n/g, '<br/>');
+
+// --- Pretty + cosmic formatting for Genie replies ---
+const cosmicOutros = [
+  "The stars tilt toward {topic}. ✨",
+  "Orbit set; trajectory locked. 🔮",
+  "The lamp hums in your direction. 🌙",
+  "Gravity favors your move. 🌌",
+  "Signals aligned; door unlocked. 🗝️"
+];
+const COSMIC_METAPHORS = [
+  ['visualize','Like plotting stars before a voyage—see it, then sail.'],
+  ['assess','Numbers are telescope lenses—clean them and the path sharpens.'],
+  ['schedule','Calendars are gravity; what you schedule, orbits you.'],
+  ['contact','Knock and the door vibrates; knock twice and it opens.'],
+  ['record','One take beats zero takes—silence never went viral.'],
+  ['post','Ship the signal so your tribe can find its frequency.'],
+  ['email','A good subject line is a comet tail—impossible to ignore.'],
+  ['apply','Forms are portals; boring but they warp reality when complete.'],
+  ['practice','Reps are runways—every pass smooths the landing.'],
+  ['learn','Knowledge is dark matter—unseen, but it holds your galaxy.']
+];
+
+function explainLine(line='') {
+  const L = line.trim();
+  if (!L) return '';
+  if (/(The lamp|orbit|stars|gravity|cosmos|Signals aligned)/i.test(L)) return L;
+  let add = null;
+  for (const [key, meta] of COSMIC_METAPHORS) {
+    if (new RegExp(`\\b${key}`, 'i').test(L)) { add = meta; break; }
+  }
+  if (!add) add = 'Do it small and soon—momentum makes its own magic.';
+  const hasEmoji = /^[^\w\s]/.test(L);
+  const base = hasEmoji ? L : `✨ ${L}`;
+  return `${base}\n<span style="opacity:.8">— ${add}</span>`;
+}
+function wittyCloser(topic='this') {
+  const zingers = [
+    `I’ll hold the lamp; you push the door on “${topic}.”`,
+    `Pro tip: perfection is a black hole—aim for orbit.`,
+    `If the muse calls, let it go to voicemail—ship first.`,
+    `Cosmos math: tiny action × today > giant plan × someday.`,
+  ];
+  return zingers[Math.floor(Math.random()*zingers.length)];
+}
+function ensureNoNumberedLists(s='') {
+  return s
+    .replace(/^\s*\d+\.\s*/gm, '• ')
+    .replace(/^\s*-\s*/gm, '• ');
+}
+function bulletize(s='') {
+  return s.split(/\n+/).map(line => {
+    const L = line.trim();
+    if (!L) return '';
+    if (/^(•|\*|–|-)/.test(L)) return L.replace(/^(•|\*|–|-)\s*/, '');
+    if (/^(step|do|try|next|then|now|contact|create|assess|visualize|message|record|post|ship|book|schedule|prepare|explore)\b/i.test(L)) {
+      const anchors = ["🌌","🔑","💰","🌀","✨"];
+      return `${anchors[Math.floor(Math.random()*anchors.length)]} ${L}`;
+    }
+    return L;
+  }).join('\n');
+}
+function addCosmicOutro(s='', topic='this') {
+  const line = cosmicOutros[Math.floor(Math.random()*cosmicOutros.length)].replace('{topic}', topic);
+  if (/(star|orbit|cosmos|universe|galaxy|gravity|lamp|portal)/i.test(s.split('\n').slice(-2).join(' '))) return s;
+  return `${s}\n\n${line}`;
+}
+function formatGenieReply(raw='', topic='this') {
+  const noNums = ensureNoNumberedLists(raw);
+  const bullets = bulletize(noNums);
+  const tight = toSocialLines(bullets, 9);
+  const withOutro = addCosmicOutro(tight, topic);
+  return withOutro.trim();
+}
 
 /* =========================
-   Oath Gate (local persistence)
+   Streak Messages (Brunson-style, human + hype)
    ========================= */
-const OATH_KEY = 'mg_oath_ok'
-function hasOathAccepted(){ try { return localStorage.getItem(OATH_KEY) === 'yes' } catch { return false } }
-function markOathAccepted(){ try { localStorage.setItem(OATH_KEY, 'yes') } catch {} }
+function streakMessage(count) {
+  if (count === 1) return "Day 1 — you showed up. Momentum just started.";
+  if (count === 2) return "2 days in a row. That’s a pattern forming. Keep it alive.";
+  if (count === 3) return "3-day streak. You’re building a muscle. Don’t break it tonight.";
+  if (count >= 4 && count < 7) return `${count} days straight — proof this isn’t luck. Keep stacking wins.`;
+  if (count >= 7 && count < 30) return `${count} days. Weekly habit formed — imagine what 30 does.`;
+  return `${count} days strong — this isn’t a streak anymore, it’s who you are.`;
+}
+
+/* =========================
+   Brunson Daily Streak (localStorage)
+   ========================= */
+const STREAK_KEY = 'mg_streak'
+const LAST_DATE_KEY = 'mg_last_date'
+function getToday() { return new Date().toISOString().slice(0,10) }
+function getYesterday() { const d = new Date(); d.setDate(d.getDate() - 1); return d.toISOString().slice(0,10) }
+function loadStreak() {
+  if (typeof window === 'undefined') return { count: 0, last: null }
+  try {
+    const count = parseInt(localStorage.getItem(STREAK_KEY) || '0', 10)
+    const last = localStorage.getItem(LAST_DATE_KEY)
+    return { count: isNaN(count) ? 0 : count, last }
+  } catch { return { count: 0, last: null } }
+}
+function saveStreak(count, last) {
+  try {
+    localStorage.setItem(STREAK_KEY, String(count))
+    localStorage.setItem(LAST_DATE_KEY, last)
+  } catch {}
+}
 
 /* =========================
    Minimal Questionnaire
@@ -85,13 +220,30 @@ function Questionnaire({ initial, onComplete, vibe, firstName }) {
         <h3 style={styles.h3}>What’s the play today, {firstName}?</h3>
 
         <p style={styles.subtle}>{GenieLang.questPrompts.wish}</p>
-        <textarea value={wish} onChange={e=>setWish(e.target.value)} placeholder="One line. No fluff." style={styles.textarea} rows={3} />
+        <textarea
+          value={wish}
+          onChange={e=>setWish(e.target.value)}
+          placeholder="One line. No fluff."
+          style={styles.textarea}
+          rows={3}
+        />
 
         <p style={{...styles.subtle, marginTop:16}}>{GenieLang.questPrompts.block}</p>
-        <textarea value={block} onChange={e=>setBlock(e.target.value)} placeholder="Say the snag. Simple + true." style={styles.textarea} rows={2} />
+        <textarea
+          value={block}
+          onChange={e=>setBlock(e.target.value)}
+          placeholder="Say the snag. Simple + true."
+          style={styles.textarea}
+          rows={2}
+        />
 
         <p style={{...styles.subtle, marginTop:16}}>{GenieLang.questPrompts.micro}</p>
-        <input value={micro} onChange={e=>setMicro(e.target.value)} placeholder="Send it. Start it. Ship it." style={styles.input} />
+        <input
+          value={micro}
+          onChange={e=>setMicro(e.target.value)}
+          placeholder="Send it. Start it. Ship it."
+          style={styles.input}
+        />
 
         <button
           style={{...styles.btn, marginTop:16, opacity: canSubmit ? 1 : 0.6, cursor: canSubmit ? 'pointer' : 'not-allowed'}}
@@ -107,34 +259,55 @@ function Questionnaire({ initial, onComplete, vibe, firstName }) {
 }
 
 /* =========================
-   3-Step Checklist
+   3-Step Checklist (custom to input)
    ========================= */
 function Checklist({ wish, micro, steps, onToggle, onComplete, onSkip }) {
   const allDone = steps.length > 0 && steps.every(s => s.done)
+
   return (
     <div style={styles.card}>
-      <h3 style={styles.h3}>Do this now for: <span style={{opacity:.9}}>"{wish || 'your wish'}"</span></h3>
+      <h3 style={styles.h3}>
+        Do this now for: <span style={{opacity:.9}}>"{wish || 'your wish'}"</span>
+      </h3>
+
       <ul style={styles.checklist}>
         {steps.map((s, i) => (
           <li key={s.id} style={styles.checkItem}>
             <label style={styles.checkLabel}>
-              <input type="checkbox" checked={!!s.done} onChange={() => onToggle(s.id)} style={styles.checkbox} />
+              <input
+                type="checkbox"
+                checked={!!s.done}
+                onChange={() => onToggle(s.id)}
+                style={styles.checkbox}
+              />
               <span>{i+1}. {s.text}</span>
             </label>
           </li>
         ))}
       </ul>
+
       <div style={styles.row}>
-        <button style={{...styles.btn, opacity: allDone ? 1 : .65, cursor: allDone ? 'pointer' : 'not-allowed'}} disabled={!allDone} onClick={onComplete}>All done → Enter chat</button>
+        <button
+          style={{...styles.btn, opacity: allDone ? 1 : .65, cursor: allDone ? 'pointer' : 'not-allowed'}}
+          disabled={!allDone}
+          onClick={onComplete}
+        >
+          All done → Enter chat
+        </button>
         <button style={styles.btnGhost} onClick={onSkip}>Skip for now</button>
       </div>
-      {micro ? <p style={{...styles.mini, marginTop:10}}>Your micro-move: <b>{micro}</b></p> : null}
+
+      {micro ? (
+        <p style={{...styles.mini, marginTop:10}}>
+          Your micro-move: <b>{micro}</b> — mark it complete once it’s in motion.
+        </p>
+      ) : null}
     </div>
   )
 }
 
 /* =========================
-   Chat Console
+   Messenger-style Chat Console (labels + likes)
    ========================= */
 function ChatConsole({ thread, onSend, onReset, onToggleLike, firstName }) {
   const [input, setInput] = useState("")
@@ -148,17 +321,30 @@ function ChatConsole({ thread, onSend, onReset, onToggleLike, firstName }) {
           const isAI = m.role === 'assistant'
           return (
             <div key={m.id} style={isAI ? styles.rowAI : styles.rowUser}>
+              {/* Avatar */}
               <div style={styles.avatar}>{isAI ? '🔮' : '🙂'}</div>
+
               <div style={{flex:1, minWidth:0}}>
+                {/* Name label (mirror) */}
                 <div style={isAI ? styles.nameLabelAI : styles.nameLabelUser}>
                   {isAI ? 'Genie' : (m.author || firstName || 'You')}
                 </div>
+
+                {/* Bubble */}
                 <div style={isAI ? styles.bubbleAI : styles.bubbleUser}>
                   <div style={styles.bubbleText} dangerouslySetInnerHTML={{__html: m.content}} />
                 </div>
+
+                {/* Reactions row */}
                 <div style={styles.reactRow}>
                   {isAI ? (
-                    <button style={m.likedByUser ? styles.likeBtnActive : styles.likeBtn} onClick={() => onToggleLike(m.id, 'user')}>👍 {m.likedByUser ? 'Liked' : 'Like'}</button>
+                    <button
+                      style={m.likedByUser ? styles.likeBtnActive : styles.likeBtn}
+                      onClick={() => onToggleLike(m.id, 'user')}
+                      aria-label="Like Genie message"
+                    >
+                      👍 {m.likedByUser ? 'Liked' : 'Like'}
+                    </button>
                   ) : (
                     m.likedByGenie ? <span style={styles.likeBadge}>Genie liked this 👍</span> : null
                   )}
@@ -170,6 +356,7 @@ function ChatConsole({ thread, onSend, onReset, onToggleLike, firstName }) {
         <div ref={endRef} />
       </div>
 
+      {/* Composer */}
       <div style={styles.chatInputRow}>
         <input
           value={input}
@@ -178,49 +365,10 @@ function ChatConsole({ thread, onSend, onReset, onToggleLike, firstName }) {
           onKeyDown={(e)=>{ if(e.key==='Enter' && input.trim()){ onSend(input.trim()); setInput('') } }}
           style={styles.chatInput}
         />
-        <button style={styles.btn} onClick={()=>{ if(input.trim()){ onSend(input.trim()); setInput('') } }}>Send</button>
-        <button style={styles.btnGhost} onClick={onReset}>New wish</button>
-      </div>
-    </div>
-  )
-}
-
-/* =========================
-   Manifestation Oath Gate
-   ========================= */
-function ManifestationOath({ onAgree }) {
-  const secrets = [
-    "Action magnetizes luck. Tiny act now > perfect plan later.",
-    "Emotion is the engine of manifestation—feel it first, then move.",
-    "Clarity compresses time. Name the target in one line.",
-    "Energy follows attention—guard your focus like treasure.",
-    "Identity precedes outcome: act as the person who already owns the result."
-  ]
-  const secret = secrets[Math.floor(Math.random()*secrets.length)]
-  const [checked, setChecked] = useState(false)
-
-  return (
-    <div style={styles.card}>
-      <h2 style={styles.h2}>Before we begin 🔮</h2>
-      <p style={styles.lead}>"{secret}"</p>
-
-      <div style={{marginTop:14, padding:12, border:'1px solid rgba(0,0,0,0.12)', borderRadius:12, background:'#fff'}}>
-        <label style={{display:'flex', gap:10, alignItems:'flex-start', cursor:'pointer'}}>
-          <input type="checkbox" checked={checked} onChange={e=>setChecked(e.target.checked)} style={{ width:18, height:18, marginTop:3, accentColor:'#ffd600' }}/>
-          <span style={{color:'#111'}}>
-            I agree to use this Genie for good, growth, and non-harmful intent. I accept full responsibility for my actions.
-          </span>
-        </label>
-      </div>
-
-      <div style={styles.row}>
-        <button
-          style={{...styles.btn, opacity: checked ? 1 : .6, cursor: checked ? 'pointer' : 'not-allowed'}}
-          disabled={!checked}
-          onClick={onAgree}
-        >
-          I Agree — Enter →
+        <button style={styles.btn} onClick={()=>{ if(input.trim()){ onSend(input.trim()); setInput('') } }}>
+          Send
         </button>
+        <button style={styles.btnGhost} onClick={onReset}>New wish</button>
       </div>
     </div>
   )
@@ -229,37 +377,53 @@ function ManifestationOath({ onAgree }) {
 /* =========================
    Main Page
    ========================= */
+
+// normalize any message object we ingest
+function normalizeMsg(m, fallbackAuthor='Genie') {
+  return {
+    id: m.id || newId(),
+    role: m.role || 'assistant',
+    author: m.author || (m.role === 'assistant' ? 'Genie' : fallbackAuthor || 'You'),
+    content: typeof m.content === 'string' ? m.content : '',
+    likedByUser: !!m.likedByUser,
+    likedByGenie: !!m.likedByGenie
+  }
+}
+function normalizeThread(thread = [], firstName = 'You') {
+  return thread.map(m => normalizeMsg(m, firstName))
+}
 function toPlainMessages(thread) {
   const strip = (s='') => s
     .replace(/<br\s*\/?>/gi, '\n')
     .replace(/<\/?[^>]+(>|$)/g, '')
     .replace(/\s+/g, ' ')
     .trim()
-  return thread.map(m => ({ role: m.role, content: strip(m.content || '') }))
+
+  return thread.map(m => ({
+    role: m.role,
+    content: strip(m.content || '')
+  }))
 }
 
 export default function ChatPage() {
-  // FIRST NAME: cache first; hydrate from Supabase
+  // FIRST NAME
   const [firstName, setFirstName] = useState(getFirstNameFromCache())
 
   // phases
-  const [phase, setPhase] = useState('oath') // 🚀 show oath first
+  const [phase, setPhase] = useState('welcome')
   const [vibe, setVibe] = useState(null) // 'BOLD' | 'CALM' | 'RICH'
-  const [currentWish, setCurrentWish] = useState(null)
+  const [currentWish, setCurrentWish] = useState(null) // {wish, block, micro, vibe, date}
   const [lastWish, setLastWish] = useState(null)
   const [steps, setSteps] = useState([])
 
-  // streak state (kept minimal)
+  // streak state
   const [streak, setStreak] = useState(0)
   const [hasAnnouncedStreak, setHasAnnouncedStreak] = useState(false)
 
-  // greeting seeded with name
-  const [greeting] = useState(() => injectName(pick(GenieLang.greetings), firstName))
-  const [thread, setThread] = useState([
-    { id:newId(), role:'assistant', author:'Genie', content:greeting, likedByUser:false, likedByGenie:false }
-  ])
+  // defer greeting + initial thread seeding to client to avoid SSR hydration issues
+  const [thread, setThread] = useState([])
 
-  // Supabase name hydration + initial gate
+  // Supabase name hydration
   useEffect(() => {
     let alive = true
     ;(async () => {
@@ -280,102 +444,173 @@ export default function ChatPage() {
 
         if (!fn) {
           const meta = user.user_metadata || {}
-          fn = (meta.full_name?.trim().split(' ')[0]) || (meta.name?.trim().split(' ')[0]) || meta.given_name || null
+          fn =
+            (meta.full_name?.trim().split(' ')[0]) ||
+            (meta.name?.trim().split(' ')[0]) ||
+            meta.given_name ||
+            null
         }
+
         if (!fn) fn = (user.email || '').split('@')[0] || 'Friend'
 
         if (alive) {
           setFirstName(fn)
           try { localStorage.setItem(NAME_KEY, fn) } catch {}
-          // 🔐 Gate: if oath not accepted, force oath; else go to vibe (or keep current)
-          setPhase(prev => hasOathAccepted() ? (prev === 'oath' ? 'vibe' : prev) : 'oath')
+          setPhase(prev => (prev !== 'chat' && prev !== 'checklist' && prev !== 'questionnaire' && !vibe) ? 'vibe' : prev)
         }
       } catch {}
     })()
     return () => { alive = false }
-  }, [])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [vibe])
 
-  // Load persisted state on mount (but never bypass the oath)
+  // Load persisted state on mount (client only), and seed greeting if needed
   useEffect(()=>{
     const s = loadState()
     if (s) {
+      setPhase(s.phase || 'welcome')
       setVibe(s.vibe || null)
       setCurrentWish(s.currentWish || null)
       setLastWish(s.lastWish || null)
       setSteps(s.steps || [])
-      setThread(s.thread?.length ? s.thread : [{role:'assistant', content: injectName(pick(GenieLang.greetings), firstName)}])
-      if (hasOathAccepted()) {
-        setPhase(s.phase || 'vibe')
-      } else {
-        setPhase('oath')
-      }
+      const hydrated = normalizeThread(
+        (Array.isArray(s.thread) && s.thread.length ? s.thread : []),
+        firstName
+      )
+      setThread(hydrated.length ? hydrated : [
+        normalizeMsg({
+          role:'assistant',
+          author:'Genie',
+          content: injectName(pick(GenieLang.greetings), firstName)
+        }, firstName)
+      ])
+    } else {
+      // brand-new session
+      setThread([normalizeMsg({
+        role:'assistant',
+        author:'Genie',
+        content: injectName(pick(GenieLang.greetings), firstName)
+      }, firstName)])
     }
-    // simple local streak seed
-    try {
-      const last = localStorage.getItem('mg_last_date')
-      const today = todayStr()
-      if (last === today) setStreak(parseInt(localStorage.getItem('mg_streak')||'1',10)||1)
-      else {
-        const next = (last && last !== today) ? (parseInt(localStorage.getItem('mg_streak')||'0',10)||0) + 1 : 1
-        localStorage.setItem('mg_streak', String(next))
-        localStorage.setItem('mg_last_date', today)
-        setStreak(next)
-      }
-    } catch {}
+
+    // hydrate streak
+    const { count, last } = loadStreak()
+    const today = getToday()
+    if (last === today) {
+      setStreak(count)
+    } else if (last === getYesterday()) {
+      setStreak(count + 1)
+      saveStreak(count + 1, today)
+    } else {
+      setStreak(1)
+      saveStreak(1, today)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // Persist state
   useEffect(()=>{ saveState({ phase, vibe, currentWish, lastWish, steps, thread }) }, [phase, vibe, currentWish, lastWish, steps, thread])
 
   // Scroll to top on phase change
-  useEffect(() => { if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' }) }, [phase])
+  useEffect(() => {
+    if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' })
+  }, [phase])
+
+  // Announce streak once when entering chat
+  useEffect(() => {
+    if (phase !== 'chat') return
+    const today = getToday()
+    const alreadyAnnouncedToday = getAnnouncedDate() === today
+    if (alreadyAnnouncedToday) {
+      if (!hasAnnouncedStreak) setHasAnnouncedStreak(true)
+      return
+    }
+    if (!hasAnnouncedStreak) {
+      setThread(prev => prev.concat(normalizeMsg({
+        role: 'assistant',
+        author: 'Genie',
+        content: nl2br(escapeHTML(
+          `${streakMessage(streak)}\nKeep the streak alive — what’s today’s micro-move?`
+        )),
+      })))
+      setHasAnnouncedStreak(true)
+      setAnnouncedToday()
+    }
+  }, [phase, streak, hasAnnouncedStreak])
 
   const handlePickVibe = (v) => {
     setVibe(v)
     setPhase('resumeNew')
-    setThread(prev => prev.concat({
+    setThread(prev => prev.concat(normalizeMsg({
       role:'assistant',
+      author:'Genie',
       content: `${GenieLang.vibePrompt}<br/><span style="opacity:.8">Chosen: <b>${emojiFor(v)} ${titleCase(v)}</b></span>`
-    }))
+    })))
   }
 
   const handleResume = () => {
     const chosen = lastWish || currentWish
     if (chosen) {
       setCurrentWish(chosen)
-      if ((steps || []).length) setPhase('checklist')
-      else setPhase('questionnaire')
-      setThread(prev => prev.concat({ role:'assistant', content: `We’ll keep weaving the last wish: <b>${escapeHTML(chosen.wish)}</b>.` }))
+      if ((steps || []).length) {
+        setPhase('checklist')
+      } else {
+        setPhase('questionnaire')
+      }
+      setThread(prev => prev.concat(normalizeMsg({
+        role:'assistant',
+        author:'Genie',
+        content: `We’ll keep weaving the last wish: <b>${escapeHTML(chosen.wish)}</b>.`
+      })))
     } else {
       setPhase('questionnaire')
-      setThread(prev => prev.concat({ role:'assistant', content: "No past wish found. Let’s light a new one." }))
+      setThread(prev => prev.concat(normalizeMsg({
+        role:'assistant', author:'Genie',
+        content: "No past wish found. Let’s light a new one."
+      })))
     }
   }
 
   const handleNew = () => {
-    setCurrentWish(null); setSteps([]); setPhase('questionnaire')
-    setThread(prev => prev.concat({ role:'assistant', content: "New star, new path. I’m listening…" }))
+    setCurrentWish(null)
+    setSteps([])
+    setPhase('questionnaire')
+    setThread(prev => prev.concat(normalizeMsg({
+      role:'assistant', author:'Genie',
+      content: "New star, new path. I’m listening…"
+    })))
   }
 
   const handleQuestComplete = (data) => {
-    setCurrentWish(data); setLastWish(data)
-    const generated = generateChecklist(data); setSteps(generated)
+    setCurrentWish(data)
+    setLastWish(data)
+    const generated = generateChecklist(data)
+    setSteps(generated)
     setPhase('checklist')
     setThread(prev => prev.concat(
-      { id:newId(), role:'assistant', author:'Genie', content: `Wish set: <b>${escapeHTML(data.wish)}</b>.` },
-      { id:newId(), role:'assistant', author:'Genie', content: pick(GenieLang.rewards) },
-      { id:newId(), role:'assistant', author:'Genie', content: `Do these three now, then we talk. ${firstName}, speed > perfect.` }
+      normalizeMsg({ role:'assistant', author:'Genie', content: `Wish set: <b>${escapeHTML(data.wish)}</b>.` }),
+      normalizeMsg({ role:'assistant', author:'Genie', content: pick(GenieLang.rewards) }),
+      normalizeMsg({ role:'assistant', author:'Genie', content: `Do these three now, then we talk. ${firstName}, speed > perfect.` })
     ))
   }
 
-  const toggleStep = (id) => setSteps(prev => prev.map(s => s.id === id ? {...s, done: !s.done} : s))
+  // Checklist interactions
+  const toggleStep = (id) => { setSteps(prev => prev.map(s => s.id === id ? {...s, done: !s.done} : s)) }
+
   const completeChecklist = () => {
     setPhase('chat')
-    setThread(prev => prev.concat({ role:'assistant', content: `Strong move. Checklist complete. Speak, and I’ll shape the path, ${firstName}. ${GenieLang.tinyCTA}` }))
+    setThread(prev => prev.concat(normalizeMsg({
+      role:'assistant', author:'Genie',
+      content: `Strong move. Checklist complete. Speak, and I’ll shape the path, ${firstName}. ${GenieLang.tinyCTA}`
+    })))
   }
+
   const skipChecklist = () => {
     setPhase('chat')
-    setThread(prev => prev.concat({ role:'assistant', content: `We’ll refine live. Tell me where you’re stuck on “${escapeHTML(currentWish?.wish || 'your goal')}”.` }))
+    setThread(prev => prev.concat(normalizeMsg({
+      role:'assistant', author:'Genie',
+      content: `We’ll refine live. Tell me where you’re stuck on “${escapeHTML(currentWish?.wish || 'your goal')}”.`
+    })))
   }
 
   const onToggleLike = (id, who) => {
@@ -387,33 +622,101 @@ export default function ChatPage() {
     }))
   }
 
+  // Streak bump on first activity of a new day
+  function bumpStreakOnActivity() {
+    const { count, last } = loadStreak()
+    const today = getToday()
+    if (last === today) return count
+    const next = (last === getYesterday()) ? count + 1 : 1
+    saveStreak(next, today)
+    setStreak(next)
+    try { localStorage.setItem(STREAK_ANNOUNCED_KEY, today) } catch {}
+    setThread(prev => prev.concat(normalizeMsg({
+      role: 'assistant',
+      author: 'Genie',
+      content: nl2br(escapeHTML(
+        `New day logged. Streak: ${next}.\nDon’t break it — ship one tiny thing now.`
+      )),
+    })))
+    return next
+  }
+
+  const maybeGenieLikes = (msg) => {
+    const t = (msg.content || '').toLowerCase()
+    const isWin = /(done|shipped|published|posted|sold|launched|emailed|uploaded|completed|locked in)/.test(t)
+    const shouldLike = isWin || Math.random() < 0.25
+    if (!shouldLike) return
+    setThread(prev => prev.map(m => m.id === msg.id ? ({ ...m, likedByGenie:true }) : m))
+  }
+
   const handleSend = async (text) => {
-    if (!hasOathAccepted()) { setPhase('oath'); return }
-    const userMsg = { id: newId(), role: 'user', author: firstName || 'You', content: escapeHTML(text), likedByUser: false, likedByGenie: false }
+    const userMsg = normalizeMsg({
+      id: newId(),
+      role: 'user',
+      author: firstName || 'You',
+      content: escapeHTML(text),
+      likedByUser: false,
+      likedByGenie: false
+    }, firstName)
     setThread(prev => prev.concat(userMsg))
+    maybeGenieLikes(userMsg)
+    bumpStreakOnActivity()
 
     try {
       const reply = await genieReply({ text, thread, firstName, currentWish, vibe })
-      const aiMsg = { id: newId(), role: 'assistant', author: 'Genie', content: escapeHTML(reply), likedByUser: false, likedByGenie: false }
+      const topic = (currentWish?.wish || text || 'this').toLowerCase().slice(0, 80);
+      const pretty = formatGenieReply(reply, topic);
+      const aiMsg = normalizeMsg({
+        role: 'assistant',
+        author: 'Genie',
+        content: nl2br(escapeHTML(pretty)),
+        likedByUser: false,
+        likedByGenie: false
+      })
       setThread(prev => prev.concat(aiMsg))
     } catch {
-      setThread(prev => prev.concat({ id:newId(), role:'assistant', author:'Genie', content: escapeHTML("The lamp flickered. Try again."), likedByUser:false, likedByGenie:false }))
+      const errMsg = normalizeMsg({
+        role: 'assistant',
+        author: 'Genie',
+        content: escapeHTML("The lamp flickered. Try again."),
+        likedByUser: false,
+        likedByGenie: false
+      })
+      setThread(prev => prev.concat(errMsg))
     }
   }
 
   const resetToNewWish = () => {
-    setPhase('vibe'); setVibe(null); setCurrentWish(null); setSteps([])
-    setThread([{ id:newId(), role:'assistant', author:'Genie', content: injectName(pick(GenieLang.greetings), firstName), likedByUser:false, likedByGenie:false }])
+    setPhase('vibe')
+    setVibe(null)
+    setCurrentWish(null)
+    setSteps([])
+    setThread([normalizeMsg({
+      role:'assistant',
+      author:'Genie',
+      content: injectName(pick(GenieLang.greetings), firstName),
+    }, firstName)])
     setHasAnnouncedStreak(false)
-    if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' })
+    if (typeof window !== 'undefined') {
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+    }
   }
 
   return (
     <div style={styles.wrap}>
       <div style={styles.container}>
-        {/* OATH — must agree before anything else */}
-        {phase === 'oath' && (
-          <ManifestationOath onAgree={() => { markOathAccepted(); setPhase('vibe') }} />
+        {/* Welcome */}
+        {phase === 'welcome' && (
+          <div style={styles.card}>
+            <h1 style={{fontSize:34, fontWeight:900, margin:0}}>Meet Your Genie 🔮</h1>
+            <p style={{fontSize:18, opacity:.92, marginTop:8}}>
+              The lamp is open. Set your vibe and let’s flip what’s blocking you.
+            </p>
+            <p style={styles.lead}>
+              {injectName(pick(GenieLang.greetings), firstName)}
+            </p>
+            <button style={styles.btn} onClick={()=>setPhase('vibe')}>Start →</button>
+          </div>
         )}
 
         {/* Vibe */}
@@ -448,7 +751,12 @@ export default function ChatPage() {
 
         {/* Questionnaire */}
         {phase === 'questionnaire' && (
-          <Questionnaire initial={currentWish} onComplete={handleQuestComplete} vibe={vibe} firstName={firstName} />
+          <Questionnaire
+            initial={currentWish}
+            onComplete={handleQuestComplete}
+            vibe={vibe}
+            firstName={firstName}
+          />
         )}
 
         {/* Checklist */}
@@ -490,7 +798,7 @@ function VibeButton({ label, emoji, onClick }) {
   )
 }
 
-/* Hit /api/chat */
+/* Hit /api/chat (your one-liner operator Genie) */
 async function genieReply({ text, thread, firstName, currentWish, vibe, intent }) {
   const context = {
     intent: intent || null,
@@ -500,10 +808,19 @@ async function genieReply({ text, thread, firstName, currentWish, vibe, intent }
     micro: currentWish?.micro || null,
     vibe: vibe || null,
   }
+
   const resp = await fetch('/api/chat', {
     method:'POST',
     headers:{ 'Content-Type':'application/json' },
-    body: JSON.stringify({ userName: firstName || null, context, messages: [...toPlainMessages(thread), { role:'user', content:text }] })
+    body: JSON.stringify({
+      userName: firstName || null,
+      hmUrl: 'https://hypnoticmeditations.ai',
+      context,
+      messages: [
+        ...toPlainMessages(thread),
+        { role:'user', content:text }
+      ]
+    })
   })
   const data = await resp.json()
   if (!resp.ok) throw new Error(data?.error || 'API error')
@@ -511,17 +828,28 @@ async function genieReply({ text, thread, firstName, currentWish, vibe, intent }
 }
 
 /* =========================
-   Styles
+   Styles (inline for portability)
    ========================= */
 const styles = {
   portalHeader: { textAlign:'left', marginBottom:18 },
   portalTitle: { fontSize:34, fontWeight:900, margin:0, color:'#111', letterSpacing:.3 },
   portalSubtitle: { fontSize:18, opacity:.9, marginTop:6, color:'#333' },
 
-  wrap: { minHeight:'100vh', color:'#111', padding:'24px', background:'linear-gradient(180deg, #fff 0%, #f7f7f9 100%)' },
+  wrap: {
+    minHeight:'100vh',
+    color:'#111',
+    padding:'24px',
+    background:'linear-gradient(180deg, #fff 0%, #f7f7f9 100%)',
+  },
   container: { maxWidth: 860, margin:'0 auto' },
 
-  card: { background:'#fff', border:'1px solid rgba(0,0,0,0.08)', borderRadius:18, padding:24, boxShadow:'0 6px 22px rgba(0,0,0,0.08)' },
+  card: {
+    background:'#fff',
+    border:'1px solid rgba(0,0,0,0.08)',
+    borderRadius:18,
+    padding:24,
+    boxShadow:'0 6px 22px rgba(0,0,0,0.08)',
+  },
 
   h2: { margin:0, fontSize:28, fontWeight:900, letterSpacing:.3, color:'#111' },
   h3: { marginTop:0, fontSize:22, fontWeight:850, color:'#111' },
@@ -537,7 +865,10 @@ const styles = {
     borderRadius:14,
     border:'1px solid rgba(0,0,0,0.08)',
     background:'linear-gradient(180deg, #fff 0%, #f2f2f2 100%)',
-    color:'#111', cursor:'pointer', textAlign:'center', boxShadow:'0 3px 10px rgba(0,0,0,0.08)'
+    color:'#111',
+    cursor:'pointer',
+    textAlign:'center',
+    boxShadow:'0 3px 10px rgba(0,0,0,0.08)'
   },
 
   // Messenger rows
@@ -548,13 +879,94 @@ const styles = {
   nameLabelUser: { fontSize: 12, opacity: .7, margin: '0 4px 4px 0', textAlign: 'right' },
 
   reactRow: { display:'flex', gap:8, alignItems:'center', margin:'6px 6px 0 6px' },
-  likeBtn: { border:'1px solid rgba(0,0,0,0.12)', background:'transparent', color:'#333', borderRadius:999, padding:'2px 8px', fontSize:12, cursor:'pointer' },
-  likeBtnActive: { border:'1px solid #ffd600', background:'rgba(255,214,0,0.12)', color:'#b58900', borderRadius:999, padding:'2px 8px', fontSize:12, cursor:'pointer' },
-  likeBadge: { fontSize:12, color:'#b58900', background:'rgba(255,214,0,0.1)', border:'1px solid rgba(255,214,0,0.3)', borderRadius:999, padding:'2px 8px' },
+  likeBtn: {
+    border:'1px solid rgba(0,0,0,0.12)',
+    background:'transparent',
+    color:'#333',
+    borderRadius:999,
+    padding:'2px 8px',
+    fontSize:12,
+    cursor:'pointer'
+  },
+  likeBtnActive: {
+    border:'1px solid #ffd600',
+    background:'rgba(255,214,0,0.12)',
+    color:'#b58900',
+    borderRadius:999,
+    padding:'2px 8px',
+    fontSize:12,
+    cursor:'pointer'
+  },
+  likeBadge: {
+    fontSize:12,
+    color:'#b58900',
+    background:'rgba(255,214,0,0.1)',
+    border:'1px solid rgba(255,214,0,0.3)',
+    borderRadius:999,
+    padding:'2px 8px'
+  },
 
-  bubbleAI: { maxWidth:'85%', background:'rgba(0,0,0,0.04)', padding:'12px 14px', borderRadius:12, border:'1px solid rgba(0,0,0,0.08)', margin:'8px 0', fontWeight: 600, letterSpacing: .1, lineHeight: 1.7, color:'#111' },
-  bubbleUser: { maxWidth:'85%', background:'rgba(255,214,0,0.15)', padding:'12px 14px', borderRadius:12, border:'1px solid rgba(255,214,0,0.25)', margin:'8px 0 8px auto', color:'#111' },
-  bubbleText: { fontSize: 15, lineHeight: 1.6, whiteSpace: 'normal', wordBreak: 'break-word', overflowWrap: 'anywhere' },
+  bubbleAI: {
+    maxWidth:'85%',
+    background:'rgba(0,0,0,0.04)',
+    padding:'12px 14px',
+    borderRadius:12,
+    border:'1px solid rgba(0,0,0,0.08)',
+    margin:'8px 0',
+    fontWeight: 600,
+    letterSpacing: .1,
+    lineHeight: 1.7,
+    color:'#111'
+  },
+
+  btn: {
+    padding:'12px 16px',
+    borderRadius:14,
+    border:'0',
+    background:'#ffd600',
+    color:'#111',
+    fontWeight:900,
+    cursor:'pointer',
+    letterSpacing:.2,
+    boxShadow:'0 0 12px rgba(255,214,0,0.35)'
+  },
+  btnGhost: {
+    padding:'12px 16px',
+    borderRadius:14,
+    border:'1px solid rgba(0,0,0,0.15)',
+    background:'transparent',
+    color:'#333',
+    fontWeight:820,
+    cursor:'pointer'
+  },
+
+  input: {
+    width:'100%',
+    padding:'12px 14px',
+    borderRadius:12,
+    border:'1px solid rgba(0,0,0,0.15)',
+    background:'#fff',
+    color:'#111',
+    outline:'none',
+  },
+  textarea: {
+    width:'100%',
+    padding:'12px 14px',
+    borderRadius:12,
+    border:'1px solid rgba(0,0,0,0.15)',
+    background:'#fff',
+    color:'#111',
+    outline:'none',
+    resize:'vertical',
+  },
+
+  lastWish: {
+    marginTop:12,
+    padding:12,
+    border:'1px dashed rgba(0,0,0,0.18)',
+    borderRadius:12,
+    background:'rgba(255,214,0,0.05)'
+  },
 
   checklist: { listStyle:'none', paddingLeft:0, margin:'8px 0 12px' },
   checkItem: { padding:'10px 12px', borderRadius:12, background:'rgba(0,0,0,0.03)', marginBottom:8, border:'1px solid rgba(0,0,0,0.08)' },
@@ -562,21 +974,60 @@ const styles = {
   checkbox: { width:18, height:18, accentColor:'#ffd600' },
 
   chatWrap: { display:'flex', flexDirection:'column', gap:12 },
-  chatStream: { background:'#fafafa', border:'1px solid rgba(0,0,0,0.08)', borderRadius:18, padding:16, minHeight:380, maxHeight:540, overflowY:'auto', boxShadow:'0 6px 22px rgba(0,0,0,0.08)' },
-  chatInputRow: { display:'flex', gap:10, alignItems:'center' },
-  chatInput: { flex:1, padding:'12px 14px', borderRadius:12, border:'1px solid rgba(0,0,0,0.15)', background:'#fff', color:'#111', outline:'none' },
+  chatStream: {
+    background:'#fafafa',
+    border:'1px solid rgba(0,0,0,0.08)',
+    borderRadius:18,
+    padding:16,
+    minHeight:380,
+    maxHeight:540,
+    overflowY:'auto',
+    boxShadow:'0 6px 22px rgba(0,0,0,0.08)'
+  },
 
-  lastWish: { marginTop:12, padding:12, border:'1px dashed rgba(0,0,0,0.18)', borderRadius:12, background:'rgba(255,214,0,0.05)' },
+  bubbleUser: {
+    maxWidth:'85%',
+    background:'rgba(255,214,0,0.15)',
+    padding:'12px 14px',
+    borderRadius:12,
+    border:'1px solid rgba(255,214,0,0.25)',
+    margin:'8px 0 8px auto',
+    color:'#111'
+  },
+  bubbleText: {
+    fontSize: 15,
+    lineHeight: 1.6,
+    whiteSpace: 'normal',
+    wordBreak: 'break-word',
+    overflowWrap: 'anywhere',
+  },
+
+  chatInputRow: { display:'flex', gap:10, alignItems:'center' },
+  chatInput: {
+    flex:1,
+    padding:'12px 14px',
+    borderRadius:12,
+    border:'1px solid rgba(0,0,0,0.15)',
+    background:'#fff',
+    color:'#111',
+    outline:'none',
+  },
 }
 
 /* =========================
    Tiny utils
    ========================= */
-function emojiFor(v) { if (v === 'BOLD') return '🔥'; if (v === 'CALM') return '🙏'; if (v === 'RICH') return '💰'; return '✨' }
+function emojiFor(v) {
+  if (v === 'BOLD') return '🔥'
+  if (v === 'CALM') return '🙏'
+  if (v === 'RICH') return '💰'
+  return '✨'
+}
 function titleCase(s){ return s ? s[0].toUpperCase() + s.slice(1).toLowerCase() : '' }
+function escapeHTML(s=''){ return s.replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])) }
 
 /* =========================
-   Checklist generation
+   Checklist generation — references wish, block, micro
    ========================= */
 function generateChecklist({ wish='', block='', micro='' }) {
   const W = (wish || '').trim()
@@ -588,13 +1039,14 @@ function generateChecklist({ wish='', block='', micro='' }) {
   const has = (s, keys) => keys.some(k => s.includes(k))
   const intent =
     has(w, ['revenue','sales','sell','checkout','order','buy','customers','aov','payhip','shopify','product','offer']) ? 'sales' :
-    has(w, ['video','short','reel','tiktok','yt','youtube','clip']) ? 'video' :
-    has(w, ['email','newsletter','aweber','list','broadcast']) ? 'email' :
-    has(w, ['ad','ads','meta','facebook','google','tiktok ads','campaign']) ? 'ads' :
-    has(w, ['landing','page','funnel','vsl','quiz','bridge','optin','thank you','preframe']) ? 'landing' :
-    has(w, ['blog','seo','rank','article','post']) ? 'seo' :
-    has(w, ['post','tweet','x.com','thread','instagram','ig','story']) ? 'social' :
-    has(w, ['meditation','audio','track','hypnosis','bundle']) ? 'product' : 'generic'
+    has(w, ['video','short','reel','tiktok','yt','youtube','clip'])                                             ? 'video' :
+    has(w, ['email','newsletter','aweber','list','broadcast'])                                                   ? 'email' :
+    has(w, ['ad','ads','meta','facebook','google','tiktok ads','campaign'])                                      ? 'ads' :
+    has(w, ['landing','page','funnel','vsl','quiz','bridge','optin','thank you','preframe'])                     ? 'landing' :
+    has(w, ['blog','seo','rank','article','post'])                                                               ? 'seo' :
+    has(w, ['post','tweet','x.com','thread','instagram','ig','story'])                                           ? 'social' :
+    has(w, ['meditation','audio','track','hypnosis','bundle'])                                                   ? 'product' :
+    'generic'
 
   let step1 = B
     ? `Neutralize the block “${B}”. Set a 30-minute focus window and remove one friction (phone off / tab close / clear desk).`
@@ -617,7 +1069,7 @@ function generateChecklist({ wish='', block='', micro='' }) {
     case 'landing': step3 = `Ship the page for “${W}”: add hero headline + one gold CTA. Go live.`; break
     case 'seo':     step3 = `Publish an outline post for “${W}” (H1/H2 + 200 words). Link it in nav.`; break
     case 'social':  step3 = `Post one social update about “${W}” with a hard CTA in line 1.`; break
-    case 'product': step3 = `Update the product page for “${W}” : 3 bullets + hero image + buy link. Publish.`; break
+    case 'product': step3 = `Update the product page for “${W}”: 3 bullets + hero image + buy link. Publish.`; break
   }
 
   return [
@@ -626,3 +1078,5 @@ function generateChecklist({ wish='', block='', micro='' }) {
     { id: 's3', text: step3, done: false },
   ]
 }
+
+function capitalizeFirst(s){ if(!s) return s; return s[0].toUpperCase()+s.slice(1) }
