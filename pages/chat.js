@@ -285,11 +285,13 @@ function Checklist({ wish, micro, steps, onToggle, onComplete, onSkip }) {
   return (
     <div style={styles.cosmicCard}>
       <div style={styles.scrollHeader}>
-        <div style={styles.scrollBadge}>🔮 Cosmic Scroll</div>
+        <div style={styles.scrollBadge}>🌌 Cosmic Scroll</div>
         <h3 style={styles.scrollTitle}>
-          Do this now for: <span style={{opacity:.9}}>"{wish || 'your wish'}"</span>
+          Do this now for: “{wish || 'your wish'}”
         </h3>
-        <p style={styles.scrollSub}>Three precise moves, each with a reason. Small + soon beats big + later.</p>
+        <p style={styles.scrollSub}>
+          Three precise moves, each with a reason. Small + soon beats big + later.
+        </p>
       </div>
 
       <ul style={styles.checklist}>
@@ -303,8 +305,8 @@ function Checklist({ wish, micro, steps, onToggle, onComplete, onSkip }) {
                 style={styles.checkbox}
               />
               <div>
-                <div style={styles.stepTitle}>{i+1}. {s.title}</div>
-                {s.why ? <div style={styles.stepWhy}>↳ {s.why}</div> : null}
+                <div style={styles.stepTitle}>{i+1}. {s.text}</div>
+                {s.why && <div style={styles.stepWhy}>{s.why}</div>}
               </div>
             </label>
           </li>
@@ -330,6 +332,7 @@ function Checklist({ wish, micro, steps, onToggle, onComplete, onSkip }) {
     </div>
   )
 }
+
 
 
 /* =========================
@@ -1072,143 +1075,26 @@ function generateChecklist({ wish='', block='', micro='' }) {
   const W = (wish || '').trim()
   const B = (block || '').trim()
   const M = (micro || '').trim()
-  const w = W.toLowerCase()
-  const b = B.toLowerCase()
-
-  const has = (s, keys) => keys.some(k => s.includes(k))
-
-  // Domain / intent detection
-  const intent =
-    has(w, ['fiverr','freelance','gig','upwork'])                              ? 'fiverr' :
-    has(w, ['weight','lose','lbs','pounds','fat','diet','cut','fitness'])      ? 'weight' :
-    has(w, ['revenue','sales','sell','checkout','order','buy','customers'])    ? 'sales' :
-    has(w, ['video','short','reel','tiktok','yt','youtube','clip'])            ? 'video' :
-    has(w, ['email','newsletter','list','broadcast'])                          ? 'email' :
-    has(w, ['ad','ads','meta','facebook','google','campaign'])                 ? 'ads' :
-    has(w, ['landing','page','funnel','vsl','quiz','optin'])                   ? 'landing' :
-    has(w, ['blog','seo','rank','article','post'])                             ? 'seo' :
-    has(w, ['post','tweet','x.com','thread','instagram','ig','story'])         ? 'social' :
-    has(w, ['meditation','audio','track','hypnosis','bundle','course'])        ? 'product' :
-    'generic'
-
-  // Step 1 — remove friction tied to the block
-  let step1Title = B
-    ? `Neutralize the block “${B}”. Set a 20–30 min focus window; remove one friction (phone off / one tab / clear desk).`
-    : `Set a 20–30 min focus window. Phone on DND. One tab only.`
-  let step1Why = `Friction is cosmic sand in the gears — remove one grain, the whole machine hums.`
-
-  if (has(b, ['overwhelm','busy','time'])) {
-    step1Title = `Calendar 30 minutes for “${W}” today. Treat it like a paid client.`
-    step1Why   = `Calendars are gravity — what you schedule, orbits you.`
-  }
-  if (has(b, ['fear','scared','doubt','confidence'])) {
-    step1Title = `2-minute pre-game: breathe, visualize “${W}” done, press go.`
-    step1Why   = `Nerves are just power with no assignment — give them a job.`
-  }
-  if (has(b, ['tech','setup','domain','pixel','tracking'])) {
-    step1Title = `Open the tool you need for “${W}”. Complete one required field. Save once.`
-    step1Why   = `Progress loves a saved draft — it’s the universe’s “autosave.”`
-  }
-  if (has(b, ['money','budget','cost'])) {
-    step1Title = `Pick the $0 version to advance “${W}”. Ship first; upgrade later.`
-    step1Why   = `Momentum compounds; invoices don’t.`
-  }
-  if (has(b, ['perfection','perfect','procrast'])) {
-    step1Title = `Draft ugly first for “${W}”. 15-minute limit.`
-    step1Why   = `Perfection is a black hole — escape velocity is called “done.”`
-  }
-
-  // Step 2 — domain-specific micro move (always respects user micro if given)
-  let step2Title = M ? `Do your micro-move now: “${M}”. Start timer (15m).`
-                     : `Choose the smallest action toward “${W}” and do it now (15m).`
-  let step2Why   = `Tiny actions are spark plugs — small strike, big engine.`
-
-  // Step 3 — domain-specific publish/proof + “why”
-  let step3Title = `Publish proof of progress for “${W}” (one message, one person, one platform).`
-  let step3Why   = `Public signals bend reality — commitments change your timeline.`
-
-  switch (intent) {
-    case 'fiverr':
-      step2Title = M || `Tune one Fiverr gig: add 3 exact keywords to title, update thumbnail, write 3 benefit bullets.`
-      step2Why   = `Search runs on words; buyers click on pictures; bullets sell benefits.`
-      step3Title = `Send 5 tailored offers/replies to fresh buyer requests (no paste-bombs).`
-      step3Why   = `Knocking politely on five doors beats shouting at one.`
-      break
-
-    case 'weight':
-      step2Title = M || `Plan today’s protein-first meals + a 20-minute walk (or 10 min twice).`
-      step2Why   = `Protein is rocket fuel for satiety; steps are quiet fat loss.`
-      step3Title = `Log food + steps in your app and put your water bottle where you can’t ignore it.`
-      step3Why   = `What gets measured gets lighter; hydration is metabolic WD-40.`
-      break
-
-    case 'sales':
-      step2Title = M || `Create one simple offer page (headline, 3 bullets, 1 CTA).`
-      step2Why   = `Clarity converts — not confetti.`
-      step3Title = `Send the offer to one warm list or DM 5 warm leads with a 1-line CTA.`
-      step3Why   = `Warm markets buy faster; short asks get read.`
-      break
-
-    case 'video':
-      step2Title = M || `Record one 30–45s clip answering a specific pain.`
-      step2Why   = `Specific > epic. Phones beat studios when the message is right.`
-      step3Title = `Upload with hook in line 1 + one CTA.`
-      step3Why   = `Hooks open doors; CTAs show the hallway.`
-      break
-
-    case 'email':
-      step2Title = M || `Draft a 5-sentence email (hook, story, 1 insight, CTA, PS).`
-      step2Why   = `Short emails get opened; simple structure gets sent.`
-      step3Title = `Send it to your list now — done is the deliverability hack.`
-      step3Why   = `Consistency trains inboxes like puppies.`
-      break
-
-    case 'ads':
-      step2Title = M || `Launch 1 ad set: 1 audience, 1 creative, 1 promise.`
-      step2Why   = `One variable at a time — scientists, not gamblers.`
-      step3Title = `Let it run for a day; screenshot metrics for a daily log.`
-      step3Why   = `Data is telescope glass — clean it before steering.`
-      break
-
-    case 'landing':
-      step2Title = M || `Ship hero section: promise, image, single gold CTA.`
-      step2Why   = `Above-the-fold is your elevator pitch — don’t make them ride 12 floors.`
-      step3Title = `Publish and test the link on mobile; fix the first thing you spot.`
-      step3Why   = `Mobile is the real boss; first fix unlocks the next.`
-      break
-
-    case 'seo':
-      step2Title = M || `Publish an outline post (H1/H2 + 200 words) on your target phrase.`
-      step2Why   = `Google rewards momentum — scaffolding first, skyscraper later.`
-      step3Title = `Internally link from 2 older posts/pages.`
-      step3Why   = `Links are roads — build two and traffic finds you.`
-      break
-
-    case 'social':
-      step2Title = M || `Write one post that starts with the payoff in line 1.`
-      step2Why   = `First line = door. If it’s open, they walk in.`
-      step3Title = `Post it and reply to the first 5 comments.`
-      step3Why   = `Conversation is the algorithm’s love language.`
-      break
-
-    case 'product':
-      step2Title = M || `Add 3 outcome bullets + one crisp hero image to the product page.`
-      step2Why   = `People buy results; images let them pre-own it.`
-      step3Title = `Publish and share one proof (testimonial, stat, or demo clip).`
-      step3Why   = `Proof is oxygen — no breath, no buy.`
-      break
-
-    default:
-      // keep the generic titles/why
-      break
-  }
 
   return [
-    { id: 's1', title: step1Title, why: step1Why, done: false },
-    { id: 's2', title: step2Title, why: step2Why, done: false },
-    { id: 's3', title: step3Title, why: step3Why, done: false },
+    {
+      id:'s1',
+      text: B ? `Neutralize the block: ${B}` : `Clear one friction before starting`,
+      why: "Blocks are like static on a radio. Remove them and the signal of action comes through."
+    },
+    {
+      id:'s2',
+      text: M ? `Do your micro-move: ${M}` : `Pick the tiniest action toward ${W}`,
+      why: "Small steps bend gravity. Momentum is more important than size."
+    },
+    {
+      id:'s3',
+      text: `Publish proof of progress for “${W}”`,
+      why: "The universe echoes signals. When you show movement publicly, doors swing wider."
+    }
   ]
 }
+
 
 
 function capitalizeFirst(s){ if(!s) return s; return s[0].toUpperCase()+s.slice(1) }
