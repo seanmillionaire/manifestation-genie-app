@@ -477,13 +477,8 @@ export default function ChatPage() {
         (Array.isArray(s.thread) && s.thread.length ? s.thread : []),
         firstName
       )
-      setThread(hydrated.length ? hydrated : [
-        normalizeMsg({
-          role:'assistant',
-          author:'Genie',
-          content: injectName(pick(GenieLang.greetings), firstName)
-        }, firstName)
-      ])
+setThread(hydrated) // start empty; wait for the user to speak
+
     } else {
       // brand-new session
       setThread([normalizeMsg({
@@ -585,13 +580,16 @@ export default function ChatPage() {
     setCurrentWish(data)
     setLastWish(data)
     const generated = generateChecklist(data)
-    setSteps(generated)
-    setPhase('checklist')
-    setThread(prev => prev.concat(
-      normalizeMsg({ role:'assistant', author:'Genie', content: `Wish set: <b>${escapeHTML(data.wish)}</b>.` }),
-      normalizeMsg({ role:'assistant', author:'Genie', content: pick(GenieLang.rewards) }),
-      normalizeMsg({ role:'assistant', author:'Genie', content: `Do these three now, then we talk. ${firstName}, speed > perfect.` })
-    ))
+setSteps(generated)
+setPhase('checklist')
+setThread(prev => prev.concat(
+  normalizeMsg({
+    role:'assistant',
+    author:'Genie',
+    content: `Locked: <b>${escapeHTML(data.wish)}</b>. 🚀 What’s the first move you’ll take?`
+  })
+))
+
   }
 
   // Checklist interactions
