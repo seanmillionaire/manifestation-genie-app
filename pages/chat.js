@@ -868,32 +868,6 @@ const styles={
   btn:{padding:'12px 16px',borderRadius:12,background:'#ffd600',color:'#111',fontWeight:700,cursor:'pointer'},
   btnGhost:{padding:'12px 16px',borderRadius:12,background:'transparent',border:'1px solid #555',color:'#ccc',cursor:'pointer'}
 
-     // === Cosmic checklist theming ===
-  cosmicCard: {
-    background:'linear-gradient(180deg, #18192a 0%, #11131f 100%)',
-    border:'1px solid rgba(255,255,255,0.08)',
-    borderRadius:18,
-    padding:24,
-    boxShadow:'0 18px 40px rgba(0,0,0,.45), inset 0 0 0 1px rgba(255,255,255,0.03)'
-  },
-  scrollHeader: { marginBottom:12 },
-  scrollBadge: {
-    display:'inline-block',
-    padding:'4px 10px',
-    borderRadius:999,
-    fontSize:12,
-    letterSpacing:.2,
-    background:'rgba(255,214,0,0.12)',
-    color:'#ffd600',
-    border:'1px solid rgba(255,214,0,0.35)',
-    marginBottom:8
-  },
-  scrollTitle: { margin:'2px 0 4px', fontSize:22, fontWeight:850 },
-  scrollSub: { fontSize:13, opacity:.8, margin:0 },
-
-  stepTitle: { fontSize:15, fontWeight:700, lineHeight:1.5 },
-  stepWhy:   { fontSize:13, opacity:.85, marginTop:4, lineHeight:1.45 }
-
 }
 
 /* =========================
