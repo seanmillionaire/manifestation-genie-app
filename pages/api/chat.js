@@ -93,24 +93,14 @@ What identity move will you claim now?
     })
 
     const raw = completion.choices?.[0]?.message?.content ?? "OK."
-const reply = completion.data.choices[0].message.content
+    const reply = sanitizeToSocial(raw, 1200)   // keep newlines, generous cap
 
-// Split by line breaks or “.” to create shorter bursts
-const parts = reply
-  .split(/\n+/)   // split on line breaks
-  .map(p => p.trim())
-  .filter(Boolean)
-
-let delay = 0
-parts.forEach((part, i) => {
-  setTimeout(() => {
-    setThread(prev => prev.concat(
-      normalizeMsg({ role: 'assistant', author: 'Genie', content: part })
-    ))
-  }, delay)
-  delay += 800 // ms delay between bubbles (tweak speed here)
-})
-
+    return res.status(200).json({ reply })
+  } catch (err) {
+    console.error(err)
+    return res.status(500).json({ error: "Genie hiccup." })
+  }
+}
 
 // Keep newlines; remove markdown; tidy whitespace; generous cap
 function sanitizeToSocial(text, max = 1200) {
