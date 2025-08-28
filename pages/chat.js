@@ -319,7 +319,7 @@ function Checklist({ wish, micro, steps, onToggle, onComplete, onSkip }) {
           disabled={!allDone}
           onClick={onComplete}
         >
-          All done → Enter chat
+          All done → Next Step
         </button>
         <button style={styles.btnGhost} onClick={onSkip}>Skip for now</button>
       </div>
