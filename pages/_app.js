@@ -3,12 +3,29 @@ import '../styles/globals.css'
 import '../styles/light-theme.css'
 import Head from 'next/head'
 
+const LOGO_SRC = 'https://storage.googleapis.com/mixo-sites/images/file-3ee255ce-ebaa-41de-96f6-a1233499cf70.png'
+
+function LogoHeader() {
+  return (
+    <div style={{
+      width:'100%', display:'flex', alignItems:'center', justifyContent:'center',
+      padding:'14px 12px', borderBottom:'1px solid #e5e7eb', background:'#fff',
+      position:'sticky', top:0, zIndex:50
+    }}>
+      <img src={LOGO_SRC} alt="Manifestation Genie" style={{height:36, width:'auto'}} />
+    </div>
+  )
+}
+
 export default function App({ Component, pageProps }) {
   return (
     <>
       <Head>
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
-        <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet" />
+        <link
+          href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap"
+          rel="stylesheet"
+        />
         <style>{`
           :root{
             --bg:#ffffff;
@@ -52,9 +69,10 @@ export default function App({ Component, pageProps }) {
             font-weight:600;
           }
           footer a:hover{ text-decoration:underline; }
-`}</style>
+        `}</style>
       </Head>
       <div className="pageWrap">
+        <LogoHeader />
         <main>
           <Component {...pageProps} />
         </main>
