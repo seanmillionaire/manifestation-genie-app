@@ -458,9 +458,13 @@ export default function ChatPage() {
   }, [session])
 
   // Ensure we start at Vibe right after login
-  useEffect(() => {
-    if (session) setFlow('vibe')
-  }, [session])
+useEffect(() => {
+  if (session && !localStorage.getItem('mgHasEntered')) {
+    setFlow('vibe')
+    localStorage.setItem('mgHasEntered', 'true')
+  }
+}, [session])
+
 
   function handleVibeSelect(v) {
     setVibe(v)
