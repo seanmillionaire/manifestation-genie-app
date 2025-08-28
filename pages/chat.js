@@ -130,7 +130,7 @@ export default function ChatPage() {
     // Navigate to the Vibe Select entry without touching auth
     // Your index page should read ?start=vibe and show the vibe screen,
     // then progress to questionnaire -> checklist -> chat.
-    router.push({ pathname: '/', query: { start: 'vibe' } })
+    router.push('/flow')
   }
 
   function handleKey(e) {
