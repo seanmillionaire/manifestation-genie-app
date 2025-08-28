@@ -9,7 +9,7 @@ import Questionnaire from '../components/Questionnaire' // if you use it
 /* =========================
    Config / Constants
    ========================= */
-const LOGO_SRC = 'https://storage.googleapis.com/mixo-sites/images/file-3ee255ce-ebaa-41de-96f6-a1233499cf70.png' // your logo
+const LOGO_SRC = 'https://storage.googleapis.com/mixo-sites/images/file-a7eebac5-6af9-4253-bc71-34c0d455a852.png' // your logo
 const STORE_URL = 'https://hypnoticmeditations.ai'
 
 const GenieLang = {
