@@ -853,18 +853,18 @@ const styles = {
 
   wrap: {
     minHeight:'100vh',
-    color:'#f2f2f6',
+    color:'#111111',
     padding:'24px',
-    background:'radial-gradient(1200px 600px at 50% -10%, #1a1b2d 0%, #0c0d14 55%, #090a10 100%)',
+    background:'#ffffff',
   },
   container: { maxWidth: 860, margin:'0 auto' },
 
   card: {
-    background:'#171826',
-    border:'1px solid rgba(255,255,255,0.06)',
+    background:'#ffffff',
+    border:'1px solid #e5e7eb',
     borderRadius:18,
     padding:24,
-    boxShadow:'0 18px 40px rgba(0,0,0,.45), inset 0 0 0 1px rgba(255,255,255,0.02)'
+    boxShadow:'0 6px 24px rgba(0,0,0,.08)'
   },
 
   h2: { margin:0, fontSize:28, fontWeight:900, letterSpacing:.3 },
@@ -954,7 +954,7 @@ const styles = {
     padding:'12px 16px',
     borderRadius:14,
     border:0,
-    background:'#ffd600',
+    background:'#FFD600',
     color:'#111',
     fontWeight:900,
     cursor:'pointer',
