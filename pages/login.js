@@ -65,10 +65,6 @@ export default function Login() {
         )}
       </section>
 
-      <footer className="login-footer">
-        <a href="https://hypnoticmeditations.ai" target="_blank" rel="noreferrer">HypnoticMeditations.ai</a>
-      </footer>
-
       <Style />
     </div>
   )
