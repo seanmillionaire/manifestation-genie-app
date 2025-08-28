@@ -3,7 +3,7 @@ import '../styles/globals.css'
 import '../styles/light-theme.css'
 import Head from 'next/head'
 
-const LOGO_SRC = 'https://storage.googleapis.com/mixo-sites/images/file-3ee255ce-ebaa-41de-96f6-a1233499cf70.png'
+const LOGO_SRC = 'https://storage.googleapis.com/mixo-sites/images/file-a7eebac5-6af9-4253-bc71-34c0d455a852.png'
 
 function LogoHeader() {
   return (
