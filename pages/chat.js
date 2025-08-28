@@ -102,6 +102,48 @@ const cosmicOutros = [
   "Gravity favors your move. 🌌",
   "Signals aligned; door unlocked. 🗝️"
 ];
+/* ===== Cosmic explanation + humor layer ===== */
+const COSMIC_METAPHORS = [
+  ['visualize','Like plotting stars before a voyage—see it, then sail.'],
+  ['assess','Numbers are telescope lenses—clean them and the path sharpens.'],
+  ['schedule','Calendars are gravity; what you schedule, orbits you.'],
+  ['contact','Knock and the door vibrates; knock twice and it opens.'],
+  ['record','One take beats zero takes—silence never went viral.'],
+  ['post','Ship the signal so your tribe can find its frequency.'],
+  ['email','A good subject line is a comet tail—impossible to ignore.'],
+  ['apply','Forms are portals; boring but they warp reality when complete.'],
+  ['practice','Reps are runways—every pass smooths the landing.'],
+  ['learn','Knowledge is dark matter—unseen, but it holds your galaxy.']
+];
+
+function explainLine(line='') {
+  const L = line.trim();
+  if (!L) return '';
+  // Skip if it looks like an outro or already explanatory
+  if (/(The lamp|orbit|stars|gravity|cosmos|Signals aligned)/i.test(L)) return L;
+
+  // Try to match a verb and attach a short metaphor
+  let add = null;
+  for (const [key, meta] of COSMIC_METAPHORS) {
+    if (new RegExp(`\\b${key}`, 'i').test(L)) { add = meta; break; }
+  }
+  if (!add) add = 'Do it small and soon—momentum makes its own magic.';
+
+  // If line starts with an emoji bullet we keep it; else add one
+  const hasEmoji = /^[^\w\s]/.test(L);
+  const base = hasEmoji ? L : `✨ ${L}`;
+  return `${base}\n<span style="opacity:.8">— ${add}</span>`;
+}
+
+function wittyCloser(topic='this') {
+  const zingers = [
+    `I’ll hold the lamp; you push the door on “${topic}.”`,
+    `Pro tip: perfection is a black hole—aim for orbit.`,
+    `If the muse calls, let it go to voicemail—ship first.`,
+    `Cosmos math: tiny action × today > giant plan × someday.`,
+  ];
+  return zingers[Math.floor(Math.random()*zingers.length)];
+}
 
 function ensureNoNumberedLists(s='') {
   return s
@@ -129,12 +171,20 @@ function addCosmicOutro(s='', topic='this') {
 }
 
 function formatGenieReply(raw='', topic='this') {
-  const noNums = ensureNoNumberedLists(raw);
-  const bullets = bulletize(noNums);
-  const tight = toSocialLines(bullets, 9);
+  const noNums   = ensureNoNumberedLists(raw);
+  const bullets  = bulletize(noNums);
+
+  // Break to short lines, then inject explanations under action-y lines
+  const tight = toSocialLines(bullets, 9)
+    .split('\n')
+    .map(explainLine)
+    .join('\n');
+
   const withOutro = addCosmicOutro(tight, topic);
-  return withOutro.trim();
+  const withQuip  = `${withOutro}\n\n${wittyCloser(topic)}`;
+  return withQuip.trim();
 }
+
 
 /* =========================
    Streak Messages (Brunson-style, human + hype)
