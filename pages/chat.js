@@ -413,7 +413,7 @@ export default function ChatPage() {
   const [firstName, setFirstName] = useState(getFirstNameFromCache())
 
   // phases
-  const [phase, setPhase] = useState('welcome')
+  const [phase, setPhase] = useState('vibe')
   const [vibe, setVibe] = useState(null) // 'BOLD' | 'CALM' | 'RICH'
   const [currentWish, setCurrentWish] = useState(null) // {wish, block, micro, vibe, date}
   const [lastWish, setLastWish] = useState(null)
