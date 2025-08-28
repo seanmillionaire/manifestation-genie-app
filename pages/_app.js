@@ -1,41 +1,64 @@
-// /pages/_app.js — App wrapper with shared header matching Chat theme
+// /pages/_app.js
 import '../styles/globals.css'
+import '../styles/light-theme.css'
 import Head from 'next/head'
-import { useRouter } from 'next/router'
-import Logo from '../components/Logo'
 
 export default function App({ Component, pageProps }) {
-  const router = useRouter()
-  const showHeader = router.pathname === '/chat' || router.pathname === '/login'
-
   return (
     <>
       <Head>
-        <title>Manifestation Genie</title>
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
-        <link
-          href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap"
-          rel="stylesheet"
-        />
+        <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet" />
+        <style>{`
+          :root{
+            --bg:#ffffff;
+            --card:#ffffff;
+            --soft:#f8fafc;
+            --text:#111111;
+            --muted:#334155;
+            --brand:#6633CC;
+            --gold:#FFD600;
+            --green:#16a34a;
+            --purple:#6633CC;
+            --border:#e5e7eb;
+          }
+          html,body{
+            margin:0;
+            padding:0;
+            background:var(--bg);
+            color:var(--text);
+            font-family:Poppins,system-ui,Arial;
+            min-height:100%;
+          }
+          *{box-sizing:border-box}
+          .pageWrap{
+            display:flex;
+            flex-direction:column;
+            min-height:100vh;
+          }
+          main{ flex:1; }
+          footer{
+            text-align:center;
+            padding:20px 12px;
+            font-size:14px;
+            color:var(--muted);
+            border-top:1px solid var(--border);
+            line-height:1.6;
+            background:#fff;
+          }
+          footer a{
+            color:#0b67ff;
+            text-decoration:none;
+            font-weight:600;
+          }
+          footer a:hover{ text-decoration:underline; }
+`}</style>
       </Head>
-
-      <div className="mg-app">
-        {showHeader && (
-          <header className="mg-header">
-            <div className="mg-header-inner">
-              <div className="mg-brand" onClick={() => router.push('/')}>
-                <Logo size={40} withText />
-              </div>
-            </div>
-          </header>
-        )}
-
-        <main className="mg-main">
+      <div className="pageWrap">
+        <main>
           <Component {...pageProps} />
         </main>
-
-        <footer className="mg-footer">
+        <footer>
           <div>© {new Date().getFullYear()} Manifestation Genie. All rights reserved.</div>
           <div>
             Powered by{' '}
@@ -45,38 +68,6 @@ export default function App({ Component, pageProps }) {
           </div>
         </footer>
       </div>
-
-      <style jsx>{`
-        .mg-app{
-          min-height:100vh;
-          display:flex;
-          flex-direction:column;
-          background: var(--midnight);
-          color: var(--white);
-        }
-        .mg-header{
-          position:sticky; top:0; z-index:50;
-          backdrop-filter: blur(8px);
-          background: linear-gradient(180deg, rgba(13,27,42,0.85), rgba(13,27,42,0.55));
-          border-bottom: 1px solid rgba(255,255,255,0.08);
-        }
-        .mg-header-inner{
-          max-width:1000px; margin:0 auto;
-          padding:14px 20px;
-          display:flex; align-items:center; justify-content:space-between;
-        }
-        .mg-brand{ cursor:pointer; display:flex; align-items:center; gap:8px }
-        .mg-main{ flex:1; }
-        .mg-footer{
-          border-top:1px solid rgba(255,255,255,0.08);
-          padding:20px;
-          display:flex; gap:16px; flex-wrap:wrap; justify-content:center;
-          color: rgba(255,255,255,0.7);
-          background: rgba(13,27,42,0.7);
-        }
-        .mg-footer a{ color: var(--gold); text-decoration:none }
-        .mg-footer a:hover{ text-decoration:underline }
-      `}</style>
     </>
   )
 }
