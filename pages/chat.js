@@ -1,6 +1,6 @@
-// pages/chat.js — Manifestation Genie
-// Flow: welcome → vibe → resumeNew → questionnaire → checklist → chat
-// Supabase name integration + localStorage persistence (per session)
+// pages/chat.js — Manifestation Genie (Light Theme, Full File)
+// Flow: clean chat console with white shell, left/right bubbles, gold CTA,
+// uses /api/chat for replies, and persists session history locally.
 
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../src/supabaseClient'
@@ -15,1014 +15,307 @@ const GenieLang = {
     "The stars whispered your name, {firstName}… shall we begin?",
     "The portal is open 🌌 — step inside, {firstName}."
   ],
-  vibePrompt: "Pick your vibe: 🔥 Bold, 🙏 Calm, 💰 Rich. What are you feeling today?",
-  resumeOrNew: "Continue the last wish, or spark a fresh one?",
-  resumeLabel: "Continue last wish",
-  newLabel: "Start a new wish",
-  questPrompts: {
-    wish: "What’s the #1 goal you want to manifest today?",
-    block: "What’s blocking you? Drop the excuse in one line.",
-    micro: "What’s 1 micro-move you can make today? Something small."
-  },
-  rewards: [
-    "YES! That’s the one. Door unlocked.",
-    "Love it. The signal’s clear — time to move.",
-    "Locked in. You're ready. Execute time.",
-    "Noted. The window’s open. Step through."
-  ],
-  closing: "The lamp dims… but the magic stays with you.",
-  tinyCTA: "New wish or keep walking the path we opened?"
+  smallNudge:
+    "Tip: Ask for one thing in one sentence. Short, specific, alive. I’ll handle the heavy lifting.",
 }
 
 /* =========================
    Helpers
    ========================= */
-const todayStr = () => new Date().toISOString().slice(0,10)
-const pick = (arr) => arr[Math.floor(Math.random() * arr.length)]
-const STORAGE_KEY = 'mg_chat_state_v1'
+const STORAGE_KEY = 'mg_chat_history_v2'
 const NAME_KEY = 'mg_first_name'
 const newId = () => Math.random().toString(36).slice(2,10)
+const pick = (arr) => arr[Math.floor(Math.random() * arr.length)]
+const injectName = (t, name='Friend') => t.replaceAll('{firstName}', name)
 
-const injectName = (s, name) => (s || '').replaceAll('{firstName}', name || 'Friend')
-
-const loadState = () => {
-  if (typeof window === 'undefined') return null
+function loadNameFallback() {
   try {
-    const r = localStorage.getItem(STORAGE_KEY)
-    return r ? JSON.parse(r) : null
-  } catch { return null }
-}
-
-const saveState = (state) => {
-  if (typeof window === 'undefined') return
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)) } catch {}
-}
-
-const getFirstNameFromCache = () => {
-  if (typeof window === 'undefined') return 'Friend'
-  try {
-    const saved = localStorage.getItem(NAME_KEY)
-    if (saved && saved.trim()) return saved.trim().split(' ')[0]
+    const v = localStorage.getItem(NAME_KEY)
+    if (v) return v
   } catch {}
   return 'Friend'
 }
 
-// Streak announce persistence (once per day)
-const STREAK_ANNOUNCED_KEY = 'mg_streak_announced_date'
-function getAnnouncedDate() {
-  try { return localStorage.getItem(STREAK_ANNOUNCED_KEY) || null } catch { return null }
-}
-function setAnnouncedToday() {
-  try { localStorage.setItem(STREAK_ANNOUNCED_KEY, getToday()) } catch {}
-}
-
-const toSocialLines = (text='', wordsPerLine=9) => {
-  const soft = text
-    .replace(/\r/g,'')
-    .replace(/([.!?])\s+/g, '$1\n')
-    .replace(/\s+[-–—]\s+/g, '\n');
-
-  const lines = [];
-  for (const piece of soft.split(/\n+/)) {
-    const words = piece.trim().split(/\s+/).filter(Boolean);
-    if (!words.length) continue;
-    for (let i = 0; i < words.length; i += wordsPerLine) {
-      lines.push(words.slice(i, i + wordsPerLine).join(' '));
-    }
-  }
-  return lines.join('\n');
-};
-const nl2br = (s='') => s.replace(/\n/g, '<br/>');
-
-// --- Pretty + cosmic formatting for Genie replies ---
-const cosmicOutros = [
-  "The stars tilt toward {topic}. ✨",
-  "Orbit set; trajectory locked. 🔮",
-  "The lamp hums in your direction. 🌙",
-  "Gravity favors your move. 🌌",
-  "Signals aligned; door unlocked. 🗝️"
-];
-/* ===== Cosmic explanation + humor layer ===== */
-const COSMIC_METAPHORS = [
-  ['visualize','Like plotting stars before a voyage—see it, then sail.'],
-  ['assess','Numbers are telescope lenses—clean them and the path sharpens.'],
-  ['schedule','Calendars are gravity; what you schedule, orbits you.'],
-  ['contact','Knock and the door vibrates; knock twice and it opens.'],
-  ['record','One take beats zero takes—silence never went viral.'],
-  ['post','Ship the signal so your tribe can find its frequency.'],
-  ['email','A good subject line is a comet tail—impossible to ignore.'],
-  ['apply','Forms are portals; boring but they warp reality when complete.'],
-  ['practice','Reps are runways—every pass smooths the landing.'],
-  ['learn','Knowledge is dark matter—unseen, but it holds your galaxy.']
-];
-
-function explainLine(line='') {
-  const L = line.trim();
-  if (!L) return '';
-  // Skip if it looks like an outro or already explanatory
-  if (/(The lamp|orbit|stars|gravity|cosmos|Signals aligned)/i.test(L)) return L;
-
-  // Try to match a verb and attach a short metaphor
-  let add = null;
-  for (const [key, meta] of COSMIC_METAPHORS) {
-    if (new RegExp(`\\b${key}`, 'i').test(L)) { add = meta; break; }
-  }
-  if (!add) add = 'Do it small and soon—momentum makes its own magic.';
-
-  // If line starts with an emoji bullet we keep it; else add one
-  const hasEmoji = /^[^\w\s]/.test(L);
-  const base = hasEmoji ? L : `✨ ${L}`;
-  return `${base}\n<span style="opacity:.8">— ${add}</span>`;
-}
-
-function wittyCloser(topic='this') {
-  const zingers = [
-    `I’ll hold the lamp; you push the door on “${topic}.”`,
-    `Pro tip: perfection is a black hole—aim for orbit.`,
-    `If the muse calls, let it go to voicemail—ship first.`,
-    `Cosmos math: tiny action × today > giant plan × someday.`,
-  ];
-  return zingers[Math.floor(Math.random()*zingers.length)];
-}
-
-function ensureNoNumberedLists(s='') {
-  return s
-    .replace(/^\s*\d+\.\s*/gm, '• ')
-    .replace(/^\s*-\s*/gm, '• ');
-}
-
-function bulletize(s='') {
-  return s.split(/\n+/).map(line => {
-    const L = line.trim();
-    if (!L) return '';
-    if (/^(•|\*|–|-)/.test(L)) return L.replace(/^(•|\*|–|-)\s*/, '');
-    if (/^(step|do|try|next|then|now|contact|create|assess|visualize|message|record|post|ship|book|schedule|prepare|explore)\b/i.test(L)) {
-      const anchors = ["🌌","🔑","💰","🌀","✨"];
-      return `${anchors[Math.floor(Math.random()*anchors.length)]} ${L}`;
-    }
-    return L;
-  }).join('\n');
-}
-
-function addCosmicOutro(s='', topic='this') {
-  const line = cosmicOutros[Math.floor(Math.random()*cosmicOutros.length)].replace('{topic}', topic);
-  if (/(star|orbit|cosmos|universe|galaxy|gravity|lamp|portal)/i.test(s.split('\n').slice(-2).join(' '))) return s;
-  return `${s}\n\n${line}`;
-}
-
-function formatGenieReply(raw='', topic='this') {
-  const noNums = ensureNoNumberedLists(raw);
-  const bullets = bulletize(noNums);
-  const tight = toSocialLines(bullets, 9);
-  const withOutro = addCosmicOutro(tight, topic);
-  return withOutro.trim();
-}
-
-
-/* =========================
-   Streak Messages (Brunson-style, human + hype)
-   ========================= */
-function streakMessage(count) {
-  if (count === 1) return "Day 1 — you showed up. Momentum just started.";
-  if (count === 2) return "2 days in a row. That’s a pattern forming. Keep it alive.";
-  if (count === 3) return "3-day streak. You’re building a muscle. Don’t break it tonight.";
-  if (count >= 4 && count < 7) return `${count} days straight — proof this isn’t luck. Keep stacking wins.`;
-  if (count >= 7 && count < 30) return `${count} days. Weekly habit formed — imagine what 30 does.`;
-  return `${count} days strong — this isn’t a streak anymore, it’s who you are.`;
-}
-
-/* =========================
-   Brunson Daily Streak (localStorage)
-   ========================= */
-const STREAK_KEY = 'mg_streak'
-const LAST_DATE_KEY = 'mg_last_date'
-
-function getToday() { return new Date().toISOString().slice(0,10) }
-function getYesterday() {
-  const d = new Date(); d.setDate(d.getDate() - 1);
-  return d.toISOString().slice(0,10)
-}
-function loadStreak() {
-  if (typeof window === 'undefined') return { count: 0, last: null }
+function loadHistory() {
   try {
-    const count = parseInt(localStorage.getItem(STREAK_KEY) || '0', 10)
-    const last = localStorage.getItem(LAST_DATE_KEY)
-    return { count: isNaN(count) ? 0 : count, last }
-  } catch { return { count: 0, last: null } }
+    const raw = localStorage.getItem(STORAGE_KEY)
+    if (!raw) return []
+    return JSON.parse(raw) || []
+  } catch { return [] }
 }
-function saveStreak(count, last) {
-  try {
-    localStorage.setItem(STREAK_KEY, String(count))
-    localStorage.setItem(LAST_DATE_KEY, last)
-  } catch {}
+function saveHistory(messages=[]) {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(messages)) } catch {}
 }
 
 /* =========================
-   Minimal Questionnaire
+   Page
    ========================= */
-function Questionnaire({ initial, onComplete, vibe, firstName }) {
-  const [wish, setWish]   = useState(initial?.wish || "")
-  const [block, setBlock] = useState(initial?.block || "")
-  const [micro, setMicro] = useState(initial?.micro || "")
-
-  const canSubmit = wish.trim() && micro.trim()
-
-  return (
-    <>
-      <div style={styles.portalHeader}>
-        <h1 style={styles.portalTitle}>Your Personal AI Genie ✨</h1>
-        <p style={styles.portalSubtitle}>This is your daily portal to manifest your dreams into reality.</p>
-      </div>
-
-      <div style={styles.card}>
-        <h3 style={styles.h3}>Let's decode your dream, {firstName}👇</h3>
-
-        <p style={styles.subtle}>{GenieLang.questPrompts.wish}</p>
-        <textarea
-          value={wish}
-          onChange={e=>setWish(e.target.value)}
-          placeholder="One line. No fluff."
-          style={styles.textarea}
-          rows={3}
-        />
-
-        <p style={{...styles.subtle, marginTop:16}}>{GenieLang.questPrompts.block}</p>
-        <textarea
-          value={block}
-          onChange={e=>setBlock(e.target.value)}
-          placeholder="Say the snag. Simple + true."
-          style={styles.textarea}
-          rows={2}
-        />
-
-        <p style={{...styles.subtle, marginTop:16}}>{GenieLang.questPrompts.micro}</p>
-        <input
-          value={micro}
-          onChange={e=>setMicro(e.target.value)}
-          placeholder="Send it. Start it. Ship it."
-          style={styles.input}
-        />
-
-        <button
-          style={{...styles.btn, marginTop:16, opacity: canSubmit ? 1 : 0.6, cursor: canSubmit ? 'pointer' : 'not-allowed'}}
-          disabled={!canSubmit}
-          onClick={() => onComplete({wish:wish.trim(), block:block.trim(), micro:micro.trim(), vibe, date: todayStr()})}
-        >
-          Lock it in →
-        </button>
-        <p style={{...styles.mini, marginTop:12}}>{pick(GenieLang.rewards)}</p>
-      </div>
-    </>
-  )
-}
-
-/* =========================
-   Cosmic Checklist (human + metaphor)
-   ========================= */
-function Checklist({ wish, micro, steps, onToggle, onComplete, onSkip }) {
-  const allDone = steps.length > 0 && steps.every(s => s.done)
-
-  return (
-    <div style={styles.cosmicCard}>
-      <div style={styles.scrollHeader}>
-        <div style={styles.scrollBadge}>🌌 Cosmic Scroll</div>
-        <h3 style={styles.scrollTitle}>
-          Do this now for: “{wish || 'your wish'}”
-        </h3>
-        <p style={styles.scrollSub}>
-          Three precise moves, each with a reason. Small + soon beats big + later.
-        </p>
-      </div>
-
-      <ul style={styles.checklist}>
-        {steps.map((s, i) => (
-          <li key={s.id} style={styles.checkItem}>
-            <label style={styles.checkLabel}>
-              <input
-                type="checkbox"
-                checked={!!s.done}
-                onChange={() => onToggle(s.id)}
-                style={styles.checkbox}
-              />
-              <div>
-                <div style={styles.stepTitle}>{i+1}. {s.text}</div>
-                {s.why && <div style={styles.stepWhy}>{s.why}</div>}
-              </div>
-            </label>
-          </li>
-        ))}
-      </ul>
-
-      <div style={styles.row}>
-        <button
-          style={{...styles.btn, opacity: allDone ? 1 : .65, cursor: allDone ? 'pointer' : 'not-allowed'}}
-          disabled={!allDone}
-          onClick={onComplete}
-        >
-          All done → Next Step
-        </button>
-        <button style={styles.btnGhost} onClick={onSkip}>Skip for now</button>
-      </div>
-
-      {micro ? (
-        <p style={{...styles.mini, marginTop:10}}>
-          Your micro-move: <b>{micro}</b> — mark it complete once it’s in motion.
-        </p>
-      ) : null}
-    </div>
-  )
-}
-
-
-
-/* =========================
-   Messenger-style Chat Console (labels + likes)
-   ========================= */
-function ChatConsole({ thread, onSend, onReset, onToggleLike, firstName }) {
-  const [input, setInput] = useState("")
-  const endRef = useRef(null)
-  useEffect(()=>{ endRef.current?.scrollIntoView({behavior:'smooth'}) }, [thread])
-
-  return (
-    <div style={styles.chatWrap}>
-      <div style={styles.chatStream}>
-        {thread.map((m) => {
-          const isAI = m.role === 'assistant'
-          return (
-            <div key={m.id} style={isAI ? styles.rowAI : styles.rowUser}>
-              {/* Avatar */}
-              <div style={styles.avatar}>{isAI ? '🔮' : '🙂'}</div>
-
-              <div style={{flex:1, minWidth:0}}>
-                {/* Name label (mirror) */}
-                <div style={isAI ? styles.nameLabelAI : styles.nameLabelUser}>
-                  {isAI ? 'Genie' : (m.author || firstName || 'You')}
-                </div>
-
-                {/* Bubble */}
-                <div style={isAI ? styles.bubbleAI : styles.bubbleUser}>
-                  <div style={styles.bubbleText} dangerouslySetInnerHTML={{__html: m.content}} />
-                </div>
-
-                {/* Reactions row */}
-                <div style={styles.reactRow}>
-                  {isAI ? (
-                    <button
-                      style={m.likedByUser ? styles.likeBtnActive : styles.likeBtn}
-                      onClick={() => onToggleLike(m.id, 'user')}
-                      aria-label="Like Genie message"
-                    >
-                      👍 {m.likedByUser ? 'Liked' : 'Like'}
-                    </button>
-                  ) : (
-                    m.likedByGenie ? <span style={styles.likeBadge}>Genie liked this 👍</span> : null
-                  )}
-                </div>
-              </div>
-            </div>
-          )
-        })}
-        <div ref={endRef} />
-      </div>
-
-      {/* Composer */}
-      <div style={styles.chatInputRow}>
-        <input
-          value={input}
-          onChange={(e)=>setInput(e.target.value)}
-          placeholder="Speak to your Genie… 🔮"
-          onKeyDown={(e)=>{ if(e.key==='Enter' && input.trim()){ onSend(input.trim()); setInput('') } }}
-          style={styles.chatInput}
-        />
-        <button style={styles.btn} onClick={()=>{ if(input.trim()){ onSend(input.trim()); setInput('') } }}>
-          Send
-        </button>
-        <button style={styles.btnGhost} onClick={onReset}>New wish</button>
-      </div>
-    </div>
-  )
-}
-
-/* =========================
-   Main Page
-   ========================= */
-function toPlainMessages(thread) {
-  const strip = (s='') => s
-    .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/<\/?[^>]+(>|$)/g, '')
-    .replace(/\s+/g, ' ')
-    .trim()
-
-  return thread.map(m => ({
-    role: m.role,
-    content: strip(m.content || '')
-  }))
-}
-
 export default function ChatPage() {
-  // FIRST NAME: cache first; hydrate from Supabase (profiles → metadata → email)
-  const [firstName, setFirstName] = useState(getFirstNameFromCache())
+  const [firstName, setFirstName] = useState('Friend')
+  const [messages, setMessages] = useState([])
+  const [input, setInput] = useState('')
+  const [loading, setLoading] = useState(false)
+  const streamRef = useRef(null)
 
-  // phases
-  const [phase, setPhase] = useState('welcome')
-  const [vibe, setVibe] = useState(null) // 'BOLD' | 'CALM' | 'RICH'
-  const [currentWish, setCurrentWish] = useState(null) // {wish, block, micro, vibe, date}
-  const [lastWish, setLastWish] = useState(null)
-  const [steps, setSteps] = useState([])
-
-  // streak state
-  const [streak, setStreak] = useState(0)
-  const [hasAnnouncedStreak, setHasAnnouncedStreak] = useState(false)
-
-  // greeting seeded with name
-  const [greeting] = useState(() => injectName(pick(GenieLang.greetings), firstName))
-  const [thread, setThread] = useState([
-    { id:newId(), role:'assistant', author:'Genie', content:greeting, likedByUser:false, likedByGenie:false }
-  ])
-
-  // Supabase name hydration
-useEffect(() => {
-  let alive = true
-  ;(async () => {
-    try {
-      const { data: { session } } = await supabase.auth.getSession()
-      const user = session?.user
-      if (!alive || !user) return
-      let fn = null
-
+  // 1) Load name from profile or localStorage
+  useEffect(() => {
+    let mounted = true
+    ;(async () => {
       try {
-        const { data: p } = await supabase
-          .from('profiles')
-          .select('full_name')
-          .eq('id', user.id)
-          .maybeSingle()
-        if (p?.full_name) fn = String(p.full_name).trim().split(' ')[0]
+        const { data: { session } } = await supabase.auth.getSession()
+        if (session?.user?.id) {
+          const { data, error } = await supabase
+            .from('profiles')
+            .select('first_name')
+            .eq('id', session.user.id)
+            .single()
+          if (!error && data?.first_name && mounted) {
+            setFirstName(data.first_name)
+            try { localStorage.setItem(NAME_KEY, data.first_name) } catch {}
+            return
+          }
+        }
       } catch {}
-
-      if (!fn) {
-        const meta = user.user_metadata || {}
-        fn =
-          (meta.full_name?.trim().split(' ')[0]) ||
-          (meta.name?.trim().split(' ')[0]) ||
-          meta.given_name ||
-          null
-      }
-
-      if (!fn) fn = (user.email || '').split('@')[0] || 'Friend'
-
-      if (alive) {
-        setFirstName(fn)
-        try { localStorage.setItem(NAME_KEY, fn) } catch {}
-
-        // 👉 NEW: on login, if no vibe selected yet, show the Vibe screen first
-        setPhase(prev => (prev !== 'chat' && prev !== 'checklist' && prev !== 'questionnaire' && !vibe) ? 'vibe' : prev)
-      }
-    } catch {}
-  })()
-  return () => { alive = false }
-  // include `vibe` so the setter sees the latest value
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-}, [vibe])
-
-
-  // Load persisted state on mount
-  useEffect(()=>{
-    const s = loadState()
-    if (s) {
-      setPhase(s.phase || 'welcome')
-      setVibe(s.vibe || null)
-      setCurrentWish(s.currentWish || null)
-      setLastWish(s.lastWish || null)
-      setSteps(s.steps || [])
-      setThread(s.thread?.length ? s.thread : [{role:'assistant', content: injectName(pick(GenieLang.greetings), firstName)}])
-    }
-
-    // hydrate streak
-    const { count, last } = loadStreak()
-    const today = getToday()
-    if (last === today) {
-      setStreak(count)
-    } else if (last === getYesterday()) {
-      setStreak(count + 1)
-      saveStreak(count + 1, today)
-    } else {
-      setStreak(1)
-      saveStreak(1, today)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+      // fallback
+      if (mounted) setFirstName(loadNameFallback())
+    })()
+    return () => { mounted = false }
   }, [])
 
-  // Persist state
-  useEffect(()=>{ saveState({ phase, vibe, currentWish, lastWish, steps, thread }) }, [phase, vibe, currentWish, lastWish, steps, thread])
-
-  // Scroll to top on phase change
+  // 2) Load / seed conversation
   useEffect(() => {
-    if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' })
-  }, [phase])
-
-  // Announce streak once when entering chat (human, once per day)
-  useEffect(() => {
-    if (phase !== 'chat') return
-
-    const today = getToday()
-    const alreadyAnnouncedToday = getAnnouncedDate() === today
-
-    if (alreadyAnnouncedToday) {
-      if (!hasAnnouncedStreak) setHasAnnouncedStreak(true)
-      return
-    }
-
-    if (!hasAnnouncedStreak) {
-      setThread(prev => prev.concat({
-        id: newId(),
-        role: 'assistant',
-        author: 'Genie',
-        content: nl2br(escapeHTML(
-          `${streakMessage(streak)}\nKeep the streak alive — what’s today’s micro-move?`
-        )),
-        likedByUser:false, likedByGenie:false
-      }))
-      setHasAnnouncedStreak(true)
-      setAnnouncedToday()
-    }
-  }, [phase, streak, hasAnnouncedStreak])
-
-  const handlePickVibe = (v) => {
-    setVibe(v)
-    setPhase('resumeNew')
-    setThread(prev => prev.concat({
-      role:'assistant',
-      content: `${GenieLang.vibePrompt}<br/><span style="opacity:.8">Chosen: <b>${emojiFor(v)} ${titleCase(v)}</b></span>`
-    }))
-  }
-
-  const handleResume = () => {
-    const chosen = lastWish || currentWish
-    if (chosen) {
-      setCurrentWish(chosen)
-      if ((steps || []).length) {
-        setPhase('checklist')
-      } else {
-        setPhase('questionnaire')
-      }
-      setThread(prev => prev.concat({
-        role:'assistant',
-        content: `We’ll keep weaving the last wish: <b>${escapeHTML(chosen.wish)}</b>.`
-      }))
+    const hist = loadHistory()
+    if (hist.length) {
+      setMessages(hist)
     } else {
-      setPhase('questionnaire')
-      setThread(prev => prev.concat({ role:'assistant', content: "No past wish found. Let’s light a new one." }))
+      const greeting = injectName(pick(GenieLang.greetings), loadNameFallback())
+      const seed = [
+        { id:newId(), role:'assistant', content:greeting },
+        { id:newId(), role:'assistant', content:GenieLang.smallNudge },
+      ]
+      setMessages(seed)
+      saveHistory(seed)
     }
-  }
+  }, [])
 
-  const handleNew = () => {
-    setCurrentWish(null)
-    setSteps([])
-    setPhase('questionnaire')
-    setThread(prev => prev.concat({ role:'assistant', content: "New star, new path. I’m listening…" }))
-  }
+  // 3) Auto-scroll
+  useEffect(() => {
+    if (!streamRef.current) return
+    streamRef.current.scrollTop = streamRef.current.scrollHeight
+  }, [messages, loading])
 
-  // 👉 Questionnaire → Checklist (MISSING BEFORE — now included)
-  const handleQuestComplete = (data) => {
-    setCurrentWish(data)
-    setLastWish(data)
-    const generated = generateChecklist(data)
-    setSteps(generated)
-    setPhase('checklist')
-    setThread(prev => prev.concat(
-      { id:newId(), role:'assistant', author:'Genie', content: `Wish set: <b>${escapeHTML(data.wish)}</b>.` },
-      { id:newId(), role:'assistant', author:'Genie', content: pick(GenieLang.rewards) },
-      { id:newId(), role:'assistant', author:'Genie', content: `Do these three now, then we talk. ${firstName}, speed > perfect.` }
-    ))
-  }
-
-  // Checklist interactions
-  const toggleStep = (id) => {
-    setSteps(prev => prev.map(s => s.id === id ? {...s, done: !s.done} : s))
-  }
-
-  const completeChecklist = () => {
-    setPhase('chat')
-    setThread(prev => prev.concat({
-      role:'assistant',
-      content: `Strong move. Checklist complete. Speak, and I’ll shape the path, ${firstName}. ${GenieLang.tinyCTA}`
-    }))
-  }
-
-  const skipChecklist = () => {
-    setPhase('chat')
-    setThread(prev => prev.concat({
-      role:'assistant',
-      content: `We’ll refine live. Tell me where you’re stuck on “${escapeHTML(currentWish?.wish || 'your goal')}”.`
-    }))
-  }
-
-  const onToggleLike = (id, who) => {
-    setThread(prev => prev.map(m => {
-      if (m.id !== id) return m
-      if (who === 'user') return { ...m, likedByUser: !m.likedByUser }
-      if (who === 'genie') return { ...m, likedByGenie: !m.likedByGenie }
-      return m
-    }))
-  }
-
-  // Streak bump on first activity of a new day
-  function bumpStreakOnActivity() {
-    const { count, last } = loadStreak()
-    const today = getToday()
-    if (last === today) return count // already counted today
-    const next = (last === getYesterday()) ? count + 1 : 1
-    saveStreak(next, today)
-    setStreak(next)
-    // mark that we've already announced today so the top-of-chat card doesn't duplicate
-    try { localStorage.setItem(STREAK_ANNOUNCED_KEY, today) } catch {}
-
-    // celebrate inside chat (human)
-    setThread(prev => prev.concat({
-      id: newId(),
-      role: 'assistant',
-      author: 'Genie',
-      content: nl2br(escapeHTML(
-        `New day logged. Streak: ${next}.\nDon’t break it — ship one tiny thing now.`
-      )),
-      likedByUser:false, likedByGenie:false
-    }))
-    return next
-  }
-
-  const maybeGenieLikes = (msg) => {
-    const t = (msg.content || '').toLowerCase()
-    const isWin = /(done|shipped|published|posted|sold|launched|emailed|uploaded|completed|locked in)/.test(t)
-    const shouldLike = isWin || Math.random() < 0.25
-    if (!shouldLike) return
-    setThread(prev => prev.map(m => m.id === msg.id ? ({ ...m, likedByGenie:true }) : m))
-  }
-
-  const handleSend = async (text) => {
-    const userMsg = {
-      id: newId(),
-      role: 'user',
-      author: firstName || 'You',
-      content: escapeHTML(text),
-      likedByUser: false,
-      likedByGenie: false
-    }
-    setThread(prev => prev.concat(userMsg))
-    maybeGenieLikes(userMsg)
-
-    // bump streak for today's first action
-    bumpStreakOnActivity()
-
+  // 4) Send logic
+  async function handleSend() {
+    const text = input.trim()
+    if (!text || loading) return
+    const userMsg = { id:newId(), role:'user', content:text }
+    const next = [...messages, userMsg]
+    setMessages(next)
+    saveHistory(next)
+    setInput('')
+    setLoading(true)
     try {
-      const reply = await genieReply({ text, thread, firstName, currentWish, vibe })
-      const topic = (currentWish?.wish || text || 'this').toLowerCase().slice(0, 80);
-      const pretty = formatGenieReply(reply, topic);
-      const aiMsg = {
-        id: newId(),
-        role: 'assistant',
-        author: 'Genie',
-        content: nl2br(escapeHTML(pretty)),
-        likedByUser: false,
-        likedByGenie: false
-      }
-      setThread(prev => prev.concat(aiMsg))
-    } catch {
-      const errMsg = {
-        id: newId(),
-        role: 'assistant',
-        author: 'Genie',
-        content: escapeHTML("The lamp flickered. Try again."),
-        likedByUser: false,
-        likedByGenie: false
-      }
-      setThread(prev => prev.concat(errMsg))
+      const res = await fetch('/api/chat', {
+        method:'POST',
+        headers:{ 'Content-Type':'application/json' },
+        body: JSON.stringify({
+          message: text,
+          history: next.map(({ role, content }) => ({ role, content })),
+          firstName
+        })
+      })
+      if (!res.ok) throw new Error('Network error')
+      const data = await res.json()
+      const reply = (data?.reply || '').trim() || "✨ Noted. Give me one line: What’s the exact outcome you want?"
+      const botMsg = { id:newId(), role:'assistant', content:reply }
+      const newer = [...next, botMsg]
+      setMessages(newer)
+      saveHistory(newer)
+    } catch (e) {
+      const errMsg = { id:newId(), role:'assistant', content:"⚠️ The lamp flickered. Try again in a moment." }
+      const newer = [...next, errMsg]
+      setMessages(newer)
+      saveHistory(newer)
+    } finally {
+      setLoading(false)
     }
   }
 
-  const resetToNewWish = () => {
-    setPhase('vibe')
-    setVibe(null)
-    setCurrentWish(null)
-    setSteps([])
-    setThread([{
-      id:newId(),
-      role:'assistant',
-      author:'Genie',
-      content: injectName(pick(GenieLang.greetings), firstName),
-      likedByUser:false,
-      likedByGenie:false
-    }])
-    setHasAnnouncedStreak(false)
-
-    // force scroll back up
-    if (typeof window !== 'undefined') {
-      window.scrollTo({ top: 0, behavior: 'smooth' })
+  function handleKey(e) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      handleSend()
     }
   }
 
   return (
     <div style={styles.wrap}>
       <div style={styles.container}>
-        {/* Welcome */}
-        {phase === 'welcome' && (
-          <div style={styles.card}>
-            <h1 style={{fontSize:34, fontWeight:900, margin:0}}>Meet Your Genie 🔮</h1>
-            <p style={{fontSize:18, opacity:.92, marginTop:8}}>
-              The lamp is open. Set your vibe and let’s flip what’s blocking you.
-            </p>
-            <p style={styles.lead}>{injectName(pick(GenieLang.greetings), firstName)}</p>
-            <button style={styles.btn} onClick={()=>setPhase('vibe')}>Start →</button>
-          </div>
-        )}
 
-        {/* Vibe */}
-        {phase === 'vibe' && (
-          <div style={styles.card}>
-            <p style={styles.lead}>{GenieLang.vibePrompt}</p>
-            <div style={styles.vibeRow}>
-              <VibeButton label="BOLD" emoji="🔥" onClick={()=>handlePickVibe('BOLD')} />
-              <VibeButton label="CALM" emoji="🙏" onClick={()=>handlePickVibe('CALM')} />
-              <VibeButton label="RICH" emoji="💰" onClick={()=>handlePickVibe('RICH')} />
-            </div>
-          </div>
-        )}
+        <header style={styles.portalHeader}>
+          <h1 style={styles.portalTitle}>Your Personal AI Genie ✨</h1>
+          <p style={styles.portalSubtitle}>This is your daily portal to manifest your dreams into reality.</p>
+        </header>
 
-        {/* Resume or New */}
-        {phase === 'resumeNew' && (
-          <div style={styles.card}>
-            <p style={styles.lead}>{GenieLang.resumeOrNew}</p>
-            <div style={styles.row}>
-              <button style={styles.btn} onClick={handleResume}>{GenieLang.resumeLabel}</button>
-              <button style={styles.btnGhost} onClick={handleNew}>{GenieLang.newLabel}</button>
-            </div>
-            {lastWish && (
-              <div style={styles.lastWish}>
-                <div style={styles.mini}><b>Last wish:</b> {lastWish.wish}</div>
-                <div style={styles.mini}><b>Vibe:</b> {emojiFor(lastWish.vibe)} {titleCase(lastWish.vibe || '')}</div>
-                <div style={styles.mini}><b>Last step:</b> {lastWish.micro}</div>
+        <div style={styles.chatWrap}>
+          {/* Scrollable message stream */}
+          <div style={styles.chatStream} ref={streamRef}>
+            {messages.map((m) => {
+              const isUser = m.role === 'user'
+              return (
+                <div key={m.id} style={isUser ? styles.rowUser : styles.rowAI}>
+                  {!isUser && (
+                    <img
+                      alt="Genie"
+                      src="https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/svg/1f9de.svg"
+                      style={styles.avatar}
+                    />
+                  )}
+                  <div style={isUser ? styles.bubbleUser : styles.bubbleAI}>
+                    {!isUser && <div style={styles.nameLabelAI}>Genie</div>}
+                    {isUser && <div style={styles.nameLabelUser}>{firstName}</div>}
+                    <div style={styles.bubbleText} dangerouslySetInnerHTML={{ __html: escape(m.content) }} />
+                    {/* Like badge (placeholder) */}
+                    {!isUser && (
+                      <div style={{ marginTop: 8 }}>
+                        <button type="button" style={styles.likeBtn}>
+                          👍 Like
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+            {loading && (
+              <div style={styles.rowAI}>
+                <img
+                  alt="Genie"
+                  src="https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/svg/1f9de.svg"
+                  style={styles.avatar}
+                />
+                <div style={styles.bubbleAI}>
+                  <div style={styles.nameLabelAI}>Genie</div>
+                  <div style={styles.bubbleText}>…typing magic</div>
+                </div>
               </div>
             )}
           </div>
-        )}
 
-        {/* Questionnaire */}
-        {phase === 'questionnaire' && (
-          <Questionnaire
-            initial={currentWish}
-            onComplete={handleQuestComplete}
-            vibe={vibe}
-            firstName={firstName}
-          />
-        )}
+          {/* Input row */}
+          <div style={styles.chatInputRow}>
+            <input
+              style={styles.chatInput}
+              placeholder="Speak to your Genie… 🧞‍♀️"
+              value={input}
+              onChange={(e)=>setInput(e.target.value)}
+              onKeyDown={handleKey}
+              disabled={loading}
+            />
+            <button style={styles.btn} onClick={handleSend} disabled={loading || !input.trim()}>
+              {loading ? 'Sending…' : 'Send'}
+            </button>
+          </div>
+        </div>
 
-        {/* Checklist */}
-        {phase === 'checklist' && (
-          <Checklist
-            wish={currentWish?.wish}
-            micro={currentWish?.micro}
-            steps={steps}
-            onToggle={toggleStep}
-            onComplete={completeChecklist}
-            onSkip={skipChecklist}
-          />
-        )}
-
-        {/* Chat */}
-        {phase === 'chat' && (
-          <ChatConsole
-            thread={thread}
-            onSend={handleSend}
-            onReset={resetToNewWish}
-            onToggleLike={onToggleLike}
-            firstName={firstName}
-          />
-        )}
       </div>
     </div>
   )
 }
 
 /* =========================
-   Small UI bits
+   Tiny utility
    ========================= */
-function VibeButton({ label, emoji, onClick }) {
-  return (
-    <button onClick={onClick} style={styles.vibeBtn}>
-      <div style={{fontSize:28, lineHeight:1, marginBottom:6}}>{emoji}</div>
-      <div style={{fontWeight:800}}>{label}</div>
-    </button>
-  )
-}
-
-/* Hit /api/chat (your one-liner operator Genie) */
-async function genieReply({ text, thread, firstName, currentWish, vibe, intent }) {
-  const context = {
-    intent: intent || null,
-    mood: null,
-    wish: currentWish?.wish || null,
-    block: currentWish?.block || null,
-    micro: currentWish?.micro || null,
-    vibe: vibe || null,
-  }
-
-  const resp = await fetch('/api/chat', {
-    method:'POST',
-    headers:{ 'Content-Type':'application/json' },
-    body: JSON.stringify({
-      userName: firstName || null,
-      hmUrl: 'https://hypnoticmeditations.ai',
-      context,
-      messages: [
-        ...toPlainMessages(thread),
-        { role:'user', content:text }
-      ]
-    })
-  })
-  const data = await resp.json()
-  if (!resp.ok) throw new Error(data?.error || 'API error')
-  return data.reply || 'OK.'
+function escape(s=''){
+  // very light HTML escaping; server should already sanitize
+  return s.replace(/[&<>"]/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]))
 }
 
 /* =========================
-   Styles
+   Styles — Light Theme
    ========================= */
 const styles = {
-  wrap: {
-    minHeight: '100vh',
-    background: '#ffffff',
-    color: '#111111',
-    padding: '24px',
-  },
+  /* Page */
+  wrap: { minHeight:'100vh', background:'#ffffff', color:'#111111', padding:'24px' },
   container: { maxWidth: 980, margin: '0 auto' },
 
   /* Header */
-  portalHeader: { textAlign: 'left', marginBottom: 18 },
-  portalTitle: { fontSize: 32, fontWeight: 900, margin: 0, color: '#111', letterSpacing: .2 },
-  portalSubtitle: { fontSize: 16, color: '#475569', marginTop: 6 },
+  portalHeader: { textAlign:'left', marginBottom:18 },
+  portalTitle: { fontSize:32, fontWeight:900, margin:0, color:'#111', letterSpacing:.2 },
+  portalSubtitle: { fontSize:16, color:'#475569', marginTop:6 },
 
-  /* Card */
-  card: {
-    background: '#ffffff',
-    border: '1px solid #e5e7eb',
-    borderRadius: 18,
-    padding: 20,
-    boxShadow: '0 6px 24px rgba(0,0,0,.08)',
-    marginBottom: 18,
+  /* Chat shell */
+  chatWrap: {
+    background:'#fff',
+    border:'1px solid #e5e7eb',
+    borderRadius:20,
+    boxShadow:'0 18px 44px rgba(0,0,0,.08)',
+    overflow:'hidden',
+  },
+  chatStream: {
+    padding:20,
+    maxHeight:'calc(100vh - 280px)',
+    overflowY:'auto',
+    background:'#fff'
   },
 
-  /* Chat Shell */
-  chatShell: {
-    background: '#fff',
-    border: '1px solid #e5e7eb',
-    borderRadius: 20,
-    boxShadow: '0 18px 44px rgba(0,0,0,.08)',
-    display: 'flex',
-    flexDirection: 'column',
-    overflow: 'hidden',
-  },
-  messages: {
-    padding: 20,
-    maxHeight: 'calc(100vh - 280px)',
-    overflowY: 'auto',
-  },
+  /* Rows */
+  rowAI:   { display:'flex', gap:10, alignItems:'flex-start', margin:'8px 0' },
+  rowUser: { display:'flex', gap:10, alignItems:'flex-start', margin:'8px 0', justifyContent:'flex-end' },
+
+  /* Avatars + labels */
+  avatar: { width:28, height:28, borderRadius:'50%', flex:'0 0 auto' },
+  nameLabelAI: { fontSize:12, color:'#475569', margin:'0 0 4px' },
+  nameLabelUser: { fontSize:12, color:'#475569', textAlign:'right', margin:'0 0 4px' },
 
   /* Bubbles */
-  bubble: {
-    maxWidth: '86%',
-    padding: '12px 14px',
-    borderRadius: 12,
-    border: '1px solid #e5e7eb',
-    margin: '8px 0',
-    lineHeight: 1.6,
-    wordBreak: 'break-word',
-    overflowWrap: 'anywhere',
-    fontSize: 15,
-  },
-  bubbleGenie: {
-    background: '#f8fafc',
-    border: '1px solid #e5e7eb',
-    color: '#0f172a',
-    marginRight: 'auto',
+  bubbleAI: {
+    maxWidth:'86%',
+    background:'#f8fafc',
+    border:'1px solid #e5e7eb',
+    color:'#0f172a',
+    padding:'12px 14px',
+    borderRadius:12
   },
   bubbleUser: {
-    background: 'rgba(255,214,0,0.12)',
-    border: '1px solid rgba(255,214,0,0.35)',
-    color: '#111111',
-    marginLeft: 'auto',
+    maxWidth:'86%',
+    background:'rgba(255,214,0,0.12)',
+    border:'1px solid rgba(255,214,0,0.35)',
+    color:'#111111',
+    padding:'12px 14px',
+    borderRadius:12
+  },
+  bubbleText: { fontSize:15, lineHeight:1.6, wordBreak:'break-word', overflowWrap:'anywhere' },
+
+  /* Like button */
+  likeBtn: {
+    display:'inline-flex', alignItems:'center', gap:6,
+    background:'#fff',
+    border:'1px solid #e5e7eb',
+    borderRadius:999, padding:'4px 10px',
+    fontSize:12, cursor:'pointer'
   },
 
-  /* Input Bar */
-  inputBar: {
-    display: 'flex',
-    gap: 10,
-    alignItems: 'center',
-    padding: 12,
-    borderTop: '1px solid #e5e7eb',
-    background: '#fff',
+  /* Input */
+  chatInputRow: {
+    display:'flex', gap:10, alignItems:'center',
+    padding:12, borderTop:'1px solid #e5e7eb', background:'#fff'
   },
-  input: {
-    flex: 1,
-    border: '1px solid #e5e7eb',
-    borderRadius: 12,
-    padding: '12px 14px',
-    outline: 'none',
-    background: '#fff',
-    color: '#111',
+  chatInput: {
+    flex:1, border:'1px solid #e5e7eb', borderRadius:12,
+    padding:'12px 14px', outline:'none', background:'#fff', color:'#111'
   },
 
   /* Buttons */
   btn: {
-    padding: '12px 16px',
-    borderRadius: 14,
-    border: '2px solid #000',
-    background: '#FFD600',
-    color: '#111',
-    fontWeight: 900,
-    letterSpacing: .2,
-    cursor: 'pointer',
-    boxShadow: '0 18px 40px rgba(0,0,0,.10)',
-  },
-
-  /* Checklist */
-  scroll: {
-    background: '#fff',
-    border: '1px solid #e5e7eb',
-    borderRadius: 16,
-    padding: 16,
-    boxShadow: '0 6px 24px rgba(0,0,0,.06)',
-    marginTop: 12,
-  },
-  scrollHeader: { marginBottom: 8 },
-  scrollBadge: {
-    display: 'inline-block',
-    padding: '4px 10px',
-    borderRadius: 999,
-    fontSize: 12,
-    letterSpacing: .2,
-    background: 'rgba(255,214,0,0.12)',
-    color: '#b58900',
-    border: '1px solid rgba(255,214,0,0.35)',
-    marginBottom: 6,
-  },
-  scrollTitle: { margin: '2px 0 2px', fontSize: 20, fontWeight: 850 },
-  scrollSub: { fontSize: 13, color: '#475569', margin: 0 },
-
-  checklist: { listStyle: 'none', padding: 0, margin: '8px 0 0' },
-  step: {
-    display: 'flex',
-    gap: 10,
-    alignItems: 'flex-start',
-    padding: '10px 12px',
-    borderRadius: 12,
-    border: '1px solid #e5e7eb',
-    margin: '8px 0',
-    background: '#fff',
-  },
-  checkbox: { margin: '4px 8px 0 0', width: 18, height: 18 },
-  stepTitle: { fontSize: 15, fontWeight: 700, lineHeight: 1.5 },
-  stepWhy: { fontSize: 13, color: '#475569', marginTop: 4, lineHeight: 1.45 },
-};
-
-
-/* =========================
-   Tiny utils
-   ========================= */
-function emojiFor(v) {
-  if (v === 'BOLD') return '🔥'
-  if (v === 'CALM') return '🙏'
-  if (v === 'RICH') return '💰'
-  return '✨'
+    padding:'12px 16px',
+    borderRadius:14,
+    border:'2px solid #000',
+    background:'#FFD600',
+    color:'#111',
+    fontWeight:900,
+    letterSpacing:.2,
+    cursor:'pointer',
+    boxShadow:'0 18px 40px rgba(0,0,0,.10)'
+  }
 }
-function titleCase(s){ return s ? s[0].toUpperCase() + s.slice(1).toLowerCase() : '' }
-function escapeHTML(s=''){ return s.replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])) }
-
-/* =========================
-   Checklist generation — intent-aware, human, metaphors
-   ========================= */
-function generateChecklist({ wish='', block='', micro='' }) {
-  const W = (wish || '').trim()
-  const B = (block || '').trim()
-  const M = (micro || '').trim()
-
-  return [
-    {
-      id:'s1',
-      text: B ? `Neutralize the block: ${B}` : `Clear one friction before starting`,
-      why: "Blocks are like static on a radio. Remove them and the signal of action comes through."
-    },
-    {
-      id:'s2',
-      text: M ? `Do your micro-move: ${M}` : `Pick the tiniest action toward ${W}`,
-      why: "Small steps bend gravity. Momentum is more important than size."
-    },
-    {
-      id:'s3',
-      text: `Publish proof of progress for “${W}”`,
-      why: "The universe echoes signals. When you show movement publicly, doors swing wider."
-    }
-  ]
-}
-
-
-
-function capitalizeFirst(s){ if(!s) return s; return s[0].toUpperCase()+s.slice(1) }
