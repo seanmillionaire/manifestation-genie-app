@@ -836,58 +836,72 @@ async function genieReply({ text, thread, firstName, currentWish, vibe, intent }
    Styles (inline for portability)
    ========================= */
 const styles = {
+  /* Header */
   portalHeader: { textAlign:'left', marginBottom:18 },
-  portalTitle: { fontSize:34, fontWeight:900, margin:0, color:'#ffd600', letterSpacing:.3 },
-  portalSubtitle: { fontSize:18, opacity:.92, marginTop:6 },
+  portalTitle: { fontSize:34, fontWeight:900, margin:0, color:'#0B0D12', letterSpacing:.3 },
+  portalSubtitle: { fontSize:18, color:'rgba(11,13,18,0.75)', marginTop:6 },
 
+  /* Page wrap */
   wrap: {
     minHeight:'100vh',
-    color:'#f2f2f6',
+    color:'#0B0D12',
     padding:'24px',
-    background: 'radial-gradient(1200px 600px at 50% -10%, #1a1b2d 0%, #0c0d14 55%, #090a10 100%)',
+    background:'#FFFFFF'
   },
   container: { maxWidth: 860, margin:'0 auto' },
 
+  /* Cards */
   card: {
-    background:'#171826',
-    border:'1px solid rgba(255,255,255,0.06)',
-    borderRadius:18,
+    background:'#FFFFFF',
+    border:'1px solid rgba(17,17,17,0.08)',
+    borderRadius:16,
     padding:24,
-    boxShadow:'0 18px 40px rgba(0,0,0,.45), inset 0 0 0 1px rgba(255,255,255,0.02)'
+    boxShadow:'0 12px 28px rgba(17,17,17,0.06)'
   },
 
-  h2: { margin:0, fontSize:28, fontWeight:900, letterSpacing:.3 },
-  h3: { marginTop:0, fontSize:22, fontWeight:850 },
-  lead: { fontSize:18, opacity:.96, lineHeight:1.45 },
-  subtle: { fontSize:15, opacity:.86, lineHeight:1.45 },
-  mini: { fontSize:13, opacity:.82 },
+  /* Type */
+  h2: { margin:0, fontSize:28, fontWeight:900, letterSpacing:.3, color:'#0B0D12' },
+  h3: { marginTop:0, fontSize:22, fontWeight:850, color:'#0B0D12' },
+  lead: { fontSize:18, color:'rgba(11,13,18,0.86)', lineHeight:1.5 },
+  subtle: { fontSize:15, color:'rgba(11,13,18,0.7)', lineHeight:1.5 },
+  mini: { fontSize:13, color:'rgba(11,13,18,0.65)' },
 
+  /* Layout rows */
   row: { display:'flex', gap:12, marginTop:12, flexWrap:'wrap' },
   vibeRow: { display:'grid', gridTemplateColumns:'repeat(3, 1fr)', gap:12, marginTop:12 },
 
+  /* Vibe buttons */
   vibeBtn: {
     padding:'14px 16px',
     borderRadius:14,
-    border:'1px solid rgba(255,255,255,0.08)',
-    background:'linear-gradient(180deg, #161726 0%, #0f111a 100%)',
-    color:'#fff',
+    border:'1px solid rgba(17,17,17,0.10)',
+    background:'#FFFFFF',
+    color:'#0B0D12',
     cursor:'pointer',
     textAlign:'center',
-    boxShadow:'inset 0 0 0 1px rgba(255,255,255,0.02), 0 6px 16px rgba(0,0,0,.45)'
+    boxShadow:'0 6px 14px rgba(17,17,17,0.06)',
+    transition:'transform .06s ease, box-shadow .12s ease',
   },
 
-  // Messenger rows
+  /* Messenger rows */
   rowAI:   { display:'flex', gap:10, alignItems:'flex-start', margin:'10px 0' },
   rowUser: { display:'flex', gap:10, alignItems:'flex-start', margin:'10px 0', flexDirection:'row-reverse' },
-  avatar:  { width:32, height:32, borderRadius:'50%', background:'rgba(255,255,255,0.06)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:18 },
-  nameLabelAI: { fontSize: 12, opacity: .7, margin: '0 0 4px 4px', textAlign: 'left' },
-  nameLabelUser: { fontSize: 12, opacity: .7, margin: '0 4px 4px 0', textAlign: 'right' },
 
+  avatar:  {
+    width:32, height:32, borderRadius:'50%',
+    background:'#F3F4F6',
+    display:'flex', alignItems:'center', justifyContent:'center', fontSize:18
+  },
+
+  nameLabelAI: { fontSize: 12, color:'rgba(11,13,18,.55)', margin: '0 0 4px 4px', textAlign: 'left' },
+  nameLabelUser: { fontSize: 12, color:'rgba(11,13,18,.55)', margin: '0 4px 4px 0', textAlign: 'right' },
+
+  /* Reactions */
   reactRow: { display:'flex', gap:8, alignItems:'center', margin:'6px 6px 0 6px' },
   likeBtn: {
-    border:'1px solid rgba(255,255,255,0.14)',
+    border:'1px solid rgba(17,17,17,0.14)',
     background:'transparent',
-    color:'#e6e6ee',
+    color:'#0B0D12',
     borderRadius:999,
     padding:'2px 8px',
     fontSize:12,
@@ -896,7 +910,7 @@ const styles = {
   likeBtnActive: {
     border:'1px solid rgba(255,214,0,0.6)',
     background:'rgba(255,214,0,0.12)',
-    color:'#ffd600',
+    color:'#7A5A00',
     borderRadius:999,
     padding:'2px 8px',
     fontSize:12,
@@ -904,121 +918,136 @@ const styles = {
   },
   likeBadge: {
     fontSize:12,
-    color:'#ffd600',
-    background:'rgba(255,214,0,0.10)',
+    color:'#7A5A00',
+    background:'rgba(255,214,0,0.14)',
     border:'1px solid rgba(255,214,0,0.35)',
     borderRadius:999,
     padding:'2px 8px'
   },
 
-  bubbleAI: {
-    maxWidth:'85%',
-    background:'rgba(255,255,255,0.04)',
-    padding:'12px 14px',
-    borderRadius:12,
-    border:'1px solid rgba(255,255,255,0.08)',
-    margin:'8px 0',
-    backdropFilter:'blur(2px)',
-    fontWeight: 600,
-    letterSpacing: .1,
-    lineHeight: 1.7
+  /* Chat surface */
+  chatWrap: { display:'flex', flexDirection:'column', gap:12 },
+  chatStream: {
+    background:'#FFFFFF',
+    border:'1px solid rgba(17,17,17,0.08)',
+    borderRadius:16,
+    padding:16,
+    minHeight:380,
+    maxHeight:540,
+    overflowY:'auto',
+    boxShadow:'0 10px 24px rgba(17,17,17,.06)'
   },
 
+  /* Bubbles */
+  bubbleAI: {
+    maxWidth:'85%',
+    background:'#F8FAFC',
+    padding:'12px 14px',
+    borderRadius:12,
+    border:'1px solid rgba(17,17,17,0.08)',
+    margin:'8px 0',
+    backdropFilter:'blur(2px)',
+    fontWeight:600,
+    letterSpacing:.1,
+    lineHeight:1.7,
+    color:'#0B0D12'
+  },
+  bubbleUser: {
+    maxWidth:'85%',
+    background:'#FFF8CC',
+    padding:'12px 14px',
+    borderRadius:12,
+    border:'1px solid rgba(255,214,0,0.45)',
+    margin:'8px 0 8px auto',
+    color:'#0B0D12'
+  },
+  bubbleText: {
+    fontSize:15,
+    lineHeight:1.6,
+    whiteSpace:'normal',
+    wordBreak:'break-word',
+    overflowWrap:'anywhere',
+  },
+
+  /* Buttons */
   btn: {
     padding:'12px 16px',
     borderRadius:14,
     border:'0',
-    background:'#ffd600',
+    background:'#FFD600',
     color:'#111',
     fontWeight:900,
     cursor:'pointer',
     letterSpacing:.2,
-    boxShadow:'0 0 24px rgba(255,214,0,0.55), 0 8px 28px rgba(0,0,0,.35)'
+    boxShadow:'0 0 0 1px rgba(17,17,17,0.05) inset, 0 8px 18px rgba(17,17,17,.12)'
   },
   btnGhost: {
     padding:'12px 16px',
     borderRadius:14,
-    border:'1px solid rgba(255,255,255,0.14)',
+    border:'1px solid rgba(17,17,17,0.14)',
     background:'transparent',
-    color:'#e6e6ee',
+    color:'#0B0D12',
     fontWeight:820,
     cursor:'pointer'
   },
 
+  /* Inputs */
   input: {
     width:'100%',
     padding:'12px 14px',
     borderRadius:12,
-    border:'1px solid rgba(255,255,255,0.12)',
-    background:'linear-gradient(180deg, #0f1119 0%, #0c0d14 100%)',
-    color:'#fff',
+    border:'1px solid rgba(17,17,17,0.12)',
+    background:'#FFFFFF',
+    color:'#0B0D12',
     outline:'none',
-    boxShadow:'0 0 14px rgba(255,214,0,0.07)'
+    boxShadow:'0 0 0 0 rgba(255,214,0,0)',
   },
   textarea: {
     width:'100%',
     padding:'12px 14px',
     borderRadius:12,
-    border:'1px solid rgba(255,255,255,0.12)',
-    background:'linear-gradient(180deg, #0f1119 0%, #0c0d14 100%)',
-    color:'#fff',
+    border:'1px solid rgba(17,17,17,0.12)',
+    background:'#FFFFFF',
+    color:'#0B0D12',
     outline:'none',
     resize:'vertical',
-    boxShadow:'0 0 14px rgba(255,214,0,0.07)'
+    boxShadow:'0 0 0 0 rgba(255,214,0,0)'
   },
 
+  /* Last wish pill */
   lastWish: {
     marginTop:12,
     padding:12,
-    border:'1px dashed rgba(255,255,255,0.18)',
+    border:'1px dashed rgba(255,214,0,0.45)',
     borderRadius:12,
-    background:'linear-gradient(180deg, rgba(255,214,0,0.05), rgba(255,214,0,0.02))'
+    background:'linear-gradient(180deg, rgba(255,214,0,0.12), rgba(255,214,0,0.06))'
   },
 
+  /* Checklist */
   checklist: { listStyle:'none', paddingLeft:0, margin:'8px 0 12px' },
-  checkItem: { padding:'10px 12px', borderRadius:12, background:'rgba(255,255,255,0.03)', marginBottom:8, border:'1px solid rgba(255,255,255,0.06)' },
-  checkLabel: { display:'flex', gap:10, alignItems:'center', cursor:'pointer' },
-  checkbox: { width:18, height:18, accentColor:'#ffd600' },
-
-  chatWrap: { display:'flex', flexDirection:'column', gap:12 },
-  chatStream: {
-    background:'linear-gradient(180deg, #101221 0%, #0b0c15 100%)',
-    border:'1px solid rgba(255,255,255,0.08)',
-    borderRadius:18,
-    padding:16,
-    minHeight:380,
-    maxHeight:540,
-    overflowY:'auto',
-    boxShadow:'0 14px 34px rgba(0,0,0,.45)'
-  },
-
-  bubbleUser: {
-    maxWidth:'85%',
-    background:'rgba(255,214,0,0.08)',
-    padding:'12px 14px',
+  checkItem: {
+    padding:'10px 12px',
     borderRadius:12,
-    border:'1px solid rgba(255,214,0,0.18)',
-    margin:'8px 0 8px auto'
+    background:'#F9FAFB',
+    marginBottom:8,
+    border:'1px solid rgba(17,17,17,0.08)'
   },
-  bubbleText: {
-    fontSize: 15,
-    lineHeight: 1.6,
-    whiteSpace: 'normal',
-    wordBreak: 'break-word',
-    overflowWrap: 'anywhere',
-  },
+  checkLabel: { display:'flex', gap:10, alignItems:'center', cursor:'pointer', color:'#0B0D12' },
+  checkbox: { width:18, height:18, accentColor:'#FFD600' },
 
+  /* Chat composer */
   chatInputRow: { display:'flex', gap:10, alignItems:'center' },
   chatInput: {
     flex:1,
     padding:'12px 14px',
     borderRadius:12,
-    border:'1px solid rgba(255,255,255,0.12)',
-    background:'linear-gradient(180deg, #0f1119 0%, #0c0d14 100%)',
-    color:'#fff',
+    border:'1px solid rgba(17,17,17,0.12)',
+    background:'#FFFFFF',
+    color:'#0B0D12',
     outline:'none',
   },
 }
+
 
 /* =========================
    Tiny utils
