@@ -1,405 +1,220 @@
-// components/Questionnaire.jsx — One‑Step Accountability Flow (drop‑in)
-// - Works with either {session} or {user} prop
-// - Focus area → clarify → auto-generate plan → single current step UI
-// - Uses existing tables: profiles, daily_entries, daily_intents, action_steps
-
-import { useEffect, useMemo, useRef, useState } from 'react'
+// components/Questionnaire.jsx — White Theme • Wish → Block → Micro • Supabase save
+import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../src/supabaseClient'
+
+const GenieLang = {
+  questPrompts: {
+    wish: "What’s the outcome you’re chasing? Say it like you mean it.",
+    block: "What’s blocking you? Drop the excuse in one line.",
+    micro: "What’s 1 micro-move you can make today? Something small.",
+  },
+  rewards: [
+    "YES! That’s the one. Door unlocked.",
+    "Love it. The signal’s clear — time to move.",
+    "Locked in. You're ready. Execute time.",
+    "Noted. The window’s open. Step through."
+  ],
+}
 
 const todayStr = () => new Date().toISOString().slice(0,10)
 
-function Button({ children, onClick, disabled=false, variant='primary', style }) {
-  const base = {
-    padding:'12px 16px',
-    borderRadius:12,
-    border: variant==='ghost' ? '1px solid rgba(0,0,0,0.25)' : '2px solid #000',
-    cursor: disabled ? 'not-allowed' : 'pointer',
-    opacity: disabled ? 0.6 : 1,
-    fontWeight:800, fontSize:16, lineHeight:1,
-    background: variant==='ghost' ? '#fff' : '#000',
-    color: variant==='ghost' ? '#000' : '#fff',
-    ...style
-  }
-  return <button type="button" onClick={disabled ? undefined : onClick} style={base}>{children}</button>
-}
+export default function Questionnaire({ onDone, firstName='Friend', vibe=null, initial=null }) {
+  const [session, setSession] = useState(null)
+  const [wish, setWish]   = useState(initial?.wish  || '')
+  const [block, setBlock] = useState(initial?.block || '')
+  const [micro, setMicro] = useState(initial?.micro || '')
+  const [saving, setSaving] = useState(false)
+  const canSubmit = wish.trim() && micro.trim()
 
-function Field({ children, style }) {
-  return <div style={{marginTop:12, ...style}}>{children}</div>
-}
-
-export default function Questionnaire({ session, user: userProp, onDone }) {
-  const user = userProp || session?.user || null
-  const [loading, setLoading] = useState(true)
-  const [name, setName] = useState('Friend')
-  const [today] = useState(() => todayStr())
-
-  // State captured across flow
-  const [mood, setMood] = useState(null)                       // 'good' | 'okay' | 'low'
-  const [didMeditation, setDidMeditation] = useState(null)     // true|false
-  const [noMeditationReason, setNoMeditationReason] = useState('')
-
-  // Focus/clarify (stored in daily_intents as intent/idea)
-  const [focus, setFocus] = useState('')                       // category
-  const [detail, setDetail] = useState('')                     // clarified target
-
-  // Steps
-  const [steps, setSteps] = useState([])                       // [{step_order,label,url,completed}]
-  const [generating, setGenerating] = useState(false)
-
-  // Flow idx
-  const [idx, setIdx] = useState(0)
-
-  // Refs for Enter‑to‑advance
-  const reasonRef = useRef(null)
-  const detailRef = useRef(null)
-
-  // ---------- Load profile + today’s rows (robust: never hang loader) ----------
   useEffect(() => {
-    let cancelled = false
-    ;(async () => {
-      if (!user?.id) { if (!cancelled) setLoading(false); return }
+    let alive = true
+    supabase.auth.getSession().then(({ data }) => { if (alive) setSession(data?.session || null) })
+    const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => { if (alive) setSession(s) })
+    return () => { alive = false; sub?.subscription?.unsubscribe() }
+  }, [])
 
-      try {
-        setLoading(true)
+  async function saveWish() {
+    if (!canSubmit || saving) return
+    setSaving(true)
+    const userId = session?.user?.id || null
+    const payload = {
+      // generic fields we keep in memory regardless of table shape
+      wish: wish.trim(),
+      block: block.trim(),
+      micro: micro.trim(),
+      vibe: vibe || null,
+      date: todayStr(),
+    }
 
-        // name
-        const { data: profile } = await supabase
-          .from('profiles').select('full_name').eq('id', user.id).maybeSingle()
-        if (!cancelled) {
-          const first = (profile?.full_name || user.email || 'Friend').trim().split(' ')[0]
-          setName(first || 'Friend')
-        }
-
-        // daily entries
-        const { data: entry } = await supabase
-          .from('daily_entries').select('mood,did_meditation,no_meditation_reason')
-          .eq('user_id', user.id).eq('entry_date', today).maybeSingle()
-        if (!cancelled && entry) {
-          setMood(entry.mood ?? null)
-          setDidMeditation(typeof entry.did_meditation === 'boolean' ? entry.did_meditation : null)
-          setNoMeditationReason(entry.no_meditation_reason || '')
-        }
-
-        // focus/clarify
-        const { data: dIntent } = await supabase
-          .from('daily_intents').select('intent,idea')
-          .eq('user_id', user.id).eq('entry_date', today).maybeSingle()
-        if (!cancelled && dIntent) {
-          setFocus(dIntent.intent || '')
-          setDetail(dIntent.idea || '')
-        }
-
-        // steps
-        const { data: dSteps } = await supabase
-          .from('action_steps')
-          .select('step_order,label,url,completed')
-          .eq('user_id', user.id).eq('entry_date', today)
-          .order('step_order', { ascending: true })
-
-        if (!cancelled && dSteps?.length) {
-          setSteps(dSteps.map(s => ({
-            step_order: s.step_order, label: s.label, url: s.url, completed: s.completed
-          })))
-        }
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
-    })()
-    return () => { cancelled = true }
-  }, [user?.id, today])
-
-  // ---------- Flow map ----------
-  const stepKeys = useMemo(() => {
-    const base = ['mood', 'meditation', 'maybeReason', 'focus', 'clarify', 'plan', 'finish']
-    return didMeditation === false ? base : base.filter(s => s !== 'maybeReason')
-  }, [didMeditation])
-  const total = stepKeys.length
-  const key = stepKeys[idx]
-
-  // ---------- Persistence ----------
-  async function upsertEntry(fields) {
-    if (!user?.id) return
-    await supabase.from('daily_entries').upsert(
-      { user_id: user.id, entry_date: today, ...fields },
-      { onConflict: 'user_id,entry_date' }
-    )
-  }
-  async function upsertIntent(nextIntent, nextIdea) {
-    if (!user?.id) return
-    await supabase.from('daily_intents').upsert(
-      { user_id: user.id, entry_date: today, intent: nextIntent, idea: nextIdea },
-      { onConflict: 'user_id,entry_date' }
-    )
-  }
-
-  // ---------- Auto-advance actions ----------
-  async function chooseMood(val) {
-    setMood(val); await upsertEntry({ mood: val }); advance()
-  }
-  async function chooseMeditation(val) {
-    setDidMeditation(val)
-    await upsertEntry({ did_meditation: val, no_meditation_reason: val ? null : (noMeditationReason || null) })
-    jumpTo(val ? 'focus' : 'maybeReason')
-  }
-  async function saveReasonAndAdvance() {
-    await upsertEntry({ no_meditation_reason: noMeditationReason || null })
-    jumpTo('focus')
-  }
-  async function chooseFocus(val) {
-    setFocus(val); await upsertIntent(val, detail); jumpTo('clarify')
-  }
-  async function saveClarifyAndAdvance() {
-    const clean = (detail || '').trim()
-    await upsertIntent(focus, clean)
-    if (!steps.length) await generatePlan(true) // generate then go to plan
-    else advance()
-  }
-
-  function advance() { setIdx(i => Math.min(i + 1, total - 1)) }
-  function jumpTo(stepKey) {
-    const nextIndex = stepKeys.indexOf(stepKey)
-    if (nextIndex >= 0) setIdx(nextIndex)
-  }
-
-  // ---------- Plan generation (uses your existing /api/plan) ----------
-  async function generatePlan(advanceToPlan = false) {
-    if (!user?.id) return
-    const payload = { focus, detail, mood, didMeditation, name } // richer context; server can ignore extras
-    setGenerating(true)
+    // Try WISHES first
     try {
-      const r = await fetch('/api/plan', {
-        method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)
-      })
-      let json = {}
-      try { json = await r.json() } catch {}
-      const arr = Array.isArray(json?.steps) ? json.steps : []
-
-      // persist steps
-      await supabase.from('action_steps').delete().eq('user_id', user.id).eq('entry_date', today)
-      const rows = arr.slice(0,3).map((s, i) => ({
-        user_id: user.id, entry_date: today, step_order: i+1,
-        label: s.label || `Step ${i+1}`, url: s.url || null, completed: false
-      }))
-      if (rows.length) await supabase.from('action_steps').insert(rows)
-      setSteps(rows.map(r => ({ step_order: r.step_order, label: r.label, url: r.url, completed:false })))
-      if (advanceToPlan) jumpTo('plan')
-    } finally { setGenerating(false) }
-  }
-
-  // ---------- Stepper helpers ----------
-  const firstIncomplete = steps.find(s => !s.completed) || null
-  const queue = steps.filter(s => !s.completed && s.step_order !== firstIncomplete?.step_order).slice(0,2)
-
-  async function completeNow() {
-    const cur = firstIncomplete
-    if (!cur || !user?.id) return
-    await supabase
-      .from('action_steps')
-      .update({ completed: true, completed_at: new Date().toISOString() })
-      .eq('user_id', user.id).eq('entry_date', today).eq('step_order', cur.step_order)
-
-    const next = steps.map(s => s.step_order === cur.step_order ? { ...s, completed: true } : s)
-    setSteps(next)
-
-    // if all done, move to finish
-    if (!next.find(s => !s.completed)) jumpTo('finish')
-  }
-
-  // Simple client-side “shrink” when stuck (no schema change)
-  function shrinkStepLabel(label='') {
-    const base = label || ''
-    if (base.length <= 60) return `Timebox 5 min: ${base}`
-    return `Do the first 5‑min slice of: ${base.slice(0, 72)}…`
-  }
-  async function imStuck() {
-    // don’t alter DB schema; just nudge the current label smaller for this session
-    if (!firstIncomplete) return
-    const shrunken = shrinkStepLabel(firstIncomplete.label)
-    const next = steps.map(s => s.step_order === firstIncomplete.step_order ? { ...s, label: shrunken } : s)
-    setSteps(next)
-  }
-
-  // ---------- Copy ----------
-  const copy = {
-    moodQ: `Hey ${name} 👋 … quick check‑in. How’s your vibe today?`,
-    medQ:  `Did you listen to your Hypnotic Meditation today?`,
-    medNoFollow: `All good. What got in the way? (Press Enter to continue)`,
-    medEmpathy: `I hear you. No stress. Today’s not over. One track, one shift — that’s all it takes.`,
-
-    focusQ: `What would you like to focus on manifesting today?`,
-    choices: ['Financial freedom','Better health','Loving relationships','Spiritual connection','Other'],
-    clarifyIntro: (val) => `Great — you chose “${val}”. Now let’s get more clarity so you’ll hit the target.`,
-    clarifyHint: (val) => {
-      switch ((val||'').toLowerCase()) {
-        case 'financial freedom': return 'e.g., “Make $100 on Etsy”, “Pitch 5 leads”, “List 1 offer on Fiverr”.'
-        case 'better health': return 'e.g., “30‑min walk”, “Track meals today”, “Drink 3L water”.'
-        case 'loving relationships': return 'e.g., “Call mom 10 min”, “Plan a date”, “Send 3 appreciation texts”.'
-        case 'spiritual connection': return 'e.g., “7‑min breathwork”, “Journal 1 page”, “Sunset gratitude walk”.'
-        default: return 'e.g., “Finish landing page hero”, “Read 10 pages”, “Declutter desk”.'
+      const toWishes = {
+        user_id: userId,
+        title: payload.wish,
+        summary: payload.block || null,
+        micro: payload.micro || null,
+        vibe: payload.vibe,
       }
-    },
+      const { data, error } = await supabase
+        .from('wishes')
+        .insert(toWishes)
+        .select('id, title, summary, micro, vibe, created_at')
+        .single()
 
-    planIntro: `Alright ${name}, do this now (≤15 min):`,
-    upNext: `Up next`,
-    finishFinal: `✨ Nice work. One brick laid. Keep going when you’re ready.`,
+      if (error) throw error
+
+      const newWish = {
+        id: data.id,
+        title: data.title,
+        summary: data.summary,
+        micro: data.micro,
+        vibe: data.vibe,
+        created_at: data.created_at,
+      }
+      setSaving(false)
+      onDone?.(newWish)
+      return
+    } catch (_err) {
+      // Fall back to DAILY_ENTRIES (common in your older builds)
+    }
+
+    try {
+      const toEntries = {
+        user_id: userId,
+        intention: payload.wish,
+        focus_area: payload.block || null,
+        micro: payload.micro || null,      // ok to store even if column doesn’t exist; PG will ignore if not present
+        vibe: payload.vibe,                // same note
+        created_at: new Date().toISOString(),
+      }
+      const { data, error } = await supabase
+        .from('daily_entries')
+        .insert(toEntries)
+        .select('id, intention, focus_area, created_at')
+        .single()
+
+      if (error) throw error
+
+      const newWish = {
+        id: data.id,
+        title: data.intention,
+        summary: data.focus_area,
+        micro: payload.micro,
+        vibe: payload.vibe,
+        created_at: data.created_at,
+      }
+      setSaving(false)
+      onDone?.(newWish)
+    } catch (err) {
+      console.error('Save failed:', err?.message || err)
+      setSaving(false)
+      alert('The lamp flickered while saving. Try again.')
+    }
   }
-
-  // autofocus
-  useEffect(() => {
-    if (key === 'maybeReason') reasonRef.current?.focus()
-    if (key === 'clarify')     detailRef.current?.focus()
-  }, [key])
-
-  // ---------- Render ----------
-  if (loading) return (
-    <div className="card" style={{background:'rgba(255,255,255,0.04)', border:'1px solid rgba(255,255,255,0.12)'}}>
-      Loading Genie Flow…
-    </div>
-  )
 
   return (
-    <div>
-      {/* header with progress */}
-      <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16}}>
-        <div style={{fontWeight:900, fontSize:18}}>🧞 Manifestation Genie</div>
-        <div style={{fontSize:13}}>Step {Math.min(idx+1, total)} of {total}</div>
+    <div className="q-wrap">
+      <div className="q-card">
+        <div className="q-head">
+          <div className="q-eyebrow">Your Personal AI Genie</div>
+          <h2 className="q-title">What’s the play today, {firstName}?</h2>
+          <p className="q-sub">This is your daily portal to manifest your dreams into reality.</p>
+        </div>
+
+        <label className="q-label">{GenieLang.questPrompts.wish}</label>
+        <textarea
+          className="q-textarea"
+          rows={3}
+          placeholder="One line. No fluff."
+          value={wish}
+          onChange={e=>setWish(e.target.value)}
+        />
+
+        <label className="q-label">{GenieLang.questPrompts.block}</label>
+        <textarea
+          className="q-textarea"
+          rows={2}
+          placeholder="Say the snag. Simple + true."
+          value={block}
+          onChange={e=>setBlock(e.target.value)}
+        />
+
+        <label className="q-label">{GenieLang.questPrompts.micro}</label>
+        <input
+          className="q-input"
+          placeholder="Send it. Start it. Ship it."
+          value={micro}
+          onChange={e=>setMicro(e.target.value)}
+        />
+
+        <button
+          className={`q-btn ${!canSubmit || saving ? 'q-btn--disabled' : ''}`}
+          disabled={!canSubmit || saving}
+          onClick={saveWish}
+        >
+          {saving ? 'Locking it in…' : 'Lock it in →'}
+        </button>
+        <div className="q-reward">{GenieLang.rewards[Math.floor(Math.random()*GenieLang.rewards.length)]}</div>
       </div>
 
-      {/* steps */}
-      {key === 'mood' && (
-        <>
-          <div style={{fontSize:20, fontWeight:900, marginBottom:8}}>{copy.moodQ}</div>
-          <div style={{display:'flex', gap:10, flexWrap:'wrap'}}>
-            <Button onClick={()=>chooseMood('good')}>😀 Good</Button>
-            <Button onClick={()=>chooseMood('okay')}>😐 Okay</Button>
-            <Button onClick={()=>chooseMood('low')}>😔 Low</Button>
-          </div>
-        </>
-      )}
+      {/* LIGHT CSS */}
+      <style jsx>{`
+        .q-wrap {
+          padding: 18px;
+          background: #fff;
+        }
+        .q-card {
+          max-width: 980px;
+          margin: 0 auto;
+          background: #ffffff;
+          border: 1px solid #e5e7eb;
+          border-radius: 16px;
+          box-shadow: 0 10px 30px rgba(0,0,0,0.06);
+          padding: 20px;
+        }
+        .q-head { margin-bottom: 6px; }
+        .q-eyebrow {
+          font-size: 12px; letter-spacing: .08em; text-transform: uppercase;
+          color: #64748b; font-weight: 800; margin-bottom: 4px;
+        }
+        .q-title { margin: 0; font-size: 22px; font-weight: 900; color: #0f172a; }
+        .q-sub { margin: 6px 0 12px; color: #475569; }
 
-      {key === 'meditation' && (
-        <>
-          <div style={{fontSize:20, fontWeight:900, marginBottom:8}}>{copy.medQ}</div>
-          <div style={{display:'flex', gap:10, flexWrap:'wrap'}}>
-            <Button onClick={()=>chooseMeditation(true)}>✅ Yes</Button>
-            <Button onClick={()=>chooseMeditation(false)}>❌ Not yet</Button>
-          </div>
-        </>
-      )}
+        .q-label { display:block; font-weight:800; color:#0f172a; margin-top: 12px; margin-bottom: 6px; }
+        .q-textarea, .q-input {
+          width: 100%;
+          border: 1px solid #e5e7eb;
+          border-radius: 12px;
+          background: #fff;
+          color: #0f172a;
+          padding: 12px 14px;
+          outline: none;
+          box-shadow: 0 0 0 0 rgba(0,0,0,0);
+          transition: box-shadow .15s ease, border-color .15s ease;
+        }
+        .q-textarea:focus, .q-input:focus {
+          border-color: #111;
+          box-shadow: 0 0 0 3px rgba(17,17,17,.08);
+        }
 
-      {key === 'maybeReason' && (
-        <>
-          <div style={{fontSize:20, fontWeight:900, marginBottom:6}}>{copy.medNoFollow}</div>
-          <Field>
-            <textarea
-              ref={reasonRef}
-              value={noMeditationReason}
-              onChange={e=>setNoMeditationReason(e.target.value)}
-              onKeyDown={(e)=>{ if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); saveReasonAndAdvance() } }}
-              rows={3}
-              className="textArea"
-              style={{ width:'100%' }}
-              placeholder="Type a quick note…"
-            />
-          </Field>
-          <Field><div style={{fontSize:14, color:'#444'}}>{copy.medEmpathy}</div></Field>
-        </>
-      )}
-
-      {key === 'focus' && (
-        <>
-          <div style={{fontSize:20, fontWeight:900, marginBottom:8}}>{copy.focusQ}</div>
-          <div style={{display:'flex', gap:10, flexWrap:'wrap'}}>
-            {copy.choices.map((c) => <Button key={c} onClick={()=>chooseFocus(c)}>{c}</Button>)}
-          </div>
-        </>
-      )}
-
-      {key === 'clarify' && (
-        <>
-          <div style={{fontSize:20, fontWeight:900, marginBottom:6}}>
-            {copy.clarifyIntro(focus || 'your focus')}
-          </div>
-          <Field>
-            <input
-              ref={detailRef}
-              value={detail}
-              onChange={e=>setDetail(e.target.value)}
-              onKeyDown={(e)=>{ if(e.key==='Enter'){ e.preventDefault(); saveClarifyAndAdvance() } }}
-              className="textInput"
-              placeholder={copy.clarifyHint(focus)}
-            />
-          </Field>
-          <Field>
-            <Button onClick={saveClarifyAndAdvance} disabled={generating}>
-              {generating ? 'Summoning plan…' : 'Continue'}
-            </Button>
-          </Field>
-        </>
-      )}
-
-      {key === 'plan' && (
-        <>
-          {/* If we somehow got here without steps (e.g., manual refresh), generate now */}
-          {(!steps || steps.length === 0) && (
-            <Field><Button onClick={()=>generatePlan(false)} disabled={generating}>
-              {generating ? 'Summoning plan…' : 'Load today’s steps'}
-            </Button></Field>
-          )}
-
-          {steps && steps.length > 0 && (
-            <div style={{marginTop:6}}>
-              <div style={{fontSize:14, opacity:.8, marginBottom:6}}>
-                Focus: <strong>{focus || '—'}</strong>{detail ? ` — “${detail}”` : ''}
-              </div>
-              <div style={{fontSize:20, fontWeight:900, margin:'6px 0 10px'}}>{copy.planIntro}</div>
-
-              {/* ONE current step */}
-              {firstIncomplete ? (
-                <div style={{
-                  padding:'14px 16px',
-                  border:'1px solid #222',
-                  borderRadius:12,
-                  background:'rgba(255,255,255,0.03)'
-                }}>
-                  <div style={{fontSize:16, fontWeight:800, lineHeight:1.5}}>
-                    {firstIncomplete.label}
-                    {firstIncomplete.url
-                      ? <> — <a href={firstIncomplete.url} target="_blank" rel="noreferrer" style={{ fontWeight:900, color:'#000', textDecoration:'underline' }}>open</a></>
-                      : null}
-                  </div>
-
-                  <div style={{display:'flex', gap:10, marginTop:12}}>
-                    <Button onClick={completeNow}>I did it ✅</Button>
-                    <Button variant="ghost" onClick={imStuck}>I’m stuck ⚡</Button>
-                  </div>
-                </div>
-              ) : <div style={{margin:'12px 0'}}>All set for today.</div>}
-
-              {/* Up next */}
-              {queue?.length ? (
-                <div style={{marginTop:16}}>
-                  <div style={{fontSize:13, color:'#444', marginBottom:6}}>{copy.upNext}</div>
-                  <ul style={{paddingLeft:20, margin:0}}>
-                    {queue.map(s => <li key={s.step_order} style={{margin:'6px 0'}}>{s.label}</li>)}
-                  </ul>
-                </div>
-              ) : null}
-
-              <div style={{fontSize:13, color:'#444', marginTop:12}}>
-                Small wins compound. One brick at a time.
-              </div>
-            </div>
-          )}
-        </>
-      )}
-
-      {key === 'finish' && (
-        <>
-          <div style={{fontSize:20, fontWeight:900, marginBottom:8}}>{copy.finishFinal}</div>
-          <Button onClick={onDone} style={{minWidth:200}}>Back to chat</Button>
-        </>
-      )}
+        .q-btn {
+          width: 100%;
+          margin-top: 14px;
+          padding: 14px 16px;
+          border-radius: 12px;
+          border: 2px solid #111;
+          background: #fff;
+          color: #111;
+          font-weight: 900;
+          cursor: pointer;
+          min-height: 58px;
+          box-shadow: 0 6px 0 #111;
+          transition: transform .12s ease, box-shadow .2s ease, opacity .2s ease;
+        }
+        .q-btn:active { transform: translateY(2px); box-shadow: 0 4px 0 #111; }
+        .q-btn--disabled { opacity: .6; cursor: not-allowed; }
+        .q-reward { margin-top: 10px; font-size: 13px; color: #64748b; }
+      `}</style>
     </div>
   )
 }
