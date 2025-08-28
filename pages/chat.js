@@ -847,212 +847,140 @@ async function genieReply({ text, thread, firstName, currentWish, vibe, intent }
    Styles
    ========================= */
 const styles = {
-  portalHeader: { textAlign:'left', marginBottom:18 },
-  portalTitle: { fontSize:34, fontWeight:900, margin:0, color:'#ffd600', letterSpacing:.3 },
-  portalSubtitle: { fontSize:18, opacity:.92, marginTop:6 },
-
   wrap: {
-    minHeight:'100vh',
-    color:'#111111',
-    padding:'24px',
-    background:'#ffffff',
+    minHeight: '100vh',
+    background: '#ffffff',
+    color: '#111111',
+    padding: '24px',
   },
-  container: { maxWidth: 860, margin:'0 auto' },
+  container: { maxWidth: 980, margin: '0 auto' },
 
+  /* Header */
+  portalHeader: { textAlign: 'left', marginBottom: 18 },
+  portalTitle: { fontSize: 32, fontWeight: 900, margin: 0, color: '#111', letterSpacing: .2 },
+  portalSubtitle: { fontSize: 16, color: '#475569', marginTop: 6 },
+
+  /* Card */
   card: {
-    background:'#ffffff',
-    border:'1px solid #e5e7eb',
-    borderRadius:18,
-    padding:24,
-    boxShadow:'0 6px 24px rgba(0,0,0,.08)'
+    background: '#ffffff',
+    border: '1px solid #e5e7eb',
+    borderRadius: 18,
+    padding: 20,
+    boxShadow: '0 6px 24px rgba(0,0,0,.08)',
+    marginBottom: 18,
   },
 
-  h2: { margin:0, fontSize:28, fontWeight:900, letterSpacing:.3 },
-  h3: { marginTop:0, fontSize:22, fontWeight:850 },
-  lead: { fontSize:18, opacity:.96, lineHeight:1.45 },
-  subtle: { fontSize:15, opacity:.86, lineHeight:1.45 },
-  mini: { fontSize:13, opacity:.82 },
-
-  row: { display:'flex', gap:12, marginTop:12, flexWrap:'wrap' },
-  vibeRow: { display:'grid', gridTemplateColumns:'repeat(3, 1fr)', gap:12, marginTop:12 },
-
-  vibeBtn: {
-    padding:'14px 16px',
-    borderRadius:14,
-    border:'1px solid rgba(255,255,255,0.08)',
-    background:'linear-gradient(180deg, #161726 0%, #0f111a 100%)',
-    color:'#fff',
-    cursor:'pointer',
-    textAlign:'center',
-    boxShadow:'inset 0 0 0 1px rgba(255,255,255,0.02), 0 6px 16px rgba(0,0,0,.45)'
+  /* Chat Shell */
+  chatShell: {
+    background: '#fff',
+    border: '1px solid #e5e7eb',
+    borderRadius: 20,
+    boxShadow: '0 18px 44px rgba(0,0,0,.08)',
+    display: 'flex',
+    flexDirection: 'column',
+    overflow: 'hidden',
+  },
+  messages: {
+    padding: 20,
+    maxHeight: 'calc(100vh - 280px)',
+    overflowY: 'auto',
   },
 
-  // Messenger rows
-  rowAI:   { display:'flex', gap:10, alignItems:'flex-start', margin:'10px 0' },
-  rowUser: { display:'flex', gap:10, alignItems:'flex-start', margin:'10px 0', flexDirection:'row-reverse' },
-  avatar:  { width:32, height:32, borderRadius:'50%', background:'rgba(255,255,255,0.06)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:18 },
-  nameLabelAI: { fontSize:12, opacity:.7, margin:'0 0 4px 4px', textAlign:'left' },
-  nameLabelUser: { fontSize:12, opacity:.7, margin:'0 4px 4px 0', textAlign:'right' },
-
-  reactRow: { display:'flex', gap:8, alignItems:'center', margin:'6px 6px 0 6px' },
-  likeBtn: {
-    border:'1px solid rgba(255,255,255,0.14)',
-    background:'transparent',
-    color:'#e6e6ee',
-    borderRadius:999,
-    padding:'2px 8px',
-    fontSize:12,
-    cursor:'pointer'
+  /* Bubbles */
+  bubble: {
+    maxWidth: '86%',
+    padding: '12px 14px',
+    borderRadius: 12,
+    border: '1px solid #e5e7eb',
+    margin: '8px 0',
+    lineHeight: 1.6,
+    wordBreak: 'break-word',
+    overflowWrap: 'anywhere',
+    fontSize: 15,
   },
-  likeBtnActive: {
-    border:'1px solid rgba(255,214,0,0.6)',
-    background:'rgba(255,214,0,0.12)',
-    color:'#ffd600',
-    borderRadius:999,
-    padding:'2px 8px',
-    fontSize:12,
-    cursor:'pointer'
-  },
-  likeBadge: {
-    fontSize:12,
-    color:'#ffd600',
-    background:'rgba(255,214,0,0.10)',
-    border:'1px solid rgba(255,214,0,0.35)',
-    borderRadius:999,
-    padding:'2px 8px'
-  },
-
-  bubbleAI: {
-    maxWidth:'85%',
-    background:'rgba(255,255,255,0.04)',
-    padding:'12px 14px',
-    borderRadius:12,
-    border:'1px solid rgba(255,255,255,0.08)',
-    margin:'8px 0',
-    backdropFilter:'blur(2px)',
-    fontWeight:600,
-    letterSpacing:.1,
-    lineHeight:1.7
+  bubbleGenie: {
+    background: '#f8fafc',
+    border: '1px solid #e5e7eb',
+    color: '#0f172a',
+    marginRight: 'auto',
   },
   bubbleUser: {
-    maxWidth:'85%',
-    background:'rgba(255,214,0,0.08)',
-    padding:'12px 14px',
-    borderRadius:12,
-    border:'1px solid rgba(255,214,0,0.18)',
-    margin:'8px 0 8px auto'
-  },
-  bubbleText: {
-    fontSize:15,
-    lineHeight:1.6,
-    whiteSpace:'normal',
-    wordBreak:'break-word',
-    overflowWrap:'anywhere',
+    background: 'rgba(255,214,0,0.12)',
+    border: '1px solid rgba(255,214,0,0.35)',
+    color: '#111111',
+    marginLeft: 'auto',
   },
 
-  btn: {
-    padding:'12px 16px',
-    borderRadius:14,
-    border:0,
-    background:'#FFD600',
-    color:'#111',
-    fontWeight:900,
-    cursor:'pointer',
-    letterSpacing:.2,
-    boxShadow:'0 0 24px rgba(255,214,0,0.55), 0 8px 28px rgba(0,0,0,.35)'
+  /* Input Bar */
+  inputBar: {
+    display: 'flex',
+    gap: 10,
+    alignItems: 'center',
+    padding: 12,
+    borderTop: '1px solid #e5e7eb',
+    background: '#fff',
   },
-  btnGhost: {
-    padding:'12px 16px',
-    borderRadius:14,
-    border:'1px solid rgba(255,255,255,0.14)',
-    background:'transparent',
-    color:'#e6e6ee',
-    fontWeight:820,
-    cursor:'pointer'
-  },
-
   input: {
-    width:'100%',
-    padding:'12px 14px',
-    borderRadius:12,
-    border:'1px solid rgba(255,255,255,0.12)',
-    background:'linear-gradient(180deg, #0f1119 0%, #0c0d14 100%)',
-    color:'#fff',
-    outline:'none',
-    boxShadow:'0 0 14px rgba(255,214,0,0.07)'
-  },
-  textarea: {
-    width:'100%',
-    padding:'12px 14px',
-    borderRadius:12,
-    border:'1px solid rgba(255,255,255,0.12)',
-    background:'linear-gradient(180deg, #0f1119 0%, #0c0d14 100%)',
-    color:'#fff',
-    outline:'none',
-    resize:'vertical',
-    boxShadow:'0 0 14px rgba(255,214,0,0.07)'
+    flex: 1,
+    border: '1px solid #e5e7eb',
+    borderRadius: 12,
+    padding: '12px 14px',
+    outline: 'none',
+    background: '#fff',
+    color: '#111',
   },
 
-  lastWish: {
-    marginTop:12,
-    padding:12,
-    border:'1px dashed rgba(255,255,255,0.18)',
-    borderRadius:12,
-    background:'linear-gradient(180deg, rgba(255,214,0,0.05), rgba(255,214,0,0.02))'
+  /* Buttons */
+  btn: {
+    padding: '12px 16px',
+    borderRadius: 14,
+    border: '2px solid #000',
+    background: '#FFD600',
+    color: '#111',
+    fontWeight: 900,
+    letterSpacing: .2,
+    cursor: 'pointer',
+    boxShadow: '0 18px 40px rgba(0,0,0,.10)',
   },
 
-  checklist: { listStyle:'none', paddingLeft:0, margin:'8px 0 12px' },
-  checkItem: { padding:'10px 12px', borderRadius:12, background:'rgba(255,255,255,0.03)', marginBottom:8, border:'1px solid rgba(255,255,255,0.06)' },
-  checkLabel: { display:'flex', gap:10, alignItems:'center', cursor:'pointer' },
-  checkbox: { width:18, height:18, accentColor:'#ffd600' },
-
-  chatWrap: { display:'flex', flexDirection:'column', gap:12 },
-  chatStream: {
-    background:'linear-gradient(180deg, #101221 0%, #0b0c15 100%)',
-    border:'1px solid rgba(255,255,255,0.08)',
-    borderRadius:18,
-    padding:16,
-    minHeight:380,
-    maxHeight:540,
-    overflowY:'auto',
-    boxShadow:'0 14px 34px rgba(0,0,0,.45)'
+  /* Checklist */
+  scroll: {
+    background: '#fff',
+    border: '1px solid #e5e7eb',
+    borderRadius: 16,
+    padding: 16,
+    boxShadow: '0 6px 24px rgba(0,0,0,.06)',
+    marginTop: 12,
   },
-  chatInputRow: { display:'flex', gap:10, alignItems:'center' },
-  chatInput: {
-    flex:1,
-    padding:'12px 14px',
-    borderRadius:12,
-    border:'1px solid rgba(255,255,255,0.12)',
-    background:'linear-gradient(180deg, #0f1119 0%, #0c0d14 100%)',
-    color:'#fff',
-    outline:'none',
-  },
-
-  /* === Cosmic checklist theming (NEW) === */
-  cosmicCard: {
-    background:'linear-gradient(180deg, #18192a 0%, #11131f 100%)',
-    border:'1px solid rgba(255,255,255,0.08)',
-    borderRadius:18,
-    padding:24,
-    boxShadow:'0 18px 40px rgba(0,0,0,.45), inset 0 0 0 1px rgba(255,255,255,0.03)'
-  },
-  scrollHeader: { marginBottom:12 },
+  scrollHeader: { marginBottom: 8 },
   scrollBadge: {
-    display:'inline-block',
-    padding:'4px 10px',
-    borderRadius:999,
-    fontSize:12,
-    letterSpacing:.2,
-    background:'rgba(255,214,0,0.12)',
-    color:'#ffd600',
-    border:'1px solid rgba(255,214,0,0.35)',
-    marginBottom:8
+    display: 'inline-block',
+    padding: '4px 10px',
+    borderRadius: 999,
+    fontSize: 12,
+    letterSpacing: .2,
+    background: 'rgba(255,214,0,0.12)',
+    color: '#b58900',
+    border: '1px solid rgba(255,214,0,0.35)',
+    marginBottom: 6,
   },
-  scrollTitle: { margin:'2px 0 4px', fontSize:22, fontWeight:850 },
-  scrollSub: { fontSize:13, opacity:.8, margin:0 },
+  scrollTitle: { margin: '2px 0 2px', fontSize: 20, fontWeight: 850 },
+  scrollSub: { fontSize: 13, color: '#475569', margin: 0 },
 
-  stepTitle: { fontSize:15, fontWeight:700, lineHeight:1.5 },
-  stepWhy:   { fontSize:13, opacity:.85, marginTop:4, lineHeight:1.45 },
+  checklist: { listStyle: 'none', padding: 0, margin: '8px 0 0' },
+  step: {
+    display: 'flex',
+    gap: 10,
+    alignItems: 'flex-start',
+    padding: '10px 12px',
+    borderRadius: 12,
+    border: '1px solid #e5e7eb',
+    margin: '8px 0',
+    background: '#fff',
+  },
+  checkbox: { margin: '4px 8px 0 0', width: 18, height: 18 },
+  stepTitle: { fontSize: 15, fontWeight: 700, lineHeight: 1.5 },
+  stepWhy: { fontSize: 13, color: '#475569', marginTop: 4, lineHeight: 1.45 },
 };
 
 
