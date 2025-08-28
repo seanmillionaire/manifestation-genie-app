@@ -15,12 +15,12 @@ const GenieLang = {
     "The stars whispered your name, {firstName}… shall we begin?",
     "The portal is open 🌌 — step inside, {firstName}."
   ],
-  vibePrompt: "Pick your vibe: 🔥 Bold, 🙏 Calm, 💰 Rich. What are we feeling today?",
+  vibePrompt: "Pick your vibe: 🔥 Bold, 🙏 Calm, 💰 Rich. What are you feeling today?",
   resumeOrNew: "Continue the last wish, or spark a fresh one?",
   resumeLabel: "Continue last wish",
   newLabel: "Start a new wish",
   questPrompts: {
-    wish: "What’s the outcome you’re chasing? Say it like you mean it.",
+    wish: "What’s the goal you want to manifest? Say it like you mean it.",
     block: "What’s blocking you? Drop the excuse in one line.",
     micro: "What’s 1 micro-move you can make today? Something small."
   },
@@ -235,7 +235,7 @@ function Questionnaire({ initial, onComplete, vibe, firstName }) {
       </div>
 
       <div style={styles.card}>
-        <h3 style={styles.h3}>What’s the play today, {firstName}?</h3>
+        <h3 style={styles.h3}>Let's decode your dream, {firstName}👇</h3>
 
         <p style={styles.subtle}>{GenieLang.questPrompts.wish}</p>
         <textarea
