@@ -1,12 +1,9 @@
-// pages/chat.js — Manifestation Genie (Light Theme, Likes + New Wish -> Vibe Select)
+// pages/chat.js — Manifestation Genie (Light Theme, Likes + New Wish -> Vibe Select, no logout)
 
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/router'
 import { supabase } from '../src/supabaseClient'
 
-/* =========================
-   Signature Language Kit
-   ========================= */
 const GenieLang = {
   greetings: [
     "The lamp glows… your Genie is here. ✨ What’s stirring in your heart today, {firstName}?",
@@ -18,11 +15,10 @@ const GenieLang = {
     "Tip: Ask for one thing in one sentence. Short, specific, alive. I’ll handle the heavy lifting.",
 }
 
-/* =========================
-   Helpers
-   ========================= */
+/* Storage keys — do NOT touch Supabase auth keys (they start with `sb-...`) */
 const STORAGE_KEY = 'mg_chat_history_v3'
 const NAME_KEY = 'mg_first_name'
+
 const newId = () => Math.random().toString(36).slice(2,10)
 const pick = (arr) => arr[Math.floor(Math.random() * arr.length)]
 const injectName = (t, name='Friend') => t.replaceAll('{firstName}', name)
@@ -39,9 +35,6 @@ function saveHistory(messages=[]) {
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(messages)) } catch {}
 }
 
-/* =========================
-   Page
-   ========================= */
 export default function ChatPage() {
   const router = useRouter()
   const [firstName, setFirstName] = useState('Friend')
@@ -74,7 +67,7 @@ export default function ChatPage() {
     return () => { mounted = false }
   }, [])
 
-  // Load conversation
+  // Load / seed conversation
   useEffect(() => {
     const hist = loadHistory()
     if (hist.length) setMessages(hist)
@@ -83,8 +76,7 @@ export default function ChatPage() {
         { id:newId(), role:'assistant', content:injectName(pick(GenieLang.greetings), loadNameFallback()) },
         { id:newId(), role:'assistant', content:GenieLang.smallNudge },
       ]
-      setMessages(seed)
-      saveHistory(seed)
+      setMessages(seed); saveHistory(seed)
     }
   }, [])
 
@@ -131,12 +123,14 @@ export default function ChatPage() {
     setMessages(newer); saveHistory(newer)
   }
 
-  // New Wish → clear thread + go to Vibe Select (/) 
+  // New Wish -> clear only our chat thread and navigate to the flow entry
   function handleNewWish() {
     try { localStorage.removeItem(STORAGE_KEY) } catch {}
-    setMessages([])
-    setInput('')
-    router.push('/')   // assumes Vibe Select lives at the home page
+    setMessages([]); setInput('')
+    // Navigate to the Vibe Select entry without touching auth
+    // Your index page should read ?start=vibe and show the vibe screen,
+    // then progress to questionnaire -> checklist -> chat.
+    router.push({ pathname: '/', query: { start: 'vibe' } })
   }
 
   function handleKey(e) {
@@ -152,7 +146,6 @@ export default function ChatPage() {
         </header>
 
         <div style={styles.chatWrap}>
-          {/* Stream */}
           <div style={styles.chatStream} ref={streamRef}>
             {messages.map(m => {
               const isUser = m.role === 'user'
@@ -200,7 +193,6 @@ export default function ChatPage() {
             )}
           </div>
 
-          {/* Input row */}
           <div style={styles.chatInputRow}>
             <input
               style={styles.chatInput}
@@ -223,9 +215,6 @@ export default function ChatPage() {
   )
 }
 
-/* =========================
-   Styles — Light Theme
-   ========================= */
 const styles = {
   wrap: { minHeight:'100vh', background:'#ffffff', color:'#111111', padding:'24px' },
   container: { maxWidth: 980, margin: '0 auto' },
