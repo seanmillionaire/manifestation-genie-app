@@ -171,18 +171,11 @@ function addCosmicOutro(s='', topic='this') {
 }
 
 function formatGenieReply(raw='', topic='this') {
-  const noNums   = ensureNoNumberedLists(raw);
-  const bullets  = bulletize(noNums);
-
-  // Break to short lines, then inject explanations under action-y lines
-  const tight = toSocialLines(bullets, 9)
-    .split('\n')
-    .map(explainLine)
-    .join('\n');
-
+  const noNums = ensureNoNumberedLists(raw);
+  const bullets = bulletize(noNums);
+  const tight = toSocialLines(bullets, 9);
   const withOutro = addCosmicOutro(tight, topic);
-  const withQuip  = `${withOutro}\n\n${wittyCloser(topic)}`;
-  return withQuip.trim();
+  return withOutro.trim();
 }
 
 
