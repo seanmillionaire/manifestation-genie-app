@@ -27,8 +27,7 @@ export default function Login() {
   return (
     <div className="login-wrap">
       <header className="login-hero">
-        <img className="login-logo" src="https://storage.googleapis.com/mixo-sites/images/file-a7eebac5-6af9-4253-bc71-34c0d455a852.png" alt="Manifestation Genie" />
-        <h1 className="login-title">Your Personal AI Genie for Manifesting Dreams into Reality ✨💫</h1>
+       <h1 className="login-title">Your Personal AI Genie for Manifesting Dreams into Reality ✨💫</h1>
       </header>
 
       <section className="login-card">
