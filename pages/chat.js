@@ -1,12 +1,5 @@
 // pages/chat.js — Manifestation Genie (White Theme + Oath Gate)
 // Flow: oath → vibe → resumeNew → questionnaire → checklist → chat
-export default function ChatPage() {
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => { setMounted(true); }, []);
-  if (!mounted) return null; // prevent SSR/CSR mismatch
-
-  // ...existing ChatPage code...
-}
 
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../src/supabaseClient'
