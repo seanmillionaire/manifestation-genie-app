@@ -1,13 +1,16 @@
-// pages/chat.js — Manifestation Genie
-// Flow: welcome → vibe → resumeNew → questionnaire → checklist → chat
-// Supabase name integration + localStorage persistence (per session)
+// pages/chat.js — Manifestation Genie (White Theme + Magical Flow + FULL Chat Console)
+// Flow: vibe → resumeNew → wishList → questionnaire → checklist → chat
+// Includes: mgHasEntered guard (no reset-to-vibe on tab refocus)
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '../src/supabaseClient'
+import Questionnaire from '../components/Questionnaire' // uses your simplified white version
 
 /* =========================
-   Signature Language Kit
+   Config / Language
    ========================= */
+const LOGO_SRC = 'https://storage.googleapis.com/mixo-sites/images/file-3ee255ce-ebaa-41de-96f6-a1233499cf70.png'
+
 const GenieLang = {
   greetings: [
     "The lamp glows… your Genie is here. ✨ What’s stirring in your heart today, {firstName}?",
@@ -15,379 +18,378 @@ const GenieLang = {
     "The stars whispered your name, {firstName}… shall we begin?",
     "The portal is open 🌌 — step inside, {firstName}."
   ],
-  vibePrompt: "Pick your vibe: 🔥 Bold, 🙏 Calm, 💰 Rich. What are we feeling today?",
-  resumeOrNew: "Continue the last wish, or spark a fresh one?",
+  vibePrompt: "What’s your vibe today, {firstName}? Choose the current you want to surf ⚡",
+  resumeOrNew: "Continue your last wish — or spark a fresh one?",
   resumeLabel: "Continue last wish",
   newLabel: "Start a new wish",
-  questPrompts: {
-    wish: "What’s the outcome you’re chasing? Say it like you mean it.",
-    block: "What’s blocking you? Drop the excuse in one line.",
-    micro: "What’s 1 micro-move you can make today? Something small."
-  },
-  rewards: [
-    "YES! That’s the one. Door unlocked.",
-    "Love it. The signal’s clear — time to move.",
-    "Locked in. You're ready. Execute time.",
-    "Noted. The window’s open. Step through."
-  ],
-  closing: "The lamp dims… but the magic stays with you.",
-  tinyCTA: "New wish or keep walking the path we opened?"
+  checklistTitle: "Quick Activation Checklist ✅",
 }
 
-/* =========================
-   Helpers
-   ========================= */
-const todayStr = () => new Date().toISOString().slice(0,10)
-const pick = (arr) => arr[Math.floor(Math.random() * arr.length)]
-const STORAGE_KEY = 'mg_chat_state_v1'
-const NAME_KEY = 'mg_first_name'
+const pick = (arr) => arr[Math.floor(Math.random()*arr.length)]
 const newId = () => Math.random().toString(36).slice(2,10)
 
-const injectName = (s, name) => (s || '').replaceAll('{firstName}', name || 'Friend')
-
-const loadState = () => {
-  if (typeof window === 'undefined') return null
-  try {
-    const r = localStorage.getItem(STORAGE_KEY)
-    return r ? JSON.parse(r) : null
-  } catch { return null }
-}
-
-const saveState = (state) => {
-  if (typeof window === 'undefined') return
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)) } catch {}
-}
-
-const getFirstNameFromCache = () => {
-  if (typeof window === 'undefined') return 'Friend'
-  try {
-    const saved = localStorage.getItem(NAME_KEY)
-    if (saved && saved.trim()) return saved.trim().split(' ')[0]
-  } catch {}
-  return 'Friend'
-}
-
-// Streak announce persistence (once per day)
-const STREAK_ANNOUNCED_KEY = 'mg_streak_announced_date'
-function getAnnouncedDate() {
-  try { return localStorage.getItem(STREAK_ANNOUNCED_KEY) || null } catch { return null }
-}
-function setAnnouncedToday() {
-  try { localStorage.setItem(STREAK_ANNOUNCED_KEY, getToday()) } catch {}
-}
-
-const toSocialLines = (text='', wordsPerLine=9) => {
-  const soft = text
-    .replace(/\r/g,'')
-    .replace(/([.!?])\s+/g, '$1\n')
-    .replace(/\s+[-–—]\s+/g, '\n');
-
-  const lines = [];
-  for (const piece of soft.split(/\n+/)) {
-    const words = piece.trim().split(/\s+/).filter(Boolean);
-    if (!words.length) continue;
-    for (let i = 0; i < words.length; i += wordsPerLine) {
-      lines.push(words.slice(i, i + wordsPerLine).join(' '));
-    }
-  }
-  return lines.join('\n');
-};
-const nl2br = (s='') => s.replace(/\n/g, '<br/>');
-
-// --- Pretty + cosmic formatting for Genie replies ---
-const cosmicOutros = [
-  "The stars tilt toward {topic}. ✨",
-  "Orbit set; trajectory locked. 🔮",
-  "The lamp hums in your direction. 🌙",
-  "Gravity favors your move. 🌌",
-  "Signals aligned; door unlocked. 🗝️"
-];
-/* ===== Cosmic explanation + humor layer ===== */
-const COSMIC_METAPHORS = [
-  ['visualize','Like plotting stars before a voyage—see it, then sail.'],
-  ['assess','Numbers are telescope lenses—clean them and the path sharpens.'],
-  ['schedule','Calendars are gravity; what you schedule, orbits you.'],
-  ['contact','Knock and the door vibrates; knock twice and it opens.'],
-  ['record','One take beats zero takes—silence never went viral.'],
-  ['post','Ship the signal so your tribe can find its frequency.'],
-  ['email','A good subject line is a comet tail—impossible to ignore.'],
-  ['apply','Forms are portals; boring but they warp reality when complete.'],
-  ['practice','Reps are runways—every pass smooths the landing.'],
-  ['learn','Knowledge is dark matter—unseen, but it holds your galaxy.']
-];
-
-function explainLine(line='') {
-  const L = line.trim();
-  if (!L) return '';
-  // Skip if it looks like an outro or already explanatory
-  if (/(The lamp|orbit|stars|gravity|cosmos|Signals aligned)/i.test(L)) return L;
-
-  // Try to match a verb and attach a short metaphor
-  let add = null;
-  for (const [key, meta] of COSMIC_METAPHORS) {
-    if (new RegExp(`\\b${key}`, 'i').test(L)) { add = meta; break; }
-  }
-  if (!add) add = 'Do it small and soon—momentum makes its own magic.';
-
-  // If line starts with an emoji bullet we keep it; else add one
-  const hasEmoji = /^[^\w\s]/.test(L);
-  const base = hasEmoji ? L : `✨ ${L}`;
-  return `${base}\n<span style="opacity:.8">— ${add}</span>`;
-}
-
-function wittyCloser(topic='this') {
-  const zingers = [
-    `I’ll hold the lamp; you push the door on “${topic}.”`,
-    `Pro tip: perfection is a black hole—aim for orbit.`,
-    `If the muse calls, let it go to voicemail—ship first.`,
-    `Cosmos math: tiny action × today > giant plan × someday.`,
-  ];
-  return zingers[Math.floor(Math.random()*zingers.length)];
-}
-
-function ensureNoNumberedLists(s='') {
-  return s
-    .replace(/^\s*\d+\.\s*/gm, '• ')
-    .replace(/^\s*-\s*/gm, '• ');
-}
-
-function bulletize(s='') {
-  return s.split(/\n+/).map(line => {
-    const L = line.trim();
-    if (!L) return '';
-    if (/^(•|\*|–|-)/.test(L)) return L.replace(/^(•|\*|–|-)\s*/, '');
-    if (/^(step|do|try|next|then|now|contact|create|assess|visualize|message|record|post|ship|book|schedule|prepare|explore)\b/i.test(L)) {
-      const anchors = ["🌌","🔑","💰","🌀","✨"];
-      return `${anchors[Math.floor(Math.random()*anchors.length)]} ${L}`;
-    }
-    return L;
-  }).join('\n');
-}
-
-function addCosmicOutro(s='', topic='this') {
-  const line = cosmicOutros[Math.floor(Math.random()*cosmicOutros.length)].replace('{topic}', topic);
-  if (/(star|orbit|cosmos|universe|galaxy|gravity|lamp|portal)/i.test(s.split('\n').slice(-2).join(' '))) return s;
-  return `${s}\n\n${line}`;
-}
-
-function formatGenieReply(raw='', topic='this') {
-  const noNums = ensureNoNumberedLists(raw);
-  const bullets = bulletize(noNums);
-  const tight = toSocialLines(bullets, 9);
-  const withOutro = addCosmicOutro(tight, topic);
-  return withOutro.trim();
-}
-
-
 /* =========================
-   Streak Messages (Brunson-style, human + hype)
+   Header
    ========================= */
-function streakMessage(count) {
-  if (count === 1) return "Day 1 — you showed up. Momentum just started.";
-  if (count === 2) return "2 days in a row. That’s a pattern forming. Keep it alive.";
-  if (count === 3) return "3-day streak. You’re building a muscle. Don’t break it tonight.";
-  if (count >= 4 && count < 7) return `${count} days straight — proof this isn’t luck. Keep stacking wins.`;
-  if (count >= 7 && count < 30) return `${count} days. Weekly habit formed — imagine what 30 does.`;
-  return `${count} days strong — this isn’t a streak anymore, it’s who you are.`;
-}
-
-/* =========================
-   Brunson Daily Streak (localStorage)
-   ========================= */
-const STREAK_KEY = 'mg_streak'
-const LAST_DATE_KEY = 'mg_last_date'
-
-function getToday() { return new Date().toISOString().slice(0,10) }
-function getYesterday() {
-  const d = new Date(); d.setDate(d.getDate() - 1);
-  return d.toISOString().slice(0,10)
-}
-function loadStreak() {
-  if (typeof window === 'undefined') return { count: 0, last: null }
-  try {
-    const count = parseInt(localStorage.getItem(STREAK_KEY) || '0', 10)
-    const last = localStorage.getItem(LAST_DATE_KEY)
-    return { count: isNaN(count) ? 0 : count, last }
-  } catch { return { count: 0, last: null } }
-}
-function saveStreak(count, last) {
-  try {
-    localStorage.setItem(STREAK_KEY, String(count))
-    localStorage.setItem(LAST_DATE_KEY, last)
-  } catch {}
-}
-
-/* =========================
-   Minimal Questionnaire
-   ========================= */
-function Questionnaire({ initial, onComplete, vibe, firstName }) {
-  const [wish, setWish]   = useState(initial?.wish || "")
-  const [block, setBlock] = useState(initial?.block || "")
-  const [micro, setMicro] = useState(initial?.micro || "")
-
-  const canSubmit = wish.trim() && micro.trim()
-
+function LogoHeader() {
   return (
-    <>
-      <div style={styles.portalHeader}>
-        <h1 style={styles.portalTitle}>Your Personal AI Genie ✨</h1>
-        <p style={styles.portalSubtitle}>This is your daily portal to manifest your dreams into reality.</p>
-      </div>
-
-      <div style={styles.card}>
-        <h3 style={styles.h3}>What’s the play today, {firstName}?</h3>
-
-        <p style={styles.subtle}>{GenieLang.questPrompts.wish}</p>
-        <textarea
-          value={wish}
-          onChange={e=>setWish(e.target.value)}
-          placeholder="One line. No fluff."
-          style={styles.textarea}
-          rows={3}
-        />
-
-        <p style={{...styles.subtle, marginTop:16}}>{GenieLang.questPrompts.block}</p>
-        <textarea
-          value={block}
-          onChange={e=>setBlock(e.target.value)}
-          placeholder="Say the snag. Simple + true."
-          style={styles.textarea}
-          rows={2}
-        />
-
-        <p style={{...styles.subtle, marginTop:16}}>{GenieLang.questPrompts.micro}</p>
-        <input
-          value={micro}
-          onChange={e=>setMicro(e.target.value)}
-          placeholder="Send it. Start it. Ship it."
-          style={styles.input}
-        />
-
-        <button
-          style={{...styles.btn, marginTop:16, opacity: canSubmit ? 1 : 0.6, cursor: canSubmit ? 'pointer' : 'not-allowed'}}
-          disabled={!canSubmit}
-          onClick={() => onComplete({wish:wish.trim(), block:block.trim(), micro:micro.trim(), vibe, date: todayStr()})}
-        >
-          Lock it in →
-        </button>
-        <p style={{...styles.mini, marginTop:12}}>{pick(GenieLang.rewards)}</p>
-      </div>
-    </>
-  )
-}
-
-/* =========================
-   3-Step Checklist (custom to input)
-   ========================= */
-function Checklist({ wish, micro, steps, onToggle, onComplete, onSkip }) {
-  const allDone = steps.length > 0 && steps.every(s => s.done)
-
-  return (
-    <div style={styles.card}>
-      <h3 style={styles.h3}>
-        Do this now for: <span style={{opacity:.9}}>"{wish || 'your wish'}"</span>
-      </h3>
-
-      <ul style={styles.checklist}>
-        {steps.map((s, i) => (
-          <li key={s.id} style={styles.checkItem}>
-            <label style={styles.checkLabel}>
-              <input
-                type="checkbox"
-                checked={!!s.done}
-                onChange={() => onToggle(s.id)}
-                style={styles.checkbox}
-              />
-              <span>{i+1}. {s.text}</span>
-            </label>
-          </li>
-        ))}
-      </ul>
-
-      <div style={styles.row}>
-        <button
-          style={{...styles.btn, opacity: allDone ? 1 : .65, cursor: allDone ? 'pointer' : 'not-allowed'}}
-          disabled={!allDone}
-          onClick={onComplete}
-        >
-          All done → Enter chat
-        </button>
-        <button style={styles.btnGhost} onClick={onSkip}>Skip for now</button>
-      </div>
-
-      {micro ? (
-        <p style={{...styles.mini, marginTop:10}}>
-          Your micro-move: <b>{micro}</b> — mark it complete once it’s in motion.
-        </p>
-      ) : null}
+    <div style={{
+      width:'100%', display:'flex', alignItems:'center', justifyContent:'center',
+      padding:'14px 12px', borderBottom:'1px solid #e5e7eb', background:'#fff',
+      position:'sticky', top:0, zIndex:50
+    }}>
+      <img src={LOGO_SRC} alt="Manifestation Genie" style={{height:36, width:'auto'}} />
     </div>
   )
 }
 
 /* =========================
-   Messenger-style Chat Console (labels + likes)
+   Utility: ripple + backdrop
    ========================= */
-function ChatConsole({ thread, onSend, onReset, onToggleLike, firstName }) {
-  const [input, setInput] = useState("")
+function addRipple(e) {
+  const btn = e.currentTarget
+  const rect = btn.getBoundingClientRect()
+  const ripple = document.createElement('span')
+  const size = Math.max(rect.width, rect.height)
+  ripple.style.position = 'absolute'
+  ripple.style.left = `${e.clientX - rect.left - size/2}px`
+  ripple.style.top  = `${e.clientY - rect.top  - size/2}px`
+  ripple.style.width = ripple.style.height = `${size}px`
+  ripple.style.borderRadius = '50%'
+  ripple.style.pointerEvents = 'none'
+  ripple.style.background = 'rgba(17,17,17,0.08)'
+  ripple.style.transform = 'scale(0)'
+  ripple.style.opacity = '1'
+  ripple.style.transition = 'transform 500ms ease, opacity 600ms ease'
+  btn.appendChild(ripple)
+  requestAnimationFrame(() => { ripple.style.transform = 'scale(1)' })
+  setTimeout(() => { ripple.style.opacity = '0'; ripple.remove() }, 600)
+}
+
+function TwinkleBackdrop() {
+  return (
+    <div className="mg-stars" aria-hidden="true">
+      <style jsx>{`
+        .mg-stars {
+          position: fixed; inset: 0; z-index: 0; pointer-events: none;
+          background:
+            radial-gradient(1200px 800px at 50% -10%, rgba(168, 85, 247, 0.12), transparent 60%),
+            radial-gradient(800px 600px at 90% 10%, rgba(234, 179, 8, 0.12), transparent 60%),
+            radial-gradient(700px 500px at 10% 10%, rgba(14, 165, 233, 0.10), transparent 60%),
+            #ffffff;
+        }
+        .mg-stars::before, .mg-stars::after {
+          content:""; position:absolute; inset:0;
+          background-image:
+            radial-gradient(2px 2px at 20% 30%, rgba(17,17,17,0.2), transparent 40%),
+            radial-gradient(2px 2px at 40% 80%, rgba(17,17,17,0.2), transparent 40%),
+            radial-gradient(1.5px 1.5px at 70% 20%, rgba(17,17,17,0.15), transparent 40%),
+            radial-gradient(1.5px 1.5px at 85% 60%, rgba(17,17,17,0.15), transparent 40%),
+            radial-gradient(1.5px 1.5px at 15% 70%, rgba(17,17,17,0.15), transparent 40%);
+          animation: twinkle 6s linear infinite;
+        }
+        .mg-stars::after { animation-delay:3s; opacity:.7; }
+        @keyframes twinkle { 0%{opacity:.15; transform:translateY(0)} 50%{opacity:.35; transform:translateY(-6px)} 100%{opacity:.15; transform:translateY(0)} }
+      `}</style>
+    </div>
+  )
+}
+
+/* =========================
+   Vibe Select (animated)
+   ========================= */
+function useTypewriter(text, speed=24) {
+  const [out, setOut] = useState('')
+  useEffect(() => {
+    let i=0; setOut('')
+    const id = setInterval(()=>{ i++; setOut(text.slice(0,i)); if(i>=text.length) clearInterval(id)}, speed)
+    return () => clearInterval(id)
+  }, [text, speed])
+  return out
+}
+
+function VibeSelect({ firstName, onSelect }) {
+  const promptRaw = GenieLang.vibePrompt.replace('{firstName}', firstName || 'friend')
+  const typed = useTypewriter(`🧞 ${promptRaw}`)
+  const [entered, setEntered] = useState(false)
+  useEffect(()=>{ window.scrollTo({top:0, behavior:'smooth'}); const t=setTimeout(()=>setEntered(true),50); return ()=>clearTimeout(t)},[])
+  const Btn = ({label, onClick, klass}) => (
+    <button className={`vibe-btn ${klass}`} onMouseDown={addRipple} onClick={onClick}>
+      <span className="inner">{label}</span><span className="shimmer" />
+      <style jsx>{`
+        .vibe-btn{position:relative;border:2px solid #111;border-radius:14px;background:#fff;cursor:pointer;padding:14px 16px;min-height:64px;overflow:hidden;transition:transform .12s,box-shadow .2s;box-shadow:0 6px 0 #111}
+        .vibe-btn:active{transform:translateY(2px);box-shadow:0 4px 0 #111}
+        .inner{font-size:17px;font-weight:900;color:#111}
+        .shimmer{pointer-events:none;position:absolute;inset:0;background:linear-gradient(110deg,transparent 0%,transparent 40%,rgba(17,17,17,.06) 50%,transparent 60%,transparent 100%);transform:translateX(-120%);animation:sweep 3.5s ease-in-out infinite}
+        @keyframes sweep{0%{transform:translateX(-120%)}60%{transform:translateX(120%)}100%{transform:translateX(120%)}}
+        .vibe-btn:hover{box-shadow:0 10px 24px rgba(99,102,241,0.18),0 6px 0 #111}
+      `}</style>
+    </button>
+  )
+  return (
+    <div className="vibe-wrap">
+      <TwinkleBackdrop/>
+      <div className={`vibe-card ${entered?'entered':''}`}>
+        <div className="aura"/>
+        <div className="prompt">{typed}</div>
+        <div className="buttons">
+          <Btn label="🔥 Bold"  klass="bold" onClick={()=>onSelect('bold')}/>
+          <Btn label="🙏 Calm"  klass="calm" onClick={()=>onSelect('calm')}/>
+          <Btn label="💰 Rich"  klass="rich" onClick={()=>onSelect('rich')}/>
+        </div>
+      </div>
+      <style jsx>{`
+        .vibe-wrap{position:relative;min-height:calc(100vh - 60px);display:flex;align-items:center;justify-content:center;padding:24px;background:#fff}
+        .vibe-card{position:relative;z-index:1;width:100%;max-width:720px;padding:26px 24px;border:1px solid #e5e7eb;border-radius:18px;background:#fff;box-shadow:0 12px 40px rgba(167,139,250,.25);opacity:0;transform:translateY(12px) scale(.96);transition:opacity .5s, transform .6s cubic-bezier(.16,.84,.44,1);overflow:hidden}
+        .vibe-card.entered{opacity:1;transform:translateY(0) scale(1)}
+        .aura{position:absolute;inset:-20%;background:radial-gradient(350px 220px at 20% 10%,rgba(168,85,247,.16),transparent 60%),radial-gradient(300px 200px at 80% 0%,rgba(234,179,8,.16),transparent 60%);filter:blur(20px);animation:aura 6s ease-in-out infinite}
+        @keyframes aura{0%,100%{opacity:.65;transform:scale(1)}50%{opacity:.85;transform:scale(1.03)}}
+        .prompt{position:relative;z-index:1;font-size:20px;line-height:1.35;font-weight:900;color:#0f172a;margin:2px 4px 16px}
+        .buttons{position:relative;z-index:1;display:grid;grid-template-columns:1fr;gap:12px}
+        @media(min-width:680px){.buttons{grid-template-columns:repeat(3,1fr)}}
+      `}</style>
+    </div>
+  )
+}
+
+/* =========================
+   Resume/New + WishList + Checklist
+   ========================= */
+function ResumeOrNew({ onPick }) {
+  return (
+    <div className="ron-wrap">
+      <TwinkleBackdrop/>
+      <div className="ron-card">
+        <div className="title">🧞 {GenieLang.resumeOrNew}</div>
+        <div className="actions">
+          <button className="ron-btn" onMouseDown={addRipple} onClick={()=>onPick('resume')}>{GenieLang.resumeLabel}</button>
+          <button className="ron-btn" onMouseDown={addRipple} onClick={()=>onPick('new')}>{GenieLang.newLabel}</button>
+        </div>
+      </div>
+      <style jsx>{`
+        .ron-wrap{position:relative;min-height:calc(100vh - 60px);display:flex;align-items:center;justify-content:center;padding:24px;background:#fff}
+        .ron-card{position:relative;z-index:1;width:100%;max-width:680px;padding:22px;background:#fff;border:1px solid #e5e7eb;border-radius:16px;box-shadow:0 12px 40px rgba(99,102,241,.18)}
+        .title{font-weight:900;color:#0f172a;font-size:20px;margin-bottom:14px}
+        .actions{display:grid;gap:12px;grid-template-columns:1fr}
+        @media(min-width:600px){.actions{grid-template-columns:1fr 1fr}}
+        .ron-btn{position:relative;padding:14px 16px;min-height:64px;cursor:pointer;border:2px solid #111;border-radius:12px;background:#fff;font-weight:900;box-shadow:0 6px 0 #111;transition:transform .12s,box-shadow .2s}
+        .ron-btn:active{transform:translateY(2px);box-shadow:0 4px 0 #111}
+      `}</style>
+    </div>
+  )
+}
+
+function WishList({ userId, onSelectWish, onBack }) {
+  const [loading, setLoading] = useState(true)
+  const [items, setItems] = useState([])
+  const [err, setErr] = useState(null)
+
+  useEffect(() => {
+    let cancelled = false
+    async function load(){
+      setLoading(true); setErr(null)
+      try {
+        let { data: wishes, error: wErr } = await supabase
+          .from('wishes')
+          .select('id,title,summary,micro,created_at')
+          .eq('user_id', userId)
+          .order('created_at', { ascending:false })
+          .limit(50)
+        if (wErr) throw wErr
+        if ((!wishes || wishes.length===0)) {
+          const { data: entries, error: eErr } = await supabase
+            .from('daily_entries')
+            .select('id,intention,focus_area,created_at')
+            .eq('user_id', userId)
+            .order('created_at', { ascending:false })
+            .limit(50)
+          if (eErr) throw eErr
+          wishes = (entries||[]).map(e=>({ id:e.id, title:e.intention, summary:e.focus_area, created_at:e.created_at }))
+        }
+        if (!cancelled) setItems(wishes||[])
+      } catch(e){ if(!cancelled) setErr(e.message||'Load failed') }
+      finally{ if(!cancelled) setLoading(false) }
+    }
+    if (userId) load()
+    return ()=>{ cancelled=true }
+  }, [userId])
+
+  return (
+    <div className="wish-wrap">
+      <TwinkleBackdrop/>
+      <div className="wish-card">
+        <div className="hdr">
+          <button className="back" onClick={onBack}>← Back</button>
+          <div className="title">📜 Your saved wishes</div>
+        </div>
+        {loading && <div className="state">Summoning your scrolls… ✨</div>}
+        {err && <div className="state error">Couldn’t fetch: {err}</div>}
+        {!loading && !err && items.length===0 && <div className="state">No previous wishes yet.</div>}
+        <ul className="list">
+          {items.map(w=>(
+            <li key={w.id} className="row" onClick={()=>onSelectWish(w)}>
+              <div className="left">
+                <div className="t">{w.title || 'Untitled wish'}</div>
+                {w.summary ? <div className="s">{w.summary}</div> : null}
+              </div>
+              <div className="right">
+                <div className="meta">{new Date(w.created_at).toLocaleDateString()}</div>
+                <div className="cta">Resume →</div>
+              </div>
+            </li>
+          ))}
+        </ul>
+      </div>
+      <style jsx>{`
+        .wish-wrap{position:relative;min-height:calc(100vh - 60px);display:flex;align-items:center;justify-content:center;padding:24px;background:#fff}
+        .wish-card{position:relative;z-index:1;width:100%;max-width:860px;background:#fff;border:1px solid #e5e7eb;border-radius:16px;box-shadow:0 12px 40px rgba(168,85,247,.18);padding:16px}
+        .hdr{display:flex;align-items:center;gap:12px;margin-bottom:8px}
+        .back{appearance:none;border:1px solid #e5e7eb;background:#fff;border-radius:10px;padding:8px 10px;cursor:pointer}
+        .title{font-weight:900;color:#0f172a;font-size:20px}
+        .state{padding:16px;color:#475569}.state.error{color:#b91c1c}
+        .list{list-style:none;padding:0;margin:6px 0 0}
+        .row{display:flex;justify-content:space-between;align-items:center;gap:12px;border:1px solid #e5e7eb;border-radius:12px;padding:12px;cursor:pointer;background:#fff;transition:box-shadow .15s, transform .12s}
+        .row+.row{margin-top:10px}
+        .row:hover{box-shadow:0 10px 24px rgba(99,102,241,.18);transform:translateY(-1px)}
+        .t{font-weight:800;color:#0f172a}.s{color:#475569;font-size:13.5px;margin-top:2px}
+        .right{display:flex;align-items:center;gap:10px}.meta{color:#64748b;font-size:12.5px}.cta{font-weight:900}
+      `}</style>
+    </div>
+  )
+}
+
+function Checklist({ onDone }) {
+  const [checks, setChecks] = useState([false,false,false])
+  const all = checks.every(Boolean)
+  return (
+    <div className="chk-wrap">
+      <TwinkleBackdrop/>
+      <div className="chk-card">
+        <div className="title">🪄 {GenieLang.checklistTitle}</div>
+        <ul>
+          <li onClick={()=>setChecks(([a,b,c])=>[!a,b,c])}>{checks[0]?'✅':'⬜️'} Set a clear intention</li>
+          <li onClick={()=>setChecks(([a,b,c])=>[a,!b,c])}>{checks[1]?'✅':'⬜️'} Choose one micro-action for today</li>
+          <li onClick={()=>setChecks(([a,b,c])=>[a,b,!c])}>{checks[2]?'✅':'⬜️'} Promise your future self one tiny step</li>
+        </ul>
+        <button className="primary" disabled={!all} onMouseDown={addRipple} onClick={onDone}>Enter the Chamber →</button>
+      </div>
+      <style jsx>{`
+        .chk-wrap{position:relative;min-height:calc(100vh - 60px);display:flex;align-items:center;justify-content:center;padding:24px;background:#fff}
+        .chk-card{position:relative;z-index:1;width:100%;max-width:680px;background:#fff;border:1px solid #e5e7eb;border-radius:16px;box-shadow:0 12px 40px rgba(168,85,247,.18);padding:22px}
+        .title{font-weight:900;color:#0f172a;font-size:20px;margin-bottom:10px}
+        ul{list-style:none;padding:0;margin:8px 0 16px}
+        li{padding:10px 12px;border:1px solid #e5e7eb;border-radius:12px;margin-bottom:8px;font-weight:700;color:#0f172a;cursor:pointer;background:#fff}
+        .primary{width:100%;padding:14px 16px;border:2px solid #111;border-radius:12px;font-weight:900;background:#fff;box-shadow:0 6px 0 #111;cursor:pointer;min-height:58px}
+        .primary:disabled{opacity:.5;cursor:not-allowed}
+        .primary:active:not(:disabled){transform:translateY(2px);box-shadow:0 4px 0 #111}
+      `}</style>
+    </div>
+  )
+}
+
+/* =========================
+   FULL Messenger-style Chat Console
+   ========================= */
+function ChatConsole({ firstName }) {
+  const [thread, setThread] = useState(() => ([
+    { id:newId(), role:'assistant', author:'Genie', content:`${pick(GenieLang.greetings).replace('{firstName}', firstName || 'friend')}`, likedByUser:false, likedByGenie:false }
+  ]))
+  const [input, setInput] = useState('')
   const endRef = useRef(null)
   useEffect(()=>{ endRef.current?.scrollIntoView({behavior:'smooth'}) }, [thread])
 
+  function onToggleLike(id, who){
+    setThread(prev => prev.map(m => m.id===id ? (who==='user' ? {...m, likedByUser:!m.likedByUser} : {...m, likedByGenie:!m.likedByGenie}) : m))
+  }
+
+  function maybeGenieLikes(msg){
+    const t = (msg.content||'').toLowerCase()
+    const isWin = /(done|shipped|posted|sold|launched|emailed|completed|locked in)/.test(t)
+    if (isWin || Math.random() < 0.25) {
+      setThread(prev => prev.map(m => m.id===msg.id ? {...m, likedByGenie:true} : m))
+    }
+  }
+
+  async function onSend(){
+    const text = input.trim()
+    if (!text) return
+    const userMsg = { id:newId(), role:'user', author:firstName||'You', content:text, likedByUser:false, likedByGenie:false }
+    setThread(prev=>prev.concat(userMsg))
+    setInput('')
+    maybeGenieLikes(userMsg)
+
+    // ——— call your API
+    try{
+      const resp = await fetch('/api/chat',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ messages:[...thread.map(({role,content})=>({role,content})), {role:'user', content:text}] }) })
+      const data = await resp.json()
+      const aiText = data?.reply || "The lamp hums. Tell me more."
+      setThread(prev=>prev.concat({ id:newId(), role:'assistant', author:'Genie', content:aiText, likedByUser:false, likedByGenie:false }))
+    }catch{
+      setThread(prev=>prev.concat({ id:newId(), role:'assistant', author:'Genie', content:"The lamp flickered. Try again.", likedByUser:false, likedByGenie:false }))
+    }
+  }
+
   return (
-    <div style={styles.chatWrap}>
-      <div style={styles.chatStream}>
-        {thread.map((m) => {
-          const isAI = m.role === 'assistant'
+    <div className="chat-wrap">
+      <div className="chat-stream">
+        {thread.map(m=>{
+          const isAI = m.role==='assistant'
           return (
-            <div key={m.id} style={isAI ? styles.rowAI : styles.rowUser}>
-              {/* Avatar */}
-              <div style={styles.avatar}>{isAI ? '🔮' : '🙂'}</div>
-
-              <div style={{flex:1, minWidth:0}}>
-                {/* Name label (mirror) */}
-                <div style={isAI ? styles.nameLabelAI : styles.nameLabelUser}>
-                  {isAI ? 'Genie' : (m.author || firstName || 'You')}
+            <div key={m.id} className={isAI?'row ai':'row user'}>
+              <div className="avatar">{isAI?'🔮':'🙂'}</div>
+              <div className="col">
+                <div className={isAI?'name ai':'name user'}>{isAI?'Genie':(m.author||firstName||'You')}</div>
+                <div className={isAI?'bubble ai':'bubble user'}>
+                  <div className="text">{m.content}</div>
                 </div>
-
-                {/* Bubble */}
-                <div style={isAI ? styles.bubbleAI : styles.bubbleUser}>
-                  <div style={styles.bubbleText} dangerouslySetInnerHTML={{__html: m.content}} />
-                </div>
-
-                {/* Reactions row */}
-                <div style={styles.reactRow}>
+                <div className="react">
                   {isAI ? (
-                    <button
-                      style={m.likedByUser ? styles.likeBtnActive : styles.likeBtn}
-                      onClick={() => onToggleLike(m.id, 'user')}
-                      aria-label="Like Genie message"
-                    >
-                      👍 {m.likedByUser ? 'Liked' : 'Like'}
+                    <button className={m.likedByUser?'like active':'like'} onClick={()=>onToggleLike(m.id,'user')}>
+                      👍 {m.likedByUser?'Liked':'Like'}
                     </button>
                   ) : (
-                    m.likedByGenie ? <span style={styles.likeBadge}>Genie liked this 👍</span> : null
+                    m.likedByGenie ? <span className="badge">Genie liked this 👍</span> : null
                   )}
                 </div>
               </div>
             </div>
           )
         })}
-        <div ref={endRef} />
+        <div ref={endRef}/>
       </div>
 
-      {/* Composer */}
-      <div style={styles.chatInputRow}>
+      <div className="composer">
         <input
+          className="input"
           value={input}
-          onChange={(e)=>setInput(e.target.value)}
+          onChange={e=>setInput(e.target.value)}
           placeholder="Speak to your Genie… 🔮"
-          onKeyDown={(e)=>{ if(e.key==='Enter' && input.trim()){ onSend(input.trim()); setInput('') } }}
-          style={styles.chatInput}
+          onKeyDown={(e)=>{ if(e.key==='Enter') onSend() }}
         />
-        <button style={styles.btn} onClick={()=>{ if(input.trim()){ onSend(input.trim()); setInput('') } }}>
-          Send
-        </button>
-        <button style={styles.btnGhost} onClick={onReset}>New wish</button>
+        <button className="send" onClick={onSend}>Send</button>
       </div>
+
+      <style jsx>{`
+        .chat-wrap{padding:16px;max-width:980px;margin:0 auto}
+        .chat-stream{border:1px solid #e5e7eb;border-radius:16px;background:#fff;box-shadow:0 10px 30px rgba(0,0,0,.06);padding:16px;min-height:420px;max-height:560px;overflow:auto}
+        .row{display:flex;gap:10px;align-items:flex-start;margin:10px 0}
+        .row.user{flex-direction:row-reverse}
+        .avatar{width:32px;height:32px;border-radius:50%;background:#f1f5f9;display:flex;align-items:center;justify-content:center;font-size:18px}
+        .name{font-size:12px;opacity:.7;margin:0 0 4px 4px}
+        .name.user{margin:0 4px 4px 0;text-align:right}
+        .bubble{max-width:85%;padding:12px 14px;border-radius:12px;margin:8px 0}
+        .bubble.ai{background:#f8fafc;border:1px solid #e5e7eb}
+        .bubble.user{background:rgba(255,214,0,.08);border:1px solid rgba(255,214,0,.25);margin-left:auto}
+        .text{white-space:pre-wrap;word-break:break-word}
+        .react{display:flex;gap:8px;align-items:center;margin:6px 6px 0 6px}
+        .like{border:1px solid #e5e7eb;background:#fff;border-radius:999px;padding:2px 8px;font-size:12px;cursor:pointer}
+        .like.active{border-color:rgba(255,214,0,.6);background:rgba(255,214,0,.12);color:#7a5a00}
+        .badge{font-size:12px;color:#7a5a00;background:rgba(255,214,0,.12);border:1px solid rgba(255,214,0,.35);border-radius:999px;padding:2px 8px}
+        .composer{display:flex;gap:10px;align-items:center;margin-top:10px}
+        .input{flex:1;padding:12px 14px;border-radius:12px;border:1px solid #e5e7eb;background:#fff;outline:none}
+        .send{padding:12px 16px;border-radius:12px;border:2px solid #111;background:#fff;font-weight:900;box-shadow:0 6px 0 #111;cursor:pointer}
+        .send:active{transform:translateY(2px);box-shadow:0 4px 0 #111}
+      `}</style>
     </div>
   )
 }
@@ -395,694 +397,85 @@ function ChatConsole({ thread, onSend, onReset, onToggleLike, firstName }) {
 /* =========================
    Main Page
    ========================= */
-function toPlainMessages(thread) {
-  const strip = (s='') => s
-    .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/<\/?[^>]+(>|$)/g, '')
-    .replace(/\s+/g, ' ')
-    .trim()
-
-  return thread.map(m => ({
-    role: m.role,
-    content: strip(m.content || '')
-  }))
-}
-
 export default function ChatPage() {
-  // FIRST NAME: cache first; hydrate from Supabase (profiles → metadata → email)
-  const [firstName, setFirstName] = useState(getFirstNameFromCache())
+  const [session, setSession]   = useState(null)
+  const [firstName, setFirstName] = useState('friend')
+  const [flow, setFlow] = useState('vibe') // vibe → resumeNew → wishList → questionnaire → checklist → chat
+  const [vibe, setVibe] = useState(null)
+  const [activeWish, setActiveWish] = useState(null)
 
-  // phases
-  const [phase, setPhase] = useState('welcome')
-  const [vibe, setVibe] = useState(null) // 'BOLD' | 'CALM' | 'RICH'
-  const [currentWish, setCurrentWish] = useState(null) // {wish, block, micro, vibe, date}
-  const [lastWish, setLastWish] = useState(null)
-  const [steps, setSteps] = useState([])
-
-  // streak state
-  const [streak, setStreak] = useState(0)
-  const [hasAnnouncedStreak, setHasAnnouncedStreak] = useState(false)
-
-  // greeting seeded with name
-  const [greeting] = useState(() => injectName(pick(GenieLang.greetings), firstName))
-  const [thread, setThread] = useState([
-    { id:newId(), role:'assistant', author:'Genie', content:greeting, likedByUser:false, likedByGenie:false }
-  ])
-
-  // Supabase name hydration
-useEffect(() => {
-  let alive = true
-  ;(async () => {
-    try {
-      const { data: { session } } = await supabase.auth.getSession()
-      const user = session?.user
-      if (!alive || !user) return
-      let fn = null
-
-      try {
-        const { data: p } = await supabase
-          .from('profiles')
-          .select('full_name')
-          .eq('id', user.id)
-          .maybeSingle()
-        if (p?.full_name) fn = String(p.full_name).trim().split(' ')[0]
-      } catch {}
-
-      if (!fn) {
-        const meta = user.user_metadata || {}
-        fn =
-          (meta.full_name?.trim().split(' ')[0]) ||
-          (meta.name?.trim().split(' ')[0]) ||
-          meta.given_name ||
-          null
-      }
-
-      if (!fn) fn = (user.email || '').split('@')[0] || 'Friend'
-
-      if (alive) {
-        setFirstName(fn)
-        try { localStorage.setItem(NAME_KEY, fn) } catch {}
-
-        // 👉 NEW: on login, if no vibe selected yet, show the Vibe screen first
-        setPhase(prev => (prev !== 'chat' && prev !== 'checklist' && prev !== 'questionnaire' && !vibe) ? 'vibe' : prev)
-      }
-    } catch {}
-  })()
-  return () => { alive = false }
-  // include `vibe` so the setter sees the latest value
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-}, [vibe])
-
-
-  // Load persisted state on mount
-  useEffect(()=>{
-    const s = loadState()
-    if (s) {
-      setPhase(s.phase || 'welcome')
-      setVibe(s.vibe || null)
-      setCurrentWish(s.currentWish || null)
-      setLastWish(s.lastWish || null)
-      setSteps(s.steps || [])
-      setThread(s.thread?.length ? s.thread : [{role:'assistant', content: injectName(pick(GenieLang.greetings), firstName)}])
-    }
-
-    // hydrate streak
-    const { count, last } = loadStreak()
-    const today = getToday()
-    if (last === today) {
-      setStreak(count)
-    } else if (last === getYesterday()) {
-      setStreak(count + 1)
-      saveStreak(count + 1, today)
-    } else {
-      setStreak(1)
-      saveStreak(1, today)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  // Load session
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => setSession(data?.session || null))
+    const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => setSession(s))
+    return () => sub?.subscription?.unsubscribe()
   }, [])
 
-  // Persist state
-  useEffect(()=>{ saveState({ phase, vibe, currentWish, lastWish, steps, thread }) }, [phase, vibe, currentWish, lastWish, steps, thread])
-
-  // Scroll to top on phase change
+  // Pull first name + guard so we don't keep resetting to vibe on refocus
   useEffect(() => {
-    if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' })
-  }, [phase])
+    let alive = true
+    ;(async () => {
+      try {
+        if (!session?.user?.id) return
+        const { data: p } = await supabase.from('profiles').select('first_name').eq('id', session.user.id).single()
+        const fn = p?.first_name?.split(' ')?.[0] || (session.user.email||'friend').split('@')[0]
+        if (alive) setFirstName(fn)
+      } catch {}
+    })()
+    return () => { alive=false }
+  }, [session])
 
-  // Announce streak once when entering chat (human, once per day)
   useEffect(() => {
-    if (phase !== 'chat') return
-
-    const today = getToday()
-    const alreadyAnnouncedToday = getAnnouncedDate() === today
-
-    if (alreadyAnnouncedToday) {
-      if (!hasAnnouncedStreak) setHasAnnouncedStreak(true)
-      return
+    if (session && !localStorage.getItem('mgHasEntered')) {
+      setFlow('vibe')
+      localStorage.setItem('mgHasEntered','true')
     }
+  }, [session])
 
-    if (!hasAnnouncedStreak) {
-      setThread(prev => prev.concat({
-        id: newId(),
-        role: 'assistant',
-        author: 'Genie',
-        content: nl2br(escapeHTML(
-          `${streakMessage(streak)}\nKeep the streak alive — what’s today’s micro-move?`
-        )),
-        likedByUser:false, likedByGenie:false
-      }))
-      setHasAnnouncedStreak(true)
-      setAnnouncedToday()
+  function handleVibeSelect(v) {
+    setVibe(v); localStorage.setItem('mgVibe', v); setFlow('resumeNew')
+  }
+  function handleResumeNew(choice) {
+    if (choice==='resume') setFlow('wishList'); else setFlow('questionnaire')
+  }
+  function handleSelectWish(w) {
+    setActiveWish(w); localStorage.setItem('mgActiveWish', JSON.stringify(w)); setFlow('checklist')
+  }
+  function handleQuestionnaireDone(newWish) {
+    if (newWish) { setActiveWish(newWish); localStorage.setItem('mgActiveWish', JSON.stringify(newWish)) }
+    setFlow('checklist')
+  }
+  function handleChecklistDone() {
+    if (!activeWish) {
+      const ls = localStorage.getItem('mgActiveWish'); if (ls) setActiveWish(JSON.parse(ls))
     }
-  }, [phase, streak, hasAnnouncedStreak])
-
-  const handlePickVibe = (v) => {
-    setVibe(v)
-    setPhase('resumeNew')
-    setThread(prev => prev.concat({
-      role:'assistant',
-      content: `${GenieLang.vibePrompt}<br/><span style="opacity:.8">Chosen: <b>${emojiFor(v)} ${titleCase(v)}</b></span>`
-    }))
+    setFlow('chat')
   }
 
-  const handleResume = () => {
-    const chosen = lastWish || currentWish
-    if (chosen) {
-      setCurrentWish(chosen)
-      if ((steps || []).length) {
-        setPhase('checklist')
-      } else {
-        setPhase('questionnaire')
-      }
-      setThread(prev => prev.concat({
-        role:'assistant',
-        content: `We’ll keep weaving the last wish: <b>${escapeHTML(chosen.wish)}</b>.`
-      }))
-    } else {
-      setPhase('questionnaire')
-      setThread(prev => prev.concat({ role:'assistant', content: "No past wish found. Let’s light a new one." }))
-    }
-  }
-
-  const handleNew = () => {
-    setCurrentWish(null)
-    setSteps([])
-    setPhase('questionnaire')
-    setThread(prev => prev.concat({ role:'assistant', content: "New star, new path. I’m listening…" }))
-  }
-
-  // 👉 Questionnaire → Checklist (MISSING BEFORE — now included)
-  const handleQuestComplete = (data) => {
-    setCurrentWish(data)
-    setLastWish(data)
-    const generated = generateChecklist(data)
-    setSteps(generated)
-    setPhase('checklist')
-    setThread(prev => prev.concat(
-      { id:newId(), role:'assistant', author:'Genie', content: `Wish set: <b>${escapeHTML(data.wish)}</b>.` },
-      { id:newId(), role:'assistant', author:'Genie', content: pick(GenieLang.rewards) },
-      { id:newId(), role:'assistant', author:'Genie', content: `Do these three now, then we talk. ${firstName}, speed > perfect.` }
-    ))
-  }
-
-  // Checklist interactions
-  const toggleStep = (id) => {
-    setSteps(prev => prev.map(s => s.id === id ? {...s, done: !s.done} : s))
-  }
-
-  const completeChecklist = () => {
-    setPhase('chat')
-    setThread(prev => prev.concat({
-      role:'assistant',
-      content: `Strong move. Checklist complete. Speak, and I’ll shape the path, ${firstName}. ${GenieLang.tinyCTA}`
-    }))
-  }
-
-  const skipChecklist = () => {
-    setPhase('chat')
-    setThread(prev => prev.concat({
-      role:'assistant',
-      content: `We’ll refine live. Tell me where you’re stuck on “${escapeHTML(currentWish?.wish || 'your goal')}”.`
-    }))
-  }
-
-  const onToggleLike = (id, who) => {
-    setThread(prev => prev.map(m => {
-      if (m.id !== id) return m
-      if (who === 'user') return { ...m, likedByUser: !m.likedByUser }
-      if (who === 'genie') return { ...m, likedByGenie: !m.likedByGenie }
-      return m
-    }))
-  }
-
-  // Streak bump on first activity of a new day
-  function bumpStreakOnActivity() {
-    const { count, last } = loadStreak()
-    const today = getToday()
-    if (last === today) return count // already counted today
-    const next = (last === getYesterday()) ? count + 1 : 1
-    saveStreak(next, today)
-    setStreak(next)
-    // mark that we've already announced today so the top-of-chat card doesn't duplicate
-    try { localStorage.setItem(STREAK_ANNOUNCED_KEY, today) } catch {}
-
-    // celebrate inside chat (human)
-    setThread(prev => prev.concat({
-      id: newId(),
-      role: 'assistant',
-      author: 'Genie',
-      content: nl2br(escapeHTML(
-        `New day logged. Streak: ${next}.\nDon’t break it — ship one tiny thing now.`
-      )),
-      likedByUser:false, likedByGenie:false
-    }))
-    return next
-  }
-
-  const maybeGenieLikes = (msg) => {
-    const t = (msg.content || '').toLowerCase()
-    const isWin = /(done|shipped|published|posted|sold|launched|emailed|uploaded|completed|locked in)/.test(t)
-    const shouldLike = isWin || Math.random() < 0.25
-    if (!shouldLike) return
-    setThread(prev => prev.map(m => m.id === msg.id ? ({ ...m, likedByGenie:true }) : m))
-  }
-
-  const handleSend = async (text) => {
-    const userMsg = {
-      id: newId(),
-      role: 'user',
-      author: firstName || 'You',
-      content: escapeHTML(text),
-      likedByUser: false,
-      likedByGenie: false
-    }
-    setThread(prev => prev.concat(userMsg))
-    maybeGenieLikes(userMsg)
-
-    // bump streak for today's first action
-    bumpStreakOnActivity()
-
-    try {
-      const reply = await genieReply({ text, thread, firstName, currentWish, vibe })
-      const topic = (currentWish?.wish || text || 'this').toLowerCase().slice(0, 80);
-      const pretty = formatGenieReply(reply, topic);
-      const aiMsg = {
-        id: newId(),
-        role: 'assistant',
-        author: 'Genie',
-        content: nl2br(escapeHTML(pretty)),
-        likedByUser: false,
-        likedByGenie: false
-      }
-      setThread(prev => prev.concat(aiMsg))
-    } catch {
-      const errMsg = {
-        id: newId(),
-        role: 'assistant',
-        author: 'Genie',
-        content: escapeHTML("The lamp flickered. Try again."),
-        likedByUser: false,
-        likedByGenie: false
-      }
-      setThread(prev => prev.concat(errMsg))
-    }
-  }
-
-  const resetToNewWish = () => {
-    setPhase('vibe')
-    setVibe(null)
-    setCurrentWish(null)
-    setSteps([])
-    setThread([{
-      id:newId(),
-      role:'assistant',
-      author:'Genie',
-      content: injectName(pick(GenieLang.greetings), firstName),
-      likedByUser:false,
-      likedByGenie:false
-    }])
-    setHasAnnouncedStreak(false)
-
-    // force scroll back up
-    if (typeof window !== 'undefined') {
-      window.scrollTo({ top: 0, behavior: 'smooth' })
-    }
-  }
+  const userId = session?.user?.id || null
 
   return (
-    <div style={styles.wrap}>
-      <div style={styles.container}>
-        {/* Welcome */}
-        {phase === 'welcome' && (
-          <div style={styles.card}>
-            <h1 style={{fontSize:34, fontWeight:900, margin:0}}>Meet Your Genie 🔮</h1>
-            <p style={{fontSize:18, opacity:.92, marginTop:8}}>
-              The lamp is open. Set your vibe and let’s flip what’s blocking you.
-            </p>
-            <p style={styles.lead}>{injectName(pick(GenieLang.greetings), firstName)}</p>
-            <button style={styles.btn} onClick={()=>setPhase('vibe')}>Start →</button>
+    <div className="page">
+      <LogoHeader/>
+      {flow==='vibe' && <VibeSelect firstName={firstName} onSelect={handleVibeSelect}/>}
+      {flow==='resumeNew' && <ResumeOrNew onPick={handleResumeNew}/>}
+      {flow==='wishList' && <WishList userId={userId} onSelectWish={handleSelectWish} onBack={()=>setFlow('resumeNew')}/>}
+      {flow==='questionnaire' && (
+        <div style={{padding:'18px'}}>
+          <div style={{maxWidth:980, margin:'0 auto', border:'1px solid #e5e7eb', borderRadius:16, background:'#fff', boxShadow:'0 10px 30px rgba(0,0,0,.06)'}}>
+            <Questionnaire onDone={handleQuestionnaireDone} firstName={firstName} vibe={vibe}/>
           </div>
-        )}
+        </div>
+      )}
+      {flow==='checklist' && <Checklist onDone={handleChecklistDone}/>}
+      {flow==='chat' && <ChatConsole firstName={firstName}/>}
 
-        {/* Vibe */}
-        {phase === 'vibe' && (
-          <div style={styles.card}>
-            <p style={styles.lead}>{GenieLang.vibePrompt}</p>
-            <div style={styles.vibeRow}>
-              <VibeButton label="BOLD" emoji="🔥" onClick={()=>handlePickVibe('BOLD')} />
-              <VibeButton label="CALM" emoji="🙏" onClick={()=>handlePickVibe('CALM')} />
-              <VibeButton label="RICH" emoji="💰" onClick={()=>handlePickVibe('RICH')} />
-            </div>
-          </div>
-        )}
-
-        {/* Resume or New */}
-        {phase === 'resumeNew' && (
-          <div style={styles.card}>
-            <p style={styles.lead}>{GenieLang.resumeOrNew}</p>
-            <div style={styles.row}>
-              <button style={styles.btn} onClick={handleResume}>{GenieLang.resumeLabel}</button>
-              <button style={styles.btnGhost} onClick={handleNew}>{GenieLang.newLabel}</button>
-            </div>
-            {lastWish && (
-              <div style={styles.lastWish}>
-                <div style={styles.mini}><b>Last wish:</b> {lastWish.wish}</div>
-                <div style={styles.mini}><b>Vibe:</b> {emojiFor(lastWish.vibe)} {titleCase(lastWish.vibe || '')}</div>
-                <div style={styles.mini}><b>Last step:</b> {lastWish.micro}</div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Questionnaire */}
-        {phase === 'questionnaire' && (
-          <Questionnaire
-            initial={currentWish}
-            onComplete={handleQuestComplete}
-            vibe={vibe}
-            firstName={firstName}
-          />
-        )}
-
-        {/* Checklist */}
-        {phase === 'checklist' && (
-          <Checklist
-            wish={currentWish?.wish}
-            micro={currentWish?.micro}
-            steps={steps}
-            onToggle={toggleStep}
-            onComplete={completeChecklist}
-            onSkip={skipChecklist}
-          />
-        )}
-
-        {/* Chat */}
-        {phase === 'chat' && (
-          <ChatConsole
-            thread={thread}
-            onSend={handleSend}
-            onReset={resetToNewWish}
-            onToggleLike={onToggleLike}
-            firstName={firstName}
-          />
-        )}
-      </div>
+      <style jsx global>{`
+        html, body, #__next { background:#ffffff; }
+        * { box-sizing: border-box; }
+        .page { min-height:100vh; background:#fff; }
+        ::selection { background:#fde68a; }
+      `}</style>
     </div>
   )
 }
-
-/* =========================
-   Small UI bits
-   ========================= */
-function VibeButton({ label, emoji, onClick }) {
-  return (
-    <button onClick={onClick} style={styles.vibeBtn}>
-      <div style={{fontSize:28, lineHeight:1, marginBottom:6}}>{emoji}</div>
-      <div style={{fontWeight:800}}>{label}</div>
-    </button>
-  )
-}
-
-/* Hit /api/chat (your one-liner operator Genie) */
-async function genieReply({ text, thread, firstName, currentWish, vibe, intent }) {
-  const context = {
-    intent: intent || null,
-    mood: null,
-    wish: currentWish?.wish || null,
-    block: currentWish?.block || null,
-    micro: currentWish?.micro || null,
-    vibe: vibe || null,
-  }
-
-  const resp = await fetch('/api/chat', {
-    method:'POST',
-    headers:{ 'Content-Type':'application/json' },
-    body: JSON.stringify({
-      userName: firstName || null,
-      hmUrl: 'https://hypnoticmeditations.ai',
-      context,
-      messages: [
-        ...toPlainMessages(thread),
-        { role:'user', content:text }
-      ]
-    })
-  })
-  const data = await resp.json()
-  if (!resp.ok) throw new Error(data?.error || 'API error')
-  return data.reply || 'OK.'
-}
-
-/* =========================
-   Styles (inline for portability)
-   ========================= */
-const styles = {
-  portalHeader: { textAlign:'left', marginBottom:18 },
-  portalTitle: { fontSize:34, fontWeight:900, margin:0, color:'#ffd600', letterSpacing:.3 },
-  portalSubtitle: { fontSize:18, opacity:.92, marginTop:6 },
-
-  wrap: {
-    minHeight:'100vh',
-    color:'#f2f2f6',
-    padding:'24px',
-    background: 'radial-gradient(1200px 600px at 50% -10%, #1a1b2d 0%, #0c0d14 55%, #090a10 100%)',
-  },
-  container: { maxWidth: 860, margin:'0 auto' },
-
-  card: {
-    background:'#171826',
-    border:'1px solid rgba(255,255,255,0.06)',
-    borderRadius:18,
-    padding:24,
-    boxShadow:'0 18px 40px rgba(0,0,0,.45), inset 0 0 0 1px rgba(255,255,255,0.02)'
-  },
-
-  h2: { margin:0, fontSize:28, fontWeight:900, letterSpacing:.3 },
-  h3: { marginTop:0, fontSize:22, fontWeight:850 },
-  lead: { fontSize:18, opacity:.96, lineHeight:1.45 },
-  subtle: { fontSize:15, opacity:.86, lineHeight:1.45 },
-  mini: { fontSize:13, opacity:.82 },
-
-  row: { display:'flex', gap:12, marginTop:12, flexWrap:'wrap' },
-  vibeRow: { display:'grid', gridTemplateColumns:'repeat(3, 1fr)', gap:12, marginTop:12 },
-
-  vibeBtn: {
-    padding:'14px 16px',
-    borderRadius:14,
-    border:'1px solid rgba(255,255,255,0.08)',
-    background:'linear-gradient(180deg, #161726 0%, #0f111a 100%)',
-    color:'#fff',
-    cursor:'pointer',
-    textAlign:'center',
-    boxShadow:'inset 0 0 0 1px rgba(255,255,255,0.02), 0 6px 16px rgba(0,0,0,.45)'
-  },
-
-  // Messenger rows
-  rowAI:   { display:'flex', gap:10, alignItems:'flex-start', margin:'10px 0' },
-  rowUser: { display:'flex', gap:10, alignItems:'flex-start', margin:'10px 0', flexDirection:'row-reverse' },
-  avatar:  { width:32, height:32, borderRadius:'50%', background:'rgba(255,255,255,0.06)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:18 },
-  nameLabelAI: { fontSize: 12, opacity: .7, margin: '0 0 4px 4px', textAlign: 'left' },
-  nameLabelUser: { fontSize: 12, opacity: .7, margin: '0 4px 4px 0', textAlign: 'right' },
-
-  reactRow: { display:'flex', gap:8, alignItems:'center', margin:'6px 6px 0 6px' },
-  likeBtn: {
-    border:'1px solid rgba(255,255,255,0.14)',
-    background:'transparent',
-    color:'#e6e6ee',
-    borderRadius:999,
-    padding:'2px 8px',
-    fontSize:12,
-    cursor:'pointer'
-  },
-  likeBtnActive: {
-    border:'1px solid rgba(255,214,0,0.6)',
-    background:'rgba(255,214,0,0.12)',
-    color:'#ffd600',
-    borderRadius:999,
-    padding:'2px 8px',
-    fontSize:12,
-    cursor:'pointer'
-  },
-  likeBadge: {
-    fontSize:12,
-    color:'#ffd600',
-    background:'rgba(255,214,0,0.10)',
-    border:'1px solid rgba(255,214,0,0.35)',
-    borderRadius:999,
-    padding:'2px 8px'
-  },
-
-  bubbleAI: {
-    maxWidth:'85%',
-    background:'rgba(255,255,255,0.04)',
-    padding:'12px 14px',
-    borderRadius:12,
-    border:'1px solid rgba(255,255,255,0.08)',
-    margin:'8px 0',
-    backdropFilter:'blur(2px)',
-    fontWeight: 600,
-    letterSpacing: .1,
-    lineHeight: 1.7
-  },
-
-  btn: {
-    padding:'12px 16px',
-    borderRadius:14,
-    border:'0',
-    background:'#ffd600',
-    color:'#111',
-    fontWeight:900,
-    cursor:'pointer',
-    letterSpacing:.2,
-    boxShadow:'0 0 24px rgba(255,214,0,0.55), 0 8px 28px rgba(0,0,0,.35)'
-  },
-  btnGhost: {
-    padding:'12px 16px',
-    borderRadius:14,
-    border:'1px solid rgba(255,255,255,0.14)',
-    background:'transparent',
-    color:'#e6e6ee',
-    fontWeight:820,
-    cursor:'pointer'
-  },
-
-  input: {
-    width:'100%',
-    padding:'12px 14px',
-    borderRadius:12,
-    border:'1px solid rgba(255,255,255,0.12)',
-    background:'linear-gradient(180deg, #0f1119 0%, #0c0d14 100%)',
-    color:'#fff',
-    outline:'none',
-    boxShadow:'0 0 14px rgba(255,214,0,0.07)'
-  },
-  textarea: {
-    width:'100%',
-    padding:'12px 14px',
-    borderRadius:12,
-    border:'1px solid rgba(255,255,255,0.12)',
-    background:'linear-gradient(180deg, #0f1119 0%, #0c0d14 100%)',
-    color:'#fff',
-    outline:'none',
-    resize:'vertical',
-    boxShadow:'0 0 14px rgba(255,214,0,0.07)'
-  },
-
-  lastWish: {
-    marginTop:12,
-    padding:12,
-    border:'1px dashed rgba(255,255,255,0.18)',
-    borderRadius:12,
-    background:'linear-gradient(180deg, rgba(255,214,0,0.05), rgba(255,214,0,0.02))'
-  },
-
-  checklist: { listStyle:'none', paddingLeft:0, margin:'8px 0 12px' },
-  checkItem: { padding:'10px 12px', borderRadius:12, background:'rgba(255,255,255,0.03)', marginBottom:8, border:'1px solid rgba(255,255,255,0.06)' },
-  checkLabel: { display:'flex', gap:10, alignItems:'center', cursor:'pointer' },
-  checkbox: { width:18, height:18, accentColor:'#ffd600' },
-
-  chatWrap: { display:'flex', flexDirection:'column', gap:12 },
-  chatStream: {
-    background:'linear-gradient(180deg, #101221 0%, #0b0c15 100%)',
-    border:'1px solid rgba(255,255,255,0.08)',
-    borderRadius:18,
-    padding:16,
-    minHeight:380,
-    maxHeight:540,
-    overflowY:'auto',
-    boxShadow:'0 14px 34px rgba(0,0,0,.45)'
-  },
-
-  bubbleUser: {
-    maxWidth:'85%',
-    background:'rgba(255,214,0,0.08)',
-    padding:'12px 14px',
-    borderRadius:12,
-    border:'1px solid rgba(255,214,0,0.18)',
-    margin:'8px 0 8px auto'
-  },
-  bubbleText: {
-    fontSize: 15,
-    lineHeight: 1.6,
-    whiteSpace: 'normal',
-    wordBreak: 'break-word',
-    overflowWrap: 'anywhere',
-  },
-
-  chatInputRow: { display:'flex', gap:10, alignItems:'center' },
-  chatInput: {
-    flex:1,
-    padding:'12px 14px',
-    borderRadius:12,
-    border:'1px solid rgba(255,255,255,0.12)',
-    background:'linear-gradient(180deg, #0f1119 0%, #0c0d14 100%)',
-    color:'#fff',
-    outline:'none',
-  },
-}
-
-/* =========================
-   Tiny utils
-   ========================= */
-function emojiFor(v) {
-  if (v === 'BOLD') return '🔥'
-  if (v === 'CALM') return '🙏'
-  if (v === 'RICH') return '💰'
-  return '✨'
-}
-function titleCase(s){ return s ? s[0].toUpperCase() + s.slice(1).toLowerCase() : '' }
-function escapeHTML(s=''){ return s.replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])) }
-
-/* =========================
-   Checklist generation — references wish, block, micro
-   ========================= */
-function generateChecklist({ wish='', block='', micro='' }) {
-  const W = (wish || '').trim()
-  const B = (block || '').trim()
-  const M = (micro || '').trim()
-  const w = W.toLowerCase()
-  const b = B.toLowerCase()
-
-  const has = (s, keys) => keys.some(k => s.includes(k))
-  const intent =
-    has(w, ['revenue','sales','sell','checkout','order','buy','customers','aov','payhip','shopify','product','offer']) ? 'sales' :
-    has(w, ['video','short','reel','tiktok','yt','youtube','clip'])                                             ? 'video' :
-    has(w, ['email','newsletter','aweber','list','broadcast'])                                                   ? 'email' :
-    has(w, ['ad','ads','meta','facebook','google','tiktok ads','campaign'])                                      ? 'ads' :
-    has(w, ['landing','page','funnel','vsl','quiz','bridge','optin','thank you','preframe'])                     ? 'landing' :
-    has(w, ['blog','seo','rank','article','post'])                                                               ? 'seo' :
-    has(w, ['post','tweet','x.com','thread','instagram','ig','story'])                                           ? 'social' :
-    has(w, ['meditation','audio','track','hypnosis','bundle'])                                                   ? 'product' :
-    'generic'
-
-  let step1 = B
-    ? `Neutralize the block “${B}”. Set a 30-minute focus window and remove one friction (phone off / tab close / clear desk).`
-    : `Set a 30-minute focus window. Phone on DND. One tab only.`
-
-  if (has(b, ['overwhelm','busy','time']))      step1 = `Calendar 30 minutes for "${W}". Phone on DND. One tab only.`
-  if (has(b, ['fear','scared','doubt','confidence'])) step1 = `2-minute pre-game: breathe, visualize "${W}" done, press go.`
-  if (has(b, ['tech','setup','domain','pixel','tracking'])) step1 = `Open the tool you need for "${W}". Complete one required field. Save once.`
-  if (has(b, ['money','budget','cost']))        step1 = `Pick the $0 version to advance "${W}". Ship first, upgrade later.`
-  if (has(b, ['perfection','perfect','procrast'])) step1 = `Draft ugly first for "${W}". 15-minute limit. Done > perfect.`
-
-  const step2 = M ? `Do your micro-move now: "${M}". Start timer (15m).` : `Choose the smallest action toward “${W}” and do it now (15m).`
-
-  let step3 = `Publish proof of progress for “${W}” (one message, one person, one platform).`
-  switch (intent) {
-    case 'sales':   step3 = `Publish one offer link for “${W}” (story/post/email). First line = CTA.`; break
-    case 'video':   step3 = `Record one 30–45s clip about “${W}”. Upload with first-line CTA.`; break
-    case 'email':   step3 = `Send one 5-sentence email about “${W}” with a single CTA link.`; break
-    case 'ads':     step3 = `Launch 1 ad set for “${W}”: 1 audience, 1 creative. Turn it on.`; break
-    case 'landing': step3 = `Ship the page for “${W}”: add hero headline + one gold CTA. Go live.`; break
-    case 'seo':     step3 = `Publish an outline post for “${W}” (H1/H2 + 200 words). Link it in nav.`; break
-    case 'social':  step3 = `Post one social update about “${W}” with a hard CTA in line 1.`; break
-    case 'product': step3 = `Update the product page for “${W}”: 3 bullets + hero image + buy link. Publish.`; break
-  }
-
-  return [
-    { id: 's1', text: step1, done: false },
-    { id: 's2', text: step2, done: false },
-    { id: 's3', text: step3, done: false },
-  ]
-}
-
-function capitalizeFirst(s){ if(!s) return s; return s[0].toUpperCase()+s.slice(1) }
