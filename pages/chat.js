@@ -1,5 +1,4 @@
-// pages/chat.js — Manifestation Genie (Light Theme, Likes + New Wish)
-// Full file. No patches needed.
+// pages/chat.js — Manifestation Genie (Light Theme, Likes + New Wish, Correct Button Order)
 
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../src/supabaseClient'
@@ -237,11 +236,11 @@ export default function ChatPage() {
               onKeyDown={handleKey}
               disabled={loading}
             />
-            <button style={styles.btnGhost} onClick={handleNewWish} disabled={loading}>
-              New wish
-            </button>
             <button style={styles.btn} onClick={handleSend} disabled={loading || !input.trim()}>
               {loading ? 'Sending…' : 'Send'}
+            </button>
+            <button style={styles.btnGhost} onClick={handleNewWish} disabled={loading}>
+              New wish
             </button>
           </div>
         </div>
