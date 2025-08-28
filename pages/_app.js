@@ -11,15 +11,16 @@ export default function App({ Component, pageProps }) {
         <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet" />
         <style>{`
           :root{
-            --bg:#0D1B2A;          
-            --card:#16172a;        
-            --soft:#21233a;        
-            --text:#FFFFFF;        
-            --muted:#a6a8bf;       
-            --brand:#5A189A;       
-            --gold:#FFD700;        
-            --green:#00C853;       
-            --purple:#5A189A;      
+            --bg:#ffffff;
+            --card:#ffffff;
+            --soft:#f8fafc;
+            --text:#111111;
+            --muted:#334155;
+            --brand:#6633CC;
+            --gold:#FFD600;
+            --green:#16a34a;
+            --purple:#6633CC;
+            --border:#e5e7eb;
           }
           html,body{
             margin:0;
@@ -35,26 +36,23 @@ export default function App({ Component, pageProps }) {
             flex-direction:column;
             min-height:100vh;
           }
-          main{
-            flex:1;
-          }
+          main{ flex:1; }
           footer{
             text-align:center;
             padding:20px 12px;
             font-size:14px;
-            color:rgba(255,255,255,0.7);
-            border-top:1px solid rgba(255,255,255,0.08);
+            color:var(--muted);
+            border-top:1px solid var(--border);
             line-height:1.6;
+            background:#fff;
           }
           footer a{
-            color:var(--gold);
+            color:#0b67ff;
             text-decoration:none;
             font-weight:600;
           }
-          footer a:hover{
-            text-decoration:underline;
-          }
-        `}</style>
+          footer a:hover{ text-decoration:underline; }
+`}</style>
       </Head>
       <div className="pageWrap">
         <main>
