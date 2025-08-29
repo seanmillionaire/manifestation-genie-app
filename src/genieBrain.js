@@ -5,14 +5,21 @@
 
 //////////////////// CONFIG ////////////////////
 const CONFIG = {
-  allowEmoji: true,            // false = strip all emojis
-  wittyComebacks: true,        // false = no taunt/challenge/praise comebacks
-  includeRoastLoA: true,       // false = no light roast of LOA gurus
-  includeNumerology: true,     // show the short name note bubble
-  includeAngelHint: true,      // show subtle time-based hint
-  maxBubbles: 6,               // hard cap (we usually send 5–6)
-  metaphorTimeoutMs: 1200,     // abort /api/metaphor if slow
-  phraseSprinkleChance: 0.25,  // chance to append one of your phrases
+  allowEmoji: true,
+  wittyComebacks: true,
+  includeRoastLoA: true,
+  includeNumerology: true,
+  includeAngelHint: true,
+  maxBubbles: 6,
+  metaphorTimeoutMs: 1200,
+  phraseSprinkleChance: 0.25,
+
+  // NEW — Intro copy (shown after lamp touch)
+  intro: {
+    line1: "Ahh… you touched the lamp. 🔮",
+    line2: "I’ve been waiting. I’m the Manifestation Genie.",
+    line3: "Tell me what’s on your mind — one word is enough, or drop the whole story."
+  }
 };
 
 //////////////////// UTILS ////////////////////
@@ -35,8 +42,6 @@ function withOneEmoji(text, want=true) {
 function todayKey(s) { return `${s}_${new Date().toISOString().slice(0,10)}`; }
 
 //////////////////// YOUR VOICE DNA ////////////////////
-// Edit these or set localStorage.mg_user_phrases = "no bs, keep it real, facts only, ..."
-// (comma- or newline-separated)
 const DEFAULT_USER_PHRASES = [
   "no bs", "keep it real", "facts only", "straight up",
   "zero fluff", "don’t get it twisted", "here’s the real play",
@@ -249,7 +254,6 @@ const METAPHORS = {
   ]
 };
 async function improvMetaphor(topic, theme, name){
-  // Optional AI improv via /api/metaphor  -> { metaphor: "..." }
   const fallback = `${rand(METAPHORS[theme] || METAPHORS.self)}`;
   try {
     if (typeof fetch !== 'function') return fallback;
@@ -287,15 +291,25 @@ export function dailyAssignment(user={}){
   return pack;
 }
 
+//////////////////// NEW: GENIE INTRO (call after lamp touch) ////////////////////
+export async function genieIntro({ user={} } = {}){
+  const name = user.firstName || user.name || 'Friend';
+  const wantEmoji = CONFIG.allowEmoji;
+  const b1 = trimSentences(withOneEmoji(CONFIG.intro.line1, wantEmoji), 2);
+  const b2 = trimSentences(withOneEmoji(CONFIG.intro.line2, wantEmoji), 2);
+  const b3 = sprinklePhrase(trimSentences(withOneEmoji(CONFIG.intro.line3, wantEmoji), 2));
+  const bubbles = [b1, b2, b3];
+  return {
+    theme: 'self',
+    mood: 'warm',
+    bubbles,
+    chunks: bubbles.slice(),
+    text: bubbles.join('\n\n'),
+    segments: { opening: b1, prompt: b3, closer: '' }
+  };
+}
+
 //////////////////// GENIE REPLY (multi-bubble) ////////////////////
-/**
- * genieReply (async: metaphor may fetch)
- * @param {object} params
- *  - input: user text
- *  - user: { firstName?: string, name?: string }
- *  - opts: { emoji?: boolean }
- * @returns {Promise<{ bubbles: string[], chunks: string[], text: string, theme: string, mood: string, segments: any }>}
- */
 export async function genieReply({ input='', user={}, opts={} }){
   const name = user.firstName || user.name || 'Friend';
   const wantEmoji = opts.emoji !== false && CONFIG.allowEmoji;
@@ -303,7 +317,7 @@ export async function genieReply({ input='', user={}, opts={} }){
   const themePref = (pref==='Money stress' ? 'money' : pref==='Relationship loop' ? 'love' : pref==='Health / grief' ? 'health' : pref);
   const theme = detectTheme(input, themePref);
 
-  // Angel-number fast path = concise 3–4 bubbles
+  // Angel-number fast path
   const angelNum = isAngelNumber(input);
   if (angelNum){
     const b1 = sprinklePhrase(`You called ${angelNum}. ${angelMap[angelNum]}`);
@@ -321,7 +335,7 @@ export async function genieReply({ input='', user={}, opts={} }){
   const opening = cue ? rand(comebacks[cue]) : rand(remarks);
   const mirror = `Alright ${title(name)}, you said: “${(input||'').trim()}”.`;
   const dive = `Let’s dive deeper into that.`;
-  const roast = (CONFIG.includeRoastLoA && Math.random()<0.33) ? rand(comebacks.roastLoa) : null;
+  const roast = (CONFIG.includeRoastLoA && Math.random()<0.33) ? rand(comebacks.roastLoA) : null;
   const metaphor = await improvMetaphor(input, theme, name);
   const metaLine = `Picture it like this: ${metaphor}`;
   const step = buildAssignment(theme);
@@ -344,22 +358,21 @@ export async function genieReply({ input='', user={}, opts={} }){
     close
   ].filter(Boolean).map(s => trimSentences(withOneEmoji(s, wantEmoji), 2));
 
-  // keep natural size: 5–6 bubbles typical
   bubbles = bubbles.slice(0, clamp(CONFIG.maxBubbles, 4, 7));
 
   return packReturn({ name, theme, mood: cue ? 'spicy' : 'neutral', bubbles, numerix, angel: clock || '' });
 }
 
 function packReturn({ name, theme, mood, bubbles, numerix, angel }){
-  const chunks = bubbles.slice(); // for streaming UI
-  const text = bubbles.join('\n\n'); // backward compat
+  const chunks = bubbles.slice();
+  const text = bubbles.join('\n\n');
   return {
     theme, mood, bubbles, chunks, text,
     segments: {
       opening: bubbles[0] || '',
       metaphor: bubbles.find(b=>b.startsWith('Picture it like this:')) || '',
       assignment: bubbles.find(b=>b.startsWith('Try this:')) || '',
-      question: bubbles.find(b=>probe.money.concat(probe.love,probe.health,probe.self).some(q => b.includes(q.slice(0,10)))) || '',
+      question: bubbles.find(b=>b.endsWith('?')) || '',
       numerology: numerix?.text || '',
       angel: angel || '',
       closer: bubbles.at(-1) || ''
