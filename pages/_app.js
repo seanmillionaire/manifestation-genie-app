@@ -1,30 +1,21 @@
-// pages/_app.js — Global shell (single clean header + pledge gate + widgets)
+// pages/_app.js — Global shell (header uses fixed logo image + widgets + pledge gate)
 
 import '../styles/globals.css'
 import '../styles/light-theme.css'
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/router'
 
-// ---------- Header (one logo only) ----------
+// ---------- Header with fixed logo ----------
 function Header() {
-  const [showImg, setShowImg] = useState(true) // hide if /logo.png missing
-
   return (
     <header style={{position:'sticky', top:0, zIndex:50, background:'#fff', borderBottom:'1px solid #e5e7eb'}}>
       <div style={{maxWidth:980, margin:'0 auto', padding:'10px 16px', display:'flex', alignItems:'center', gap:12}}>
-        {showImg ? (
-          <img
-            src="/logo.png"
-            alt="Manifestation Genie"
-            width={150}
-            height={32}
-            style={{height:32, width:'auto', objectFit:'contain'}}
-            onError={() => setShowImg(false)}
-          />
-        ) : (
-          <div style={{fontWeight:900, fontSize:18}}>Manifestation Genie</div>
-        )}
+        <img
+          src="https://storage.googleapis.com/mixo-sites/images/file-a7eebac5-6af9-4253-bc71-34c0d455a852.png"
+          alt="Manifestation Genie"
+          style={{height:34, width:'auto', objectFit:'contain'}}
+        />
         <nav style={{marginLeft:'auto', display:'flex', gap:14}}>
           <Link href="/flow" className="link">Flow</Link>
           <Link href="/chat" className="link">Chat</Link>
@@ -35,16 +26,16 @@ function Header() {
   )
 }
 
-// ---------- Optional global widgets (keep if you already added) ----------
+// ---------- Emergency Reset ----------
 function EmergencyReset() {
   if (typeof window === 'undefined') return null
   const AUDIO_SRC = '/audio/emergency-reset.mp3'
-  const [open, setOpen] = useState(false)
-  const [playing, setPlaying] = useState(false)
-  const [note, setNote] = useState('Panic easing • Money stress calming')
-  const [audio, setAudio] = useState(null)
+  const [open, setOpen] = React.useState(false)
+  const [playing, setPlaying] = React.useState(false)
+  const [note, setNote] = React.useState('Panic easing • Money stress calming')
+  const [audio, setAudio] = React.useState(null)
 
-  useEffect(() => {
+  React.useEffect(() => {
     const a = new Audio(AUDIO_SRC)
     a.preload = 'auto'
     a.addEventListener('ended', () => setPlaying(false))
@@ -85,15 +76,16 @@ function EmergencyReset() {
   )
 }
 
+// ---------- Results Tracker ----------
 function ResultsTracker() {
   if (typeof window === 'undefined') return null
-  const [open, setOpen] = useState(false)
-  const [items, setItems] = useState([])
+  const [open, setOpen] = React.useState(false)
+  const [items, setItems] = React.useState([])
 
   function todayKey(){ return `mg_relief_${new Date().toISOString().slice(0,10)}` }
   function load(){ try { return JSON.parse(localStorage.getItem(todayKey())||'[]') } catch { return [] } }
 
-  useEffect(() => { if (open) setItems(load()) }, [open])
+  React.useEffect(() => { if (open) setItems(load()) }, [open])
 
   return (
     <div style={{position:'fixed', left:16, bottom:16, zIndex:60}}>
@@ -121,10 +113,11 @@ function ResultsTracker() {
   )
 }
 
+// ---------- App ----------
 export default function App({ Component, pageProps }) {
   const router = useRouter()
 
-  // Gate: if pledge not accepted, force /onboard
+  // Gate: redirect to /onboard if no pledge yet
   useEffect(() => {
     const accepted = typeof window!=='undefined' && localStorage.getItem('mg_pledge_ok')==='1'
     const onOnboard = router.pathname.startsWith('/onboard')
