@@ -1,135 +1,91 @@
-// pages/_app.js — Global shell (header uses fixed logo image + widgets + pledge gate)
-
+// /pages/_app.js
 import '../styles/globals.css'
 import '../styles/light-theme.css'
-import { useEffect } from 'react'
-import Link from 'next/link'
-import { useRouter } from 'next/router'
+import Head from 'next/head'
 
-// ---------- Header with fixed logo ----------
-function Header() {
+const LOGO_SRC = 'https://storage.googleapis.com/mixo-sites/images/file-a7eebac5-6af9-4253-bc71-34c0d455a852.png'
+
+function LogoHeader() {
   return (
-    <header style={{position:'sticky', top:0, zIndex:50, background:'#fff', borderBottom:'1px solid #e5e7eb'}}>
-      <div style={{maxWidth:980, margin:'0 auto', padding:'10px 16px', display:'flex', alignItems:'center', gap:12}}>
-        <img
-          src="https://storage.googleapis.com/mixo-sites/images/file-a7eebac5-6af9-4253-bc71-34c0d455a852.png"
-          alt="Manifestation Genie"
-          style={{height:34, width:'auto', objectFit:'contain'}}
-        />
-        <nav style={{marginLeft:'auto', display:'flex', gap:14}}>
-          <Link href="/flow" className="link">Flow</Link>
-          <Link href="/chat" className="link">Chat</Link>
-          <Link href="/onboard" className="link">Onboard</Link>
-        </nav>
-      </div>
-    </header>
-  )
-}
-
-// ---------- Emergency Reset ----------
-function EmergencyReset() {
-  if (typeof window === 'undefined') return null
-  const AUDIO_SRC = '/audio/emergency-reset.mp3'
-  const [open, setOpen] = React.useState(false)
-  const [playing, setPlaying] = React.useState(false)
-  const [note, setNote] = React.useState('Panic easing • Money stress calming')
-  const [audio, setAudio] = React.useState(null)
-
-  React.useEffect(() => {
-    const a = new Audio(AUDIO_SRC)
-    a.preload = 'auto'
-    a.addEventListener('ended', () => setPlaying(false))
-    setAudio(a)
-    return () => { try { a.pause(); a.src=''; } catch(e){} }
-  }, [])
-
-  function todayKey(){ return `mg_relief_${new Date().toISOString().slice(0,10)}` }
-  function load(){ try { return JSON.parse(localStorage.getItem(todayKey())||'[]') } catch { return [] } }
-  function log(){
-    const arr = load(); arr.push({ type:'emergency_reset', note, ts: Date.now() })
-    localStorage.setItem(todayKey(), JSON.stringify(arr))
-  }
-
-  function togglePlay(){
-    if (!audio) return
-    if (playing) { audio.pause(); setPlaying(false) }
-    else { audio.currentTime = 0; audio.play().catch(()=>{}); setPlaying(true); log() }
-  }
-
-  return (
-    <div style={{position:'fixed', right:16, bottom:16, zIndex:60, display:'flex', flexDirection:'column', alignItems:'flex-end', gap:10}}>
-      {open && (
-        <div style={{width:300, padding:14, border:'1px solid #e5e7eb', borderRadius:12, boxShadow:'0 16px 50px rgba(15,23,42,.18)', background:'#fff'}}>
-          <div style={{fontWeight:800, marginBottom:6}}>Emergency Reset</div>
-          <p style={{margin:'0 0 8px', color:'#475569', fontSize:14}}>
-            3–7 minute calming track for money panic, fight/flight, and “card declined” spirals.
-          </p>
-          <input value={note} onChange={e=>setNote(e.target.value)} placeholder="Optional note"
-                 style={{width:'100%', padding:'10px 12px', border:'1px solid #e5e7eb', borderRadius:10, marginBottom:10}} />
-          <button className="btn btn-primary full" onClick={togglePlay}>{playing ? 'Pause' : 'Play Reset'}</button>
-        </div>
-      )}
-      <button onClick={()=>setOpen(v=>!v)} className="btn btn-primary" style={{borderRadius:999, padding:'10px 14px'}}>
-        {open ? 'Close Reset' : 'Emergency Reset'}
-      </button>
+    <div style={{
+      width:'100%', display:'flex', alignItems:'center', justifyContent:'center',
+      padding:'14px 12px', borderBottom:'1px solid #e5e7eb', background:'#fff',
+      position:'sticky', top:0, zIndex:50
+    }}>
+      <img src={LOGO_SRC} alt="Manifestation Genie" style={{height:36, width:'auto'}} />
     </div>
   )
 }
 
-// ---------- Results Tracker ----------
-function ResultsTracker() {
-  if (typeof window === 'undefined') return null
-  const [open, setOpen] = React.useState(false)
-  const [items, setItems] = React.useState([])
-
-  function todayKey(){ return `mg_relief_${new Date().toISOString().slice(0,10)}` }
-  function load(){ try { return JSON.parse(localStorage.getItem(todayKey())||'[]') } catch { return [] } }
-
-  React.useEffect(() => { if (open) setItems(load()) }, [open])
-
-  return (
-    <div style={{position:'fixed', left:16, bottom:16, zIndex:60}}>
-      {open && (
-        <div style={{width:300, padding:14, border:'1px solid #e5e7eb', borderRadius:12, boxShadow:'0 16px 50px rgba(15,23,42,.18)', background:'#fff', marginBottom:10}}>
-          <div style={{fontWeight:800, marginBottom:6}}>Today’s Micro-Wins</div>
-          {items.length===0 ? (
-            <p style={{margin:0, color:'#475569'}}>No events yet. Press play on the Emergency Reset to log your first win.</p>
-          ) : (
-            <ul style={{margin:0, paddingLeft:18}}>
-              {items.map((it, i)=>(
-                <li key={i} style={{marginBottom:6}}>
-                  <b>{it.type.replace('_',' ')}</b>
-                  <div style={{fontSize:12, color:'#64748b'}}>{new Date(it.ts).toLocaleTimeString()} — {it.note||'Calm achieved'}</div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      )}
-      <button onClick={()=>setOpen(v=>!v)} className="btn btn-ghost" style={{borderRadius:999}}>
-        {open ? 'Close Wins' : 'Today’s Wins'}
-      </button>
-    </div>
-  )
-}
-
-// ---------- App ----------
 export default function App({ Component, pageProps }) {
-  const router = useRouter()
-
-  // Gate: redirect to /onboard if no pledge yet
-  useEffect(() => {
-    const accepted = typeof window!=='undefined' && localStorage.getItem('mg_pledge_ok')==='1'
-    const onOnboard = router.pathname.startsWith('/onboard')
-    if (!accepted && !onOnboard) router.replace('/onboard')
-  }, [router.pathname])
-
   return (
     <>
-      <Header />
-      <Component {...pageProps} />
-      <EmergencyReset />
-      <ResultsTracker />
+      <Head>
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
+        <link
+          href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap"
+          rel="stylesheet"
+        />
+        <style>{`
+          :root{
+            --bg:#ffffff;
+            --card:#ffffff;
+            --soft:#f8fafc;
+            --text:#111111;
+            --muted:#334155;
+            --brand:#6633CC;
+            --gold:#FFD600;
+            --green:#16a34a;
+            --purple:#6633CC;
+            --border:#e5e7eb;
+          }
+          html,body{
+            margin:0;
+            padding:0;
+            background:var(--bg);
+            color:var(--text);
+            font-family:Poppins,system-ui,Arial;
+            min-height:100%;
+          }
+          *{box-sizing:border-box}
+          .pageWrap{
+            display:flex;
+            flex-direction:column;
+            min-height:100vh;
+          }
+          main{ flex:1; }
+          footer{
+            text-align:center;
+            padding:20px 12px;
+            font-size:14px;
+            color:var(--muted);
+            border-top:1px solid var(--border);
+            line-height:1.6;
+            background:#fff;
+          }
+          footer a{
+            color:#0b67ff;
+            text-decoration:none;
+            font-weight:600;
+          }
+          footer a:hover{ text-decoration:underline; }
+        `}</style>
+      </Head>
+      <div className="pageWrap">
+        <LogoHeader />
+        <main>
+          <Component {...pageProps} />
+        </main>
+        <footer>
+          <div>© {new Date().getFullYear()} Manifestation Genie. All rights reserved.</div>
+          <div>
+            Powered by{' '}
+            <a href="https://hypnoticmeditations.ai" target="_blank" rel="noopener noreferrer">
+              HypnoticMeditations.ai
+            </a>
+          </div>
+        </footer>
+      </div>
     </>
   )
 }
