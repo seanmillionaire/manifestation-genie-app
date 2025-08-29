@@ -1,5 +1,5 @@
 // pages/chat-genie.js
-// Manifestation Genie — resilient chat page (no blank bubbles, proper await, fallback to /api/chat)
+// Manifestation Genie — chat with lamp intro + multi-bubble streaming + resilient fallback
 
 import { useEffect, useRef, useState } from 'react'
 import Head from 'next/head'
@@ -7,10 +7,10 @@ import Head from 'next/head'
 // Prefer the local brain; if it’s missing or errors we’ll fall back to /api/chat
 let localBrain = null
 try {
-  // optional import so builds don’t break if the file changes
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const brain = require('../src/genieBrain')
   localBrain = {
+    genieIntro: brain.genieIntro,          // NEW
     genieReply: brain.genieReply,
     dailyAssignment: brain.dailyAssignment
   }
@@ -25,77 +25,99 @@ try {
 
 function useFirstName() {
   const [firstName, setFirstName] = useState('Friend')
-
   useEffect(() => {
     let mounted = true
     ;(async () => {
       try {
         const cached = typeof window !== 'undefined' ? localStorage.getItem('mg_first_name') : null
         if (cached && mounted) { setFirstName(cached); return }
-
         if (supabase) {
           const { data:{ session } = { session: null } } = await supabase.auth.getSession()
           const email = session?.user?.email || ''
           const guess = email ? (email.split('@')[0] || '') : ''
-          const name = guess
-            ? guess.replace(/[._-]+/g,' ').trim().split(' ')[0]
-            : 'Friend'
+          const name = guess ? guess.replace(/[._-]+/g,' ').trim().split(' ')[0] : 'Friend'
           if (mounted) setFirstName(name.charAt(0).toUpperCase() + name.slice(1))
         }
-      } catch {
-        /* ignore */
-      }
+      } catch {}
     })()
     return () => { mounted = false }
   }, [])
-
   useEffect(() => {
     if (typeof window === 'undefined') return
     try { localStorage.setItem('mg_first_name', firstName) } catch {}
   }, [firstName])
-
   return firstName || 'Friend'
 }
 
 export default function ChatGenie() {
   const firstName = useFirstName()
-  const [msgs, setMsgs] = useState([
-    {
-      author: 'Genie',
-      text: `The lamp hums… I’m listening, ${firstName}. Ask me *anything* or throw a word — I’ll turn it into gold.`
-    }
-  ])
+  const [started, setStarted] = useState(false)   // NEW: lamp idle -> chat
+  const [msgs, setMsgs] = useState([])            // start empty; Genie speaks only after lamp touch
   const [input, setInput] = useState('')
   const [thinking, setThinking] = useState(false)
   const listRef = useRef(null)
   const inputRef = useRef(null)
 
-  // keep greeting in sync once name resolves
-  useEffect(() => {
-    setMsgs(prev => {
-      if (!prev.length) return prev
-      const [first, ...rest] = prev
-      if (first.author !== 'Genie') return prev
-      const updated = {
-        ...first,
-        text: `The lamp hums… I’m listening, ${firstName}. Ask me *anything* or throw a word — I’ll turn it into gold.`
-      }
-      return [updated, ...rest]
-    })
-  }, [firstName])
-
   // autoscroll
   useEffect(() => {
     listRef.current?.scrollTo(0, 1e9)
-  }, [msgs, thinking])
+  }, [msgs, thinking, started])
+
+  // helper: append a single message
+  function push(author, text) {
+    setMsgs(m => [...m, { author, text }])
+  }
+
+  // helper: stream bubbles (array of strings) with a small delay
+  async function streamBubbles(author, bubbles = [], delayMs = 350) {
+    for (const b of bubbles) {
+      push(author, b)
+      await new Promise(r => setTimeout(r, delayMs))
+    }
+  }
+
+  // Lamp click -> call brain.genieIntro, stream bubbles
+  async function onLampClick() {
+    if (started) return
+    setStarted(true)
+    setThinking(true)
+    try {
+      if (localBrain?.genieIntro) {
+        const res = await localBrain.genieIntro({ user: { firstName } })
+        const bubbles = Array.isArray(res?.bubbles) && res.bubbles.length ? res.bubbles : [
+          'Ahh… you touched the lamp. 🔮',
+          'I’ve been waiting. I’m the Manifestation Genie.',
+          'Tell me what’s on your mind — one word is enough, or drop the whole story.'
+        ]
+        await streamBubbles('Genie', bubbles)
+      } else {
+        // Fallback intro if brain missing
+        await streamBubbles('Genie', [
+          'Ahh… you touched the lamp. 🔮',
+          'I’ve been waiting. I’m the Manifestation Genie.',
+          'Tell me what’s on your mind — one word is enough, or drop the whole story.'
+        ])
+      }
+      inputRef.current?.focus()
+    } catch {
+      push('Genie', 'The lamp flickered. Try tapping again if I go quiet.')
+    } finally {
+      setThinking(false)
+    }
+  }
 
   async function callLocalBrain(prompt) {
     if (!localBrain?.genieReply) throw new Error('local-brain-missing')
+    // IMPORTANT: pass user correctly
     const res = await localBrain.genieReply({
       input: prompt,
-      name: firstName || 'Friend'
+      user: { firstName }
     })
-    return res?.text || String(res || '')
+    // Prefer bubbles; fallback to text
+    if (Array.isArray(res?.bubbles) && res.bubbles.length) return res.bubbles
+    const text = res?.text || String(res || '')
+    // split by paragraphs for a pseudo-stream
+    return text.split(/\n{2,}/g).filter(Boolean)
   }
 
   async function callApi(prompt) {
@@ -108,16 +130,15 @@ export default function ChatGenie() {
       })
     })
     if (!r.ok) {
-      const t = await r.text().catch(()=>'')
+      const t = await r.text().catch(()=> '')
       throw new Error(`api-error ${r.status}: ${t}`)
     }
     const data = await r.json()
-    // support either {text} or {message}
-    return data.text || data.message || ''
+    const txt = data.text || data.message || ''
+    return txt.split(/\n{2,}/g).filter(Boolean)
   }
 
-  async function getReply(prompt) {
-    // try local brain first; if it throws, fall back to API
+  async function getReplyBubbles(prompt) {
     try { return await callLocalBrain(prompt) }
     catch { /* fall through */ }
     return await callApi(prompt)
@@ -127,21 +148,18 @@ export default function ChatGenie() {
     const trimmed = input.trim()
     if (!trimmed || thinking) return
 
-    setMsgs(m => [...m, { author: firstName, text: trimmed }])
+    push(firstName, trimmed)
     setInput('')
     setThinking(true)
 
     try {
-      const answer = await getReply(trimmed)
-      const safe = (answer && typeof answer === 'string')
-        ? answer
-        : 'As you wish — I will guide you step by step. Tell me the goal in one short line.'
-      setMsgs(m => [...m, { author: 'Genie', text: safe }])
+      const bubbles = await getReplyBubbles(trimmed)
+      const safe = (Array.isArray(bubbles) && bubbles.length)
+        ? bubbles
+        : ['As you wish — tell me the goal in one short line and I’ll give you your first 3 moves.']
+      await streamBubbles('Genie', safe)
     } catch (err) {
-      setMsgs(m => [...m, {
-        author: 'Genie',
-        text: `Hmm… the lamp flickered (network/brain error). Say the wish again, or refresh.`
-      }])
+      push('Genie', 'Hmm… the lamp flickered (network/brain error). Say the wish again, or refresh.')
     } finally {
       setThinking(false)
       inputRef.current?.focus()
@@ -149,7 +167,6 @@ export default function ChatGenie() {
   }
 
   async function onNewWish() {
-    // seed today’s micro-assignment to spark momentum
     setThinking(true)
     try {
       let seed = null
@@ -157,12 +174,9 @@ export default function ChatGenie() {
         const d = localBrain.dailyAssignment({ name: firstName })
         seed = `**${d.title}** — ${d.why}\n• ${d.steps.join('\n• ')}`
       }
-      setMsgs(m => [...m, {
-        author: 'Genie',
-        text: seed || `It is done — write the one-line wish, then I’ll drop your first 3 moves.`
-      }])
+      push('Genie', seed || 'It is done — write the one-line wish, then I’ll drop your first 3 moves.')
     } catch {
-      setMsgs(m => [...m, { author: 'Genie', text: `It is done — what’s today’s wish?` }])
+      push('Genie', 'It is done — what’s today’s wish?')
     } finally {
       setThinking(false)
     }
@@ -186,95 +200,134 @@ export default function ChatGenie() {
       <main style={{ background:'#fff', minHeight:'100vh', padding:'20px 0' }}>
         <div style={{
           width:'min(960px, 92vw)', margin:'0 auto',
-          background:'#f8fafc', border:'1px solid #e2e8f0', borderRadius:14, padding:20
+          background:'#f8fafc', border:'1px solid #e2e8f0', borderRadius:14, padding:20,
+          position:'relative'
         }}>
           <div style={{ fontWeight:800, fontSize:22, display:'flex', alignItems:'center', gap:10, margin:'6px 6px 12px' }}>
             <span style={{ fontSize:24 }}>🧞‍♂️</span>
             <span>Manifestation Genie</span>
           </div>
 
-          <div
-            ref={listRef}
-            style={{
-              height:'60vh', overflowY:'auto', background:'#fff',
-              border:'1px solid #e2e8f0', borderRadius:12, padding:16
-            }}
-          >
-            {msgs.map((m, i) => (
-              <div key={i} style={{
-                display:'flex', marginBottom:10,
-                justifyContent: m.author === 'Genie' ? 'flex-start' : 'flex-end'
-              }}>
-                <div style={{
-                  maxWidth:'75%',
-                  background: m.author === 'Genie' ? '#f1f5f9' : '#fef3c7',
-                  border:'1px solid #e2e8f0',
-                  padding:'10px 12px', borderRadius:12, whiteSpace:'pre-wrap'
-                }}>
-                  {m.text}
-                </div>
-              </div>
-            ))}
-
-            {thinking && (
-              <div style={{ display:'flex', marginBottom:10, justifyContent:'flex-start' }}>
-                <div style={{
-                  background:'#f1f5f9', border:'1px solid #e2e8f0',
-                  padding:'10px 12px', borderRadius:12
-                }}>
-                  <span className="dots">Genie is thinking</span>
-                  <style jsx>{`
-                    .dots::after {
-                      content: '…';
-                      animation: pulse 1.2s infinite steps(4, end);
-                    }
-                    @keyframes pulse {
-                      0% { content: '.'; }
-                      33% { content: '..'; }
-                      66% { content: '...'; }
-                      100% { content: '....'; }
-                    }
-                  `}</style>
-                </div>
-              </div>
-            )}
-          </div>
-
-          <div style={{ display:'flex', gap:10, marginTop:12 }}>
-            <input
-              ref={inputRef}
-              value={input}
-              onChange={e => setInput(e.target.value)}
-              onKeyDown={onKeyDown}
-              placeholder="Speak to your Genie… ✨"
+          {/* LAMP IDLE SCREEN */}
+          {!started && (
+            <div
+              onClick={onLampClick}
               style={{
-                flex:1, padding:'12px 14px', borderRadius:10,
-                border:'1px solid #cbd5e1', outline:'none'
-              }}
-            />
-            <button
-              onClick={onSend}
-              disabled={thinking || !input.trim()}
-              style={{
-                background:'#facc15', color:'#000', border:'none',
-                borderRadius:12, padding:'10px 18px', fontWeight:800,
-                cursor: thinking || !input.trim() ? 'not-allowed' : 'pointer'
+                height:'60vh',
+                border:'1px dashed #cbd5e1',
+                borderRadius:12,
+                display:'flex',
+                alignItems:'center',
+                justifyContent:'center',
+                flexDirection:'column',
+                gap:12,
+                background:'#fff',
+                cursor:'pointer',
+                userSelect:'none'
               }}
             >
-              Send
-            </button>
-            <button
-              onClick={onNewWish}
-              disabled={thinking}
-              style={{
-                background:'#fff', border:'1px solid #cbd5e1',
-                borderRadius:12, padding:'10px 14px', fontWeight:700,
-                cursor: thinking ? 'not-allowed' : 'pointer'
-              }}
-            >
-              New wish
-            </button>
-          </div>
+              <div style={{ fontSize:72, animation:'pulse 2s infinite' }}>🧞‍♂️</div>
+              <div style={{ fontSize:16, color:'#334155', textAlign:'center', padding:'0 16px' }}>
+                Touch the lamp when you’re ready to interact with the Genie
+              </div>
+              <style jsx>{`
+                @keyframes pulse {
+                  0% { transform: scale(1); opacity: 1; }
+                  50% { transform: scale(1.08); opacity: 0.85; }
+                  100% { transform: scale(1); opacity: 1; }
+                }
+              `}</style>
+            </div>
+          )}
+
+          {/* CHAT WINDOW */}
+          {started && (
+            <>
+              <div
+                ref={listRef}
+                style={{
+                  height:'60vh', overflowY:'auto', background:'#fff',
+                  border:'1px solid #e2e8f0', borderRadius:12, padding:16
+                }}
+              >
+                {msgs.map((m, i) => (
+                  <div key={i} style={{
+                    display:'flex', marginBottom:10,
+                    justifyContent: m.author === 'Genie' ? 'flex-start' : 'flex-end'
+                  }}>
+                    <div style={{
+                      maxWidth:'75%',
+                      background: m.author === 'Genie' ? '#f1f5f9' : '#fef3c7',
+                      border:'1px solid #e2e8f0',
+                      padding:'10px 12px', borderRadius:12, whiteSpace:'pre-wrap'
+                    }}>
+                      {m.text}
+                    </div>
+                  </div>
+                ))}
+
+                {thinking && (
+                  <div style={{ display:'flex', marginBottom:10, justifyContent:'flex-start' }}>
+                    <div style={{
+                      background:'#f1f5f9', border:'1px solid #e2e8f0',
+                      padding:'10px 12px', borderRadius:12
+                    }}>
+                      <span className="dots">Genie is thinking</span>
+                      <style jsx>{`
+                        .dots::after {
+                          content: '…';
+                          animation: pulse 1.2s infinite steps(4, end);
+                        }
+                        @keyframes pulse {
+                          0% { content: '.'; }
+                          33% { content: '..'; }
+                          66% { content: '...'; }
+                          100% { content: '....'; }
+                        }
+                      `}</style>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div style={{ display:'flex', gap:10, marginTop:12 }}>
+                <input
+                  ref={inputRef}
+                  value={input}
+                  onChange={e => setInput(e.target.value)}
+                  onKeyDown={onKeyDown}
+                  placeholder="Speak to your Genie… ✨"
+                  style={{
+                    flex:1, padding:'12px 14px', borderRadius:10,
+                    border:'1px solid #cbd5e1', outline:'none'
+                  }}
+                  disabled={thinking}
+                />
+                <button
+                  onClick={onSend}
+                  disabled={thinking || !input.trim()}
+                  style={{
+                    background:'#facc15', color:'#000', border:'none',
+                    borderRadius:12, padding:'10px 18px', fontWeight:800,
+                    cursor: thinking || !input.trim() ? 'not-allowed' : 'pointer'
+                  }}
+                >
+                  Send
+                </button>
+                <button
+                  onClick={onNewWish}
+                  disabled={thinking}
+                  style={{
+                    background:'#fff', border:'1px solid #cbd5e1',
+                    borderRadius:12, padding:'10px 14px', fontWeight:700,
+                    cursor: thinking ? 'not-allowed' : 'pointer'
+                  }}
+                >
+                  New wish
+                </button>
+              </div>
+            </>
+          )}
 
           <div style={{ textAlign:'center', color:'#64748b', fontSize:12, marginTop:10 }}>
             © {new Date().getFullYear()} Manifestation Genie. Powered by HypnoticMeditations.ai
