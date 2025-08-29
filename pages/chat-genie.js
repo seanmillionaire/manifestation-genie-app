@@ -1,6 +1,5 @@
 // pages/chat-genie.js
-// Standalone chat page wired to GenieBrain (wit + mysticism + assignments + numerology)
-// Drop in and visit /chat-genie. Rename to chat.js when you're ready.
+// Standalone chat wired to GenieBrain (fixed: no duplicate assignments, no blank bubbles, no inline logo)
 
 import { useEffect, useRef, useState } from 'react'
 import { genieReply, dailyAssignment } from '../src/genieBrain'
@@ -15,10 +14,9 @@ function useFirstName(){
         if (cached) { setFirstName(cached); return }
         const { data:{ session } } = await supabase.auth.getSession()
         const email = session?.user?.email || ''
-        // minimal attempt: try profiles table if you have it
         const { data } = await supabase.from('profiles').select('first_name').limit(1).maybeSingle()
-        if (data?.first_name){ setFirstName(data.first_name); localStorage.setItem('mg_first_name', data.first_name) }
-        else if (email) { setFirstName(email.split('@')[0]) }
+        const fn = data?.first_name || (email ? email.split('@')[0] : 'Friend')
+        setFirstName(fn); localStorage.setItem('mg_first_name', fn)
       }catch(e){}
     })()
   },[])
@@ -29,7 +27,9 @@ function Message({ author='Genie', text='' }){
   const mine = author!=='Genie'
   return (
     <div style={{display:'flex', gap:10, margin:'10px 0', alignItems:'flex-start'}}>
-      {!mine && <div style={{width:28, height:28, borderRadius:999, background:'#111', color:'#fff', display:'grid', placeItems:'center'}}>🧞‍♂️</div>}
+      {!mine && (
+        <div style={{width:28, height:28, borderRadius:999, background:'#111', color:'#fff', display:'grid', placeItems:'center'}}>🧞‍♂️</div>
+      )}
       <div style={{
         background: mine ? '#fff7d6' : '#f2f4f7',
         border:'1px solid #e5e7eb', borderRadius:12, padding:'12px 14px',
@@ -44,25 +44,32 @@ function Message({ author='Genie', text='' }){
 export default function ChatGenie(){
   const firstName = useFirstName()
   const [msgs, setMsgs] = useState([
-    { author:'Genie', text:`The lamp hums… I’m listening, ${firstName}. Ask me *anything* or just throw a word. I’ll turn it into gold.` }
+    { author:'Genie', text:`The lamp hums… I’m listening, ${firstName}. Ask me *anything* or throw a word — I’ll turn it into gold.` }
   ])
   const [input, setInput] = useState('')
   const listRef = useRef(null)
+  const droppedRef = useRef(false)
 
   useEffect(()=>{ listRef.current?.scrollTo(0, 999999) }, [msgs])
 
+  // Drop today's assignment once per day (guard both ref + localStorage)
   useEffect(() => {
-    // Drop today's assignment on entry (once)
+    const key = `mg_assignment_dropped_${new Date().toISOString().slice(0,10)}`
+    if (droppedRef.current) return
+    if (localStorage.getItem(key)==='1') return
     const todays = dailyAssignment({ firstName })
     setMsgs(m => [...m, { author:'Genie', text:
 `**Assignment of the Day (${todays.title})**
 Why: ${todays.why}
 • ${todays.steps.join('\n• ')}` }])
+    droppedRef.current = true
+    localStorage.setItem(key,'1')
   }, [firstName])
 
   function stream(text){
-    // simple type-stream effect: push sentence by sentence
-    const parts = text.split(/(?<=[\.\!\?])\s+/)
+    // sentence streamer with empty-part guard
+    const parts = text.split(/(?<=[\.\!\?])\s+/).map(p=>p.trim()).filter(Boolean)
+    if (parts.length===0){ setMsgs(m=>[...m, {author:'Genie', text}]); return }
     let i = 0
     const pushNext = () => {
       if (i >= parts.length) return
@@ -83,24 +90,19 @@ Why: ${todays.why}
 
     if (res.suggestReset){
       setMsgs(m => [...m, { author:'Genie', text:'I sense money-panic static. Opening the **Emergency Reset** would be wise. 🔧' }])
-      // try to click the global widget if you installed it
       setTimeout(()=>{
         const btn = [...document.querySelectorAll('button')].find(b=>b.textContent.includes('Emergency Reset'))
         if (btn) btn.click()
       }, 250)
     }
 
-    // stream the composed message
     stream(res.text)
   }
 
   return (
     <main style={{minHeight:'calc(100vh - 60px)', background:'#fff'}}>
       <div style={{maxWidth:980, margin:'0 auto', padding:'16px'}}>
-        <div style={{textAlign:'center', margin:'6px 0 8px'}}>
-          <img src="/logo.png" alt="Manifestation Genie" style={{height:34}} />
-        </div>
-
+        {/* No inline logo here — header already shows it */}
         <div ref={listRef} style={{
           height:'68vh', overflowY:'auto',
           border:'1px solid #e5e7eb', borderRadius:14, padding:14,
