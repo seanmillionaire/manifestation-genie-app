@@ -243,12 +243,7 @@ export default function ChatGenie() {
               `}</style>
             </div>
           )}
-{/* DAILY PORTAL */}
-{started && (
-  <div style={{ marginBottom: 20 }}>
-    <GenieDailyPortal userName={firstName} />
-  </div>
-)}
+
           {/* CHAT WINDOW */}
           {started && (
             <>
