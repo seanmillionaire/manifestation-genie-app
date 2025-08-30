@@ -170,6 +170,17 @@ function detectWitCue(text=''){
   if (PRAISE.test(text)) return 'praise';
   return null;
 }
+function isOffCourse(text='') {
+  const t = (text || '').trim()
+  if (!t) return true
+  // obvious off-course: taunts, ultra-short noise, or just punctuation
+  if (TAUNT.test(t)) return true
+  if (t.replace(/[\p{L}\p{N}]/gu, '').length === t.length) return true // only symbols/spaces
+  if (t.length < 3) return true
+  return false
+}
+
+function rand(arr){ return arr[Math.floor(Math.random()*arr.length)] }
 
 //////////////////// MICRO-STEPS ////////////////////
 const microSteps = {
@@ -403,34 +414,84 @@ function buildCloser(){
 }
 
 //////////////////// GENIE REPLY (multi-bubble) ////////////////////
-export async function genieReply({ input='', user={}, opts={} }){
-  const name = user.firstName || user.name || 'Friend';
-  const wantEmoji = opts.emoji !== false && CONFIG.allowEmoji;
-  const pref = (typeof window!=='undefined' && localStorage.getItem('mg_pain_focus')) || 'self';
-  const themePref = (pref==='Money stress' ? 'money' : pref==='Relationship loop' ? 'love' : pref==='Health / grief' ? 'health' : pref);
-  const theme = detectTheme(input, themePref);
+function genieReply({ input = '', user = {}, opts = {} }) {
+  const name = user.firstName || user.name || 'Friend'
+  const wantEmoji = opts.emoji !== false && CONFIG.allowEmoji
+  const pref = (typeof window !== 'undefined' && localStorage.getItem('mg_pain_focus')) || 'self'
+  const themePref =
+    (pref === 'Money stress' ? 'money' :
+     pref === 'R...hip loop' ? 'love' :
+     pref === 'Health / grief' ? 'health' : pref)
+  const theme = detectTheme(input, themePref)
+
+  // witty cue (taunt/challenge/praise)
+  const cue = CONFIG.wittyComebacks ? detectWitCue(input) : null
 
   // Optional numerology + angel hints
-  const numerix = CONFIG.includeNumerology ? numerologyDownload(name) : null;
-  const angel = CONFIG.includeAngelHint ? angelHint() : null;
+  const numerix = CONFIG.includeNumerology ? numerologyDownload(name) : null
+  const angel = CONFIG.includeAngelHint ? angelHint() : null
 
-  // Ritualized 3-part response
-  const reflection = buildMysticReflection(name, input, theme);
-  const viz = buildVisualization(theme, input);
-  const action = buildActionNudge(theme, input);
-  const flip = buildPerspectiveFlip(theme);
-  const seal = buildCloser();
+  // If user is off-course, steer them back (with cheeky opener if present)
+  if (isOffCourse(input)) {
+    const bubbles = []
 
-  let bubbles = [reflection, viz, action, flip];
-  if (numerix) bubbles.push(`Name note for ${title(name)} — ${numerix.text}`);
-  if (angel) bubbles.push(angel);
-  bubbles.push(seal);
+    if (cue && typeof comebacks?.[cue] !== 'undefined') {
+      bubbles.push(rand(comebacks[cue]))
+    } else {
+      bubbles.push("Let’s keep the lamp pointed at your wish.")
+    }
 
-  bubbles = bubbles.filter(Boolean).map(s => trimSentences(withOneEmoji(s, wantEmoji), 3));
-  bubbles = bubbles.slice(0, clamp(CONFIG.maxBubbles, 4, 6));
+    // role reminder + simple prompt to get a one-line wish
+    const nudge =
+      "Give me one clean sentence for your wish (present tense). Example: “I land one new paying client this week.”"
+    const micro =
+      "Then I’ll drop 3 tiny moves you can do today. Ready?"
 
-  return packReturn({ name, theme, mood:'warm', bubbles, numerix, angel: angel || '' });
+    // tidy + emoji sprinkle
+    const safe = [nudge, micro]
+      .map(s => trimSentences(withOneEmoji(s, wantEmoji), 2))
+
+    return packReturn({
+      name,
+      theme,
+      mood: 'directive',
+      bubbles: [...bubbles, ...safe]
+        .slice(0, 4)
+        .map(s => trimSentences(withOneEmoji(s, wantEmoji), 3)),
+      numerix,
+      angel: angel || ''
+    })
+  }
+
+  // Normal ritualized 3-part response
+  const reflection = buildMysticReflection(name, input, theme)
+  const viz = buildVisualization(theme, input)
+  const action = buildActionNudge(theme, input)
+  const flip = buildPerspectiveFlip(theme)
+  const seal = buildCloser()
+
+  let bubbles = []
+
+  // If user taunted/challenged/praised but still gave a proper wish, lead with a witty beat
+  if (cue && comebacks?.[cue]) {
+    bubbles.push(rand(comebacks[cue]))
+  }
+
+  bubbles.push(reflection, viz, action, flip)
+
+  if (numerix) bubbles.push(`Name note for ${title(name)} — ${numerix.text}`)
+  if (angel) bubbles.push(angel)
+  bubbles.push(seal)
+
+  // tidy, clamp, pack
+  bubbles = bubbles
+    .filter(Boolean)
+    .map(s => trimSentences(withOneEmoji(s, wantEmoji), 3))
+  bubbles = bubbles.slice(0, clamp(CONFIG.maxBubbles, 4, 6))
+
+  return packReturn({ name, theme, mood: 'warm', bubbles, numerix, angel: angel || '' })
 }
+
 
 //////////////////// PACK RETURN ////////////////////
 function packReturn({ name, theme='self', mood='neutral', bubbles=[], numerix=null, angel='' }){
