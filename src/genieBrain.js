@@ -14,7 +14,7 @@ const CONFIG = {
   metaphorTimeoutMs: 1200,
   phraseSprinkleChance: 0.25,
 
-  // NEW — Intro copy (shown after lamp touch)
+  // Intro copy (shown after lamp touch)
   intro: {
     line1: "Ah… the lamp warms in your palm. ✨",
     line2: "I am the Manifestation Genie — keeper of tiny moves that bend reality.",
@@ -169,6 +169,17 @@ function detectWitCue(text=''){
   if (CHALLENGE.test(text)) return 'challenge';
   if (PRAISE.test(text)) return 'praise';
   return null;
+}
+
+// NEW — Off-course detector (keeps user in-role)
+function isOffCourse(text='') {
+  const t = (text || '').trim();
+  if (!t) return true;                          // empty
+  if (t.length < 3) return true;                // ultra short noise
+  if (TAUNT.test(t)) return true;               // insults / taunts
+  // only symbols/whitespace?
+  if (t.replace(/[\p{L}\p{N}]/gu, '').length === t.length) return true;
+  return false;
 }
 
 //////////////////// MICRO-STEPS ////////////////////
@@ -410,23 +421,50 @@ export async function genieReply({ input='', user={}, opts={} }){
   const themePref = (pref==='Money stress' ? 'money' : pref==='Relationship loop' ? 'love' : pref==='Health / grief' ? 'health' : pref);
   const theme = detectTheme(input, themePref);
 
+  // witty cue (taunt/challenge/praise)
+  const cue = CONFIG.wittyComebacks ? detectWitCue(input) : null;
+
   // Optional numerology + angel hints
   const numerix = CONFIG.includeNumerology ? numerologyDownload(name) : null;
   const angel = CONFIG.includeAngelHint ? angelHint() : null;
 
-  // Ritualized 3-part response
+  // If off-course, steer back with cheeky opener + role reminder
+  if (isOffCourse(input)) {
+    const lead = cue && comebacks[cue] ? rand(comebacks[cue]) : "Let’s keep the lamp pointed at your wish.";
+    const nudge = "Give me one clean sentence for your wish (present tense). Example: “I land one new paying client this week.”";
+    const micro = "Then I’ll drop 3 tiny moves you can do today. Ready?";
+
+    const bubbles = [
+      trimSentences(withOneEmoji(lead, wantEmoji), 2),
+      trimSentences(withOneEmoji(nudge, wantEmoji), 3),
+      trimSentences(withOneEmoji(micro, wantEmoji), 2)
+    ].slice(0, clamp(CONFIG.maxBubbles, 3, 4));
+
+    return packReturn({ name, theme, mood: 'directive', bubbles, numerix, angel: angel || '' });
+  }
+
+  // Normal ritualized 3-part response (with optional witty lead-in)
   const reflection = buildMysticReflection(name, input, theme);
   const viz = buildVisualization(theme, input);
   const action = buildActionNudge(theme, input);
   const flip = buildPerspectiveFlip(theme);
   const seal = buildCloser();
 
-  let bubbles = [reflection, viz, action, flip];
+  let bubbles = [];
+
+  if (cue && comebacks[cue]) {
+    bubbles.push(rand(comebacks[cue]));
+  }
+
+  bubbles.push(reflection, viz, action, flip);
+
   if (numerix) bubbles.push(`Name note for ${title(name)} — ${numerix.text}`);
   if (angel) bubbles.push(angel);
   bubbles.push(seal);
 
-  bubbles = bubbles.filter(Boolean).map(s => trimSentences(withOneEmoji(s, wantEmoji), 3));
+  bubbles = bubbles
+    .filter(Boolean)
+    .map(s => trimSentences(withOneEmoji(s, wantEmoji), 3));
   bubbles = bubbles.slice(0, clamp(CONFIG.maxBubbles, 4, 6));
 
   return packReturn({ name, theme, mood:'warm', bubbles, numerix, angel: angel || '' });
