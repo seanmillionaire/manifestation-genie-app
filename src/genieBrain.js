@@ -174,31 +174,24 @@ function detectWitCue(text=''){
 }
 
 // Off-course detector: permissive for real goals, strict for junk/taunts
+// Off-course detector: permissive for real goals, strict for junk/taunts
 function isOffCourse(text = '') {
   const t = (text || '').trim();
-
-  // Empty / ultra short
   if (!t || t.length < 3) return true;
-
-  // Taunts or profanity
   if (TAUNT.test(t) || PROFANITY.test(t)) return true;
-
-  // If there's no letters or digits at all, it's junk
   if (!/[A-Za-z0-9]/.test(t)) return true;
 
-  // Looks like a concrete goal? Always on-course.
+  // Treat as valid goal if any of these are true:
   const looksMoney = /[$€£]\s*\d/.test(t) || /\b\d+(\.\d+)?\s*(k|m|million|thousand)\b/i.test(t);
   const hasPerTime = /\bper\s+(day|week|month|year)\b/i.test(t) || /\/\s*(day|wk|mo|yr|year|month)/i.test(t);
   const goalVerbs = /\b(i\s*)?(want|need|make|earn|land|get|grow|sell|buy|hit|reach|build|launch|save|close|book|sign|scale|publish|ship)\b/i.test(t);
   if (looksMoney || hasPerTime || goalVerbs) return false;
 
-  // If it has at least two real words (3+ letters), assume it's a valid intent
   const realWords = (t.match(/[A-Za-z]{3,}/g) || []).length;
   if (realWords >= 2) return false;
-
-  // Otherwise treat as off-course
   return true;
 }
+
 
 
 //////////////////// MICRO-STEPS ////////////////////
