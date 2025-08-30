@@ -1,8 +1,11 @@
-// GenieDailyPortal.jsx — ONE exercise/day with Shockcard (2), Ritual Button (3), Proof Ticker (6)
-// Usage in your chat page: <GenieDailyPortal userName="Sean" dream="$1K/day from HM" initialProof={12842} />
-// No external deps. White theme. Interlocks steps: Shock → Ritual → Exercise → Proof → Lock until 5:00 AM local.
+// GenieDailyPortal.jsx — Dynamic per-user (no hardcoded details)
+// Usage example in your chat page:
+//   <GenieDailyPortal userName={sessionUser?.first_name} dream={userGoal} initialProof={seedFromDB} />
+//
+// If userName/dream are not passed, this component will capture them once (inline) and store in localStorage.
+// White theme. One exercise/day. Flow: Shock → Ritual → Exercise → Proof → Lock until 5:00 AM local.
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 
 /* =========================
    Brand Tokens (white theme)
@@ -23,7 +26,7 @@ const UI = {
 /* =========================================================
    Daily Gate @ 05:00 LOCAL — lock today after completion
    ========================================================= */
-const DAILY_UNLOCK_HOUR = 5; // 5:00 local
+const DAILY_UNLOCK_HOUR = 5;
 
 function todayKey() {
   const d = new Date();
@@ -43,9 +46,7 @@ function nextUnlockDate() {
     0,
     0
   );
-  if (now >= unlock) {
-    unlock.setDate(unlock.getDate() + 1);
-  }
+  if (now >= unlock) unlock.setDate(unlock.getDate() + 1);
   return unlock;
 }
 function timeUntilUnlockStr() {
@@ -65,7 +66,6 @@ function useProofCounter(initialSeed = 12000) {
     if (typeof window === "undefined") return initialSeed;
     const saved = localStorage.getItem("genie_proof_total");
     if (saved) return parseInt(saved, 10);
-    // Seed with a lively baseline + small random jitter
     const seed = initialSeed + Math.floor(Math.random() * 200);
     localStorage.setItem("genie_proof_total", String(seed));
     return seed;
@@ -83,7 +83,7 @@ function useProofCounter(initialSeed = 12000) {
 }
 
 /* ====================================================
-   Visual Shockcards (2): animated sigils/number codes
+   Visual Shockcards: animated number codes
    ==================================================== */
 const SHOCKCARDS = [
   { id: "1111", title: "11:11 — Alignment Portal", mantra: "I am precisely on time." },
@@ -130,7 +130,7 @@ function Shockcard({ code = "1111", onContinue }) {
 }
 
 /* ==================================================
-   Ritual Button (3): glitch-seal micro-interaction
+   Ritual Button: glitch seal
    ================================================== */
 function RitualSeal({ onSealed }) {
   const [glitch, setGlitch] = useState(false);
@@ -157,42 +157,26 @@ function RitualSeal({ onSealed }) {
         .glx { position: relative; overflow: hidden; }
         .glx::before, .glx::after {
           content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, transparent, ${UI.gold}, transparent);
-          animation: sweep .9s ease forwards;
-          mix-blend-mode: overlay; opacity: .8;
+          animation: sweep .9s ease forwards; mix-blend-mode: overlay; opacity: .8;
         }
         .glx::after { animation-delay: .15s }
-        @keyframes sweep {
-          0% { transform: translateX(-120%) }
-          100% { transform: translateX(120%) }
-        }
-        /* Screen pulse */
-        body { transition: background .2s ease }
-        .glx:active ~ * {}
+        @keyframes sweep { 0% { transform: translateX(-120%) } 100% { transform: translateX(120%) } }
       `}</style>
     </div>
   );
 }
 
 /* ==========================================================
-   Exercise Library (from your earlier spec, condensed fields)
-   Categories: O, P, N, Ph, C — each item includes check-in
+   Exercise Library (O, P, N, Ph, C) — condensed fields
    ========================================================== */
 const EXERCISES = [
-  // ---------- Ontology (6)
+  // --- Ontology
   { id: "O-1", cat: "O", title: "Identity Switch (90s)",
-    steps: [
-      "Say out loud: “I am the one money trusts.”",
-      "Stand tall: shoulders back; inhale 4, exhale 6 (x3).",
-      "Send ONE message that could bring money today."
-    ],
+    steps: ["Say out loud: “I am the one money trusts.”", "Stand tall; inhale 4, exhale 6 (x3).", "Send ONE message that could bring money today."],
     check: "What changed in your posture/energy (1 word)?"
   },
   { id: "O-2", cat: "O", title: "Future-Normal (2m)",
-    steps: [
-      "Imagine $1K/day is normal — again today.",
-      "Pick ONE habit Future-You does automatically.",
-      "Do it now."
-    ],
+    steps: ["Imagine your goal is normal — again today.", "Pick ONE habit Future-You does automatically.", "Do it now."],
     check: "Name the habit + rate certainty 1–10."
   },
   { id: "O-3", cat: "O", title: "Boundary Install (2m)",
@@ -212,7 +196,7 @@ const EXERCISES = [
     check: "Which receipt hit hardest?"
   },
 
-  // ---------- Psychology (6)
+  // --- Psychology
   { id: "P-1", cat: "P", title: "Pattern Interrupt (60s)",
     steps: ["When worry spikes: say 'Stop. Not mine.'", "Breath 4/6 once.", "Tap wrist 7x: “I am safe to receive.”"],
     check: "Intensity drop % (0–100)?"
@@ -238,25 +222,21 @@ const EXERCISES = [
     check: "Body now (1 word)?"
   },
 
-  // ---------- Neuropsychology (6)
+  // --- Neuropsychology
   { id: "N-1", cat: "N", title: "7-Breath Reset (90s)",
-    steps: ["Inhale 4 / hold 4 / exhale 6 — 7 rounds.",
-            "On each exhale: “Money flows when I breathe.”"],
+    steps: ["Inhale 4 / hold 4 / exhale 6 — 7 rounds.", "On each exhale: “Money flows when I breathe.”"],
     check: "Calm level now (1–10)?"
   },
   { id: "N-2", cat: "N", title: "Wrist Anchor (60s)",
-    steps: ["Press fingers to left wrist pulse.",
-            "Repeat 7x: “Stripe sings for me today.”"],
+    steps: ["Press fingers to left wrist pulse.", "Repeat 7x: “It arrives today.”"],
     check: "What sensation at the pulse?"
   },
   { id: "N-3", cat: "N", title: "Visual Micro-Loop (2m)",
-    steps: ["Eyes closed: see today’s $1K ping.",
-            "Loop the scene 7 times quickly."],
+    steps: ["Eyes closed: see today’s notification.", "Loop the scene 7 times quickly."],
     check: "One word for the feeling?"
   },
   { id: "N-4", cat: "N", title: "Task Pairing (3m)",
-    steps: ["Pair your most resisted task with a favorite song.",
-            "Start both; stop when the song ends."],
+    steps: ["Pair your most resisted task with a favorite song.", "Start both; stop when the song ends."],
     check: "Did you start? What got done?"
   },
   { id: "N-5", cat: "N", title: "Micro-Rep Goal (2m)",
@@ -264,15 +244,13 @@ const EXERCISES = [
     check: "What micro-rep did you complete?"
   },
   { id: "N-6", cat: "N", title: "Sleep Primer (tonight, 1m)",
-    steps: ["3 slow breaths; whisper: 'My brain consolidates wins.'",
-            "See tomorrow’s ping once."],
+    steps: ["3 slow breaths; whisper: 'My brain consolidates wins.'", "See tomorrow’s ping once."],
     check: "Did you wake with an idea? What?"
   },
 
-  // ---------- Phenomenology (6)
+  // --- Phenomenology
   { id: "Ph-1", cat: "Ph", title: "Somatic Yes (2m)",
-    steps: ["Recall a real win; find the body-spot that lights up.",
-            "Rub that spot and say: 'Do it again.'"],
+    steps: ["Recall a real win; find the body-spot that lights up.", "Rub that spot and say: 'Do it again.'"],
     check: "Where in your body turned on?"
   },
   { id: "Ph-2", cat: "Ph", title: "Scene Swap (3m)",
@@ -280,7 +258,7 @@ const EXERCISES = [
     check: "Mood after swap (1 word)?"
   },
   { id: "Ph-3", cat: "Ph", title: "Five-Sense Deposit (3m)",
-    steps: ["Describe in 1 line each how $1K/day smells, tastes, looks, sounds, feels."],
+    steps: ["Describe in 1 line each how your goal smells, tastes, looks, sounds, feels."],
     check: "Paste your 5 lines."
   },
   { id: "Ph-4", cat: "Ph", title: "Gratitude Needle (2m)",
@@ -296,10 +274,9 @@ const EXERCISES = [
     check: "Certainty now (1–10)?"
   },
 
-  // ---------- Cosmology (6)
+  // --- Cosmology
   { id: "C-1", cat: "C", title: "11:11 Pause (30s when seen)",
-    steps: ["When repeating numbers appear: palm on heart:",
-            "Say: 'I am in flow. Continue.'"],
+    steps: ["When repeating numbers appear: palm on heart:", "Say: 'I am in flow. Continue.'"],
     check: "Which number showed up first?"
   },
   { id: "C-2", cat: "C", title: "Prosperity Walk (5m)",
@@ -330,7 +307,6 @@ const EXERCISES = [
 const ROTATION = ["O", "P", "N", "Ph", "C"];
 function selectTodaysExercise(lastCat, lastShiftScore) {
   let idx = lastCat ? ROTATION.indexOf(lastCat) : -1;
-  // If yesterday underperformed, bias to Psych/Neuro
   if (typeof lastShiftScore === "number" && lastShiftScore < 7) {
     return pickByCat(["P", "N"]);
   }
@@ -348,7 +324,7 @@ function pickByCat(catList) {
 function ExerciseCard({ exercise, onComplete }) {
   const [stepIdx, setStepIdx] = useState(0);
   const [checkin, setCheckin] = useState("");
-  const [shift, setShift] = useState(8); // default 8/10 vibe
+  const [shift, setShift] = useState(8);
   const total = exercise.steps.length;
 
   const next = () => setStepIdx(i => Math.min(i + 1, total));
@@ -403,7 +379,7 @@ function ExerciseCard({ exercise, onComplete }) {
 }
 
 /* =======================
-   Buttons (unstyled CSS)
+   Buttons
    ======================= */
 function btnPrimary(extra = {}) {
   return {
@@ -421,15 +397,63 @@ function btnGhost(extra = {}) {
 }
 
 /* ==========================================
+   Inline Identity Capture (no props provided)
+   ========================================== */
+function IdentityCapture({ onSave }) {
+  const [name, setName] = useState(() => (typeof window !== "undefined" ? localStorage.getItem("genie_user_name") || "" : ""));
+  const [dream, setDream] = useState(() => (typeof window !== "undefined" ? localStorage.getItem("genie_user_dream") || "" : ""));
+  const canSave = name.trim().length >= 2 && dream.trim().length >= 3;
+
+  const save = () => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("genie_user_name", name.trim());
+      localStorage.setItem("genie_user_dream", dream.trim());
+    }
+    onSave?.({ name: name.trim(), dream: dream.trim() });
+  };
+
+  return (
+    <div style={{
+      border: `1px solid ${UI.line}`, borderRadius: UI.radius, padding: 18, background: UI.wash,
+      boxShadow: `0 18px 50px ${UI.glow}`
+    }}>
+      <div style={{ fontWeight: 900, fontSize: 18, marginBottom: 8, color: UI.ink }}>Set your portal</div>
+      <p style={{ color: UI.sub, fontSize: 14, marginBottom: 12 }}>
+        Tell Genie who you are and your current dream. One line each.
+      </p>
+      <input
+        value={name} onChange={e => setName(e.target.value)} placeholder="Your first name"
+        style={{ width: "100%", border: `1px solid ${UI.line}`, borderRadius: 12, padding: 10, marginBottom: 10, fontSize: 14 }}
+      />
+      <input
+        value={dream} onChange={e => setDream(e.target.value)} placeholder="Your dream (e.g., $1K/day from my store)"
+        style={{ width: "100%", border: `1px solid ${UI.line}`, borderRadius: 12, padding: 10, marginBottom: 12, fontSize: 14 }}
+      />
+      <button disabled={!canSave} onClick={save} style={btnPrimary({ opacity: canSave ? 1 : .6, width: "100%" })}>
+        Save & open today’s portal
+      </button>
+    </div>
+  );
+}
+
+/* ==========================================
    MAIN: GenieDailyPortal
    ========================================== */
 export default function GenieDailyPortal({
-  userName = "Friend",
-  dream = "$1K/day",
+  userName,      // optional: pass from your auth/profile
+  dream,         // optional: pass from your app state
   initialProof = 12000
 }) {
   const { count, bump } = useProofCounter(initialProof);
   const tKey = todayKey();
+
+  // Fallback to localStorage if props missing
+  const [identity, setIdentity] = useState(() => {
+    if (typeof window === "undefined") return { name: userName || "", dream: dream || "" };
+    const nameLS = localStorage.getItem("genie_user_name") || "";
+    const dreamLS = localStorage.getItem("genie_user_dream") || "";
+    return { name: userName || nameLS, dream: dream || dreamLS };
+  });
 
   // Persistent daily record
   const [record, setRecord] = useState(() => {
@@ -445,7 +469,6 @@ export default function GenieDailyPortal({
     return raw ? JSON.parse(raw) : {};
   }, []);
 
-  // Gate: if already completed today, lock
   const completedToday = !!record?.done;
 
   // Select exercise for today (once)
@@ -475,12 +498,6 @@ export default function GenieDailyPortal({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tKey]);
 
-  const proceed = () => {
-    const next = Math.min(step + 1, 2);
-    setStep(next);
-    persist({ step: next });
-  };
-
   const persist = (patch) => {
     if (typeof window === "undefined") return;
     const current = JSON.parse(localStorage.getItem("genie_daily_" + tKey) || "{}");
@@ -489,36 +506,42 @@ export default function GenieDailyPortal({
     setRecord(merged);
   };
 
+  const proceed = () => {
+    const next = Math.min(step + 1, 2);
+    setStep(next);
+    persist({ step: next });
+  };
+
   const finish = ({ checkin, shift }) => {
-    // Save today
     persist({ done: true, checkin, shift, finishedAt: new Date().toISOString() });
-    // Save last meta for tomorrow’s selector
     if (typeof window !== "undefined") {
       localStorage.setItem("genie_daily_lastmeta", JSON.stringify({ cat: exercise.cat, shift }));
     }
-    // Proof ticker bump
     bump(1);
   };
+
+  const name = identity.name?.trim();
+  const goal = identity.dream?.trim();
 
   return (
     <div className="hm-embed" style={{
       maxWidth: 880, margin: "0 auto", fontFamily: "Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif",
       color: UI.ink
     }}>
-
-      {/* Header + Proof Ticker (6) */}
+      {/* Header + Proof Ticker */}
       <div style={{
         display: "flex", alignItems: "center", justifyContent: "space-between",
         padding: "10px 14px", border: `1px solid ${UI.line}`, borderRadius: UI.radius,
         background: UI.wash, marginBottom: 14, boxShadow: `0 10px 30px ${UI.glow}`
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <div style={{
-            width: 34, height: 34, borderRadius: 12, background: `linear-gradient(45deg, ${UI.brand}, ${UI.gold})`
-          }} />
+          <div style={{ width: 34, height: 34, borderRadius: 12, background: `linear-gradient(45deg, ${UI.brand}, ${UI.gold})` }} />
           <div>
             <div style={{ fontWeight: 900, fontSize: 15 }}>Manifestation Genie</div>
-            <div style={{ fontSize: 12, color: UI.muted }}>Hi {userName}. Today’s portal for <b>{dream}</b> is open.</div>
+            <div style={{ fontSize: 12, color: UI.muted }}>
+              {name ? <>Hi {name}. </> : null}
+              {goal ? <>Today’s portal for <b>{goal}</b> is open.</> : <>Set your portal below.</>}
+            </div>
           </div>
         </div>
         <div style={{
@@ -529,17 +552,14 @@ export default function GenieDailyPortal({
         </div>
       </div>
 
-      {!completedToday ? (
+      {/* Identity gate if missing */}
+      {(!name || !goal) ? (
+        <IdentityCapture onSave={setIdentity} />
+      ) : !completedToday ? (
         <>
-          {step === 0 && (
-            <Shockcard code={shock} onContinue={proceed} />
-          )}
-          {step === 1 && (
-            <RitualSeal onSealed={proceed} />
-          )}
-          {step === 2 && (
-            <ExerciseCard exercise={exercise} onComplete={finish} />
-          )}
+          {step === 0 && <Shockcard code={shock} onContinue={proceed} />}
+          {step === 1 && <RitualSeal onSealed={proceed} />}
+          {step === 2 && <ExerciseCard exercise={exercise} onComplete={finish} />}
         </>
       ) : (
         <div style={{
@@ -554,15 +574,13 @@ export default function GenieDailyPortal({
             Today: {exercise.id} • Category {exercise.cat} • Felt shift {record?.shift ?? "—"}/10
           </div>
           {record?.checkin && (
-            <div style={{
-              marginTop: 10, padding: 12, border: `1px dashed ${UI.line}`, borderRadius: 12, background: "#fff"
-            }}>
+            <div style={{ marginTop: 10, padding: 12, border: `1px dashed ${UI.line}`, borderRadius: 12, background: "#fff" }}>
               <div style={{ fontWeight: 800, fontSize: 13, marginBottom: 6 }}>Your proof</div>
               <div style={{ fontSize: 14, color: UI.ink }}>{record.checkin}</div>
             </div>
           )}
           <div style={{ marginTop: 12 }}>
-            <button onClick={() => alert("See you at dawn. Keep your eyes open for 11:11 today.")}
+            <button onClick={() => alert("Eyes open for 11:11 today. Return at dawn.")}
               style={btnGhost({ fontWeight: 800 })}>
               Cosmic reminder set
             </button>
