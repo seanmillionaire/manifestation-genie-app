@@ -3,6 +3,10 @@
 
 import { useEffect, useRef, useState } from 'react'
 import Head from 'next/head'
+import dynamic from 'next/dynamic'
+
+// client-only, because it uses localStorage
+const GenieDailyPortal = dynamic(() => import('../components/GenieDailyPortal'), { ssr: false })
 
 // Prefer the local brain; if it’s missing or errors we’ll fall back to /api/chat
 let localBrain = null
@@ -239,7 +243,12 @@ export default function ChatGenie() {
               `}</style>
             </div>
           )}
-
+{/* DAILY PORTAL */}
+{started && (
+  <div style={{ marginBottom: 20 }}>
+    <GenieDailyPortal userName={firstName} />
+  </div>
+)}
           {/* CHAT WINDOW */}
           {started && (
             <>
