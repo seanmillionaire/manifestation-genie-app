@@ -3,10 +3,6 @@
 
 import { useEffect, useRef, useState } from 'react'
 import Head from 'next/head'
-import GenieDailyPortal from "../components/GenieDailyPortal";
-
-// Example when you DO have user data already:
-<GenieDailyPortal userName={session?.user?.user_metadata?.first_name} dream={userGoalFromDB} initialProof={globalProofSeed} />
 
 // Prefer the local brain; if it’s missing or errors we’ll fall back to /api/chat
 let localBrain = null
