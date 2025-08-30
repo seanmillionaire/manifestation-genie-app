@@ -140,6 +140,8 @@ function detectTheme(text='', fallback='self'){
 const TAUNT = /(dumb|stupid|not\s*smart|lame|boring|whack|useless|trash|bad bot|you suck)/i;
 const CHALLENGE = /(prove|show me|bet|can you even|do better)/i;
 const PRAISE = /(nice|thanks|thank you|good job|love this|awesome|great)/i;
+// Simple profanity/junk net (kept minimal on purpose)
+const PROFANITY = /\b(fuck|shit|bitch|asshole|cunt|dick|bastard|motherfucker)\b/i;
 
 const remarks = [
   "Hmm, I see where you’re going with that.",
@@ -171,16 +173,33 @@ function detectWitCue(text=''){
   return null;
 }
 
-// NEW — Off-course detector (keeps user in-role)
-function isOffCourse(text='') {
+// Off-course detector: permissive for real goals, strict for junk/taunts
+function isOffCourse(text = '') {
   const t = (text || '').trim();
-  if (!t) return true;                          // empty
-  if (t.length < 3) return true;                // ultra short noise
-  if (TAUNT.test(t)) return true;               // insults / taunts
-  // only symbols/whitespace?
-  if (t.replace(/[\p{L}\p{N}]/gu, '').length === t.length) return true;
-  return false;
+
+  // Empty / ultra short
+  if (!t || t.length < 3) return true;
+
+  // Taunts or profanity
+  if (TAUNT.test(t) || PROFANITY.test(t)) return true;
+
+  // If there's no letters or digits at all, it's junk
+  if (!/[A-Za-z0-9]/.test(t)) return true;
+
+  // Looks like a concrete goal? Always on-course.
+  const looksMoney = /[$€£]\s*\d/.test(t) || /\b\d+(\.\d+)?\s*(k|m|million|thousand)\b/i.test(t);
+  const hasPerTime = /\bper\s+(day|week|month|year)\b/i.test(t) || /\/\s*(day|wk|mo|yr|year|month)/i.test(t);
+  const goalVerbs = /\b(i\s*)?(want|need|make|earn|land|get|grow|sell|buy|hit|reach|build|launch|save|close|book|sign|scale|publish|ship)\b/i.test(t);
+  if (looksMoney || hasPerTime || goalVerbs) return false;
+
+  // If it has at least two real words (3+ letters), assume it's a valid intent
+  const realWords = (t.match(/[A-Za-z]{3,}/g) || []).length;
+  if (realWords >= 2) return false;
+
+  // Otherwise treat as off-course
+  return true;
 }
+
 
 //////////////////// MICRO-STEPS ////////////////////
 const microSteps = {
