@@ -134,23 +134,36 @@ export default function ChatGenie() {
     const delta = ms * jitter * (Math.random()*2 - 1)
     return Math.max(0, Math.round(ms + delta))
   }
-  async function typeLine(author, line, { perWordMs=120, cursor=true } = {}) {
-    const key = 'stream-' + Date.now() + Math.random().toString(16).slice(2)
-    setMsgs(m => [...m, { author, key, text: '' }])
+// Typing effect — FIXED so ▍ doesn't leak between words
+async function typeLine(author, line, { perWordMs = 120, cursor = true } = {}) {
+  const key = 'stream-' + Date.now() + Math.random().toString(16).slice(2)
+  setMsgs(m => [...m, { author, key, text: '' }])
 
-    const words = String(line).split(/\s+/).filter(Boolean)
-    for (let i=0; i<words.length; i++){
-      await sleep(withJitter(perWordMs))
-      setMsgs(curr => curr.map(msg => {
+  const words = String(line).split(/\s+/).filter(Boolean)
+
+  for (let i = 0; i < words.length; i++) {
+    await sleep(withJitter(perWordMs))
+    setMsgs(curr =>
+      curr.map(msg => {
         if (msg.key !== key) return msg
-        const next = msg.text ? (msg.text + ' ' + words[i]) : words[i]
-        return { ...msg, text: next + (cursor ? '▍' : '') }
-      }))
-    }
-    // remove cursor at end of line
-    setMsgs(curr => curr.map(msg => (msg.key===key ? { ...msg, text: msg.text.replace(/▍$/,'') } : msg)))
-    return key
+        // IMPORTANT: strip any trailing cursor before appending the next word
+        const base = (msg.text || '').replace(/▍$/, '')
+        const next = base ? `${base} ${words[i]}` : words[i]
+        return { ...msg, text: cursor ? `${next}▍` : next }
+      })
+    )
   }
+
+  // Remove trailing cursor at the end of the line
+  setMsgs(curr =>
+    curr.map(msg =>
+      msg.key === key ? { ...msg, text: (msg.text || '').replace(/▍$/, '') } : msg
+    )
+  )
+
+  return key
+}
+
 
   async function streamBubbles(author, bubbles = [], { perWordMs=120, linePauseMs=700 } = {}) {
     for (const b of bubbles) {
