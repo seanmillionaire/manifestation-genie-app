@@ -1,115 +1,18 @@
 // pages/chat-genie.js
-// Manifestation Genie — chat with lamp intro + in-chat DAILY PORTAL (bubbles)
-// Flow inside chat: Identity (if missing) → Shockcard → Ritual Seal → Exercise → Proof → Lock until 5:00 AM
-
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Head from 'next/head'
 
-/* =========================================================
-   Optional local brain; safe fallback to /api/chat if absent
-   ========================================================= */
-let localBrain = null
-try {
-  const brain = require('../src/genieBrain')
-  localBrain = {
-    genieIntro: brain.genieIntro,
-    genieReply: brain.genieReply,
-    dailyAssignment: brain.dailyAssignment,
-  }
-} catch {
-  // no local brain; use API
-}
+const USE_API_FALLBACK = false;
 
-/* =========================================================
-   Supabase (optional)
-   ========================================================= */
-let supabase = null
-try {
-  const { supabaseClient } = require('../src/supabaseClient')
-  supabase = supabaseClient
-} catch {}
-
-/* =========================================================
-   Utility — time windows
-   ========================================================= */
-function pad(n) { return n < 10 ? '0' + n : '' + n }
-function timeUntil(date) {
-  const now = new Date()
-  let diff = date - now
-  if (diff < 0) diff = 0
-  const h = Math.floor(diff / 3_600_000)
-  const m = Math.floor((diff % 3_600_000) / 60_000)
-  return `${h}h ${pad(m)}m`
-}
-
-/* =========================================================
-   Persistent first name (best-effort)
-   ========================================================= */
-function useFirstName() {
-  const [firstName, setFirstName] = useState('')
-  useEffect(() => {
-    let mounted = true
-    ;(async () => {
-      try {
-        const cached = typeof window !== 'undefined' ? localStorage.getItem('mg_first_name') : null
-        if (cached && mounted) { setFirstName(cached); return }
-        if (supabase) {
-          const { data:{ session } = { session: null } } = await supabase.auth.getSession()
-          const email = session?.user?.email || ''
-          const guess = email ? (email.split('@')[0] || '') : ''
-          const name = guess ? guess.replace(/[._-]+/g,' ').trim().split(' ')[0] : 'Friend'
-          if (mounted) setFirstName(name.charAt(0).toUpperCase() + name.slice(1))
-        }
-      } catch {}
-    })()
-    return () => { mounted = false }
-  }, [])
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-    try { localStorage.setItem('mg_first_name', firstName) } catch {}
-  }, [firstName])
-  return firstName || 'Friend'
-}
-
-/* =========================================================
-   DAILY PORTAL engine (O,P,N,Ph,C) — embedded as chat bubbles
-   ========================================================= */
-const UI = {
-  ink: '#0f172a', sub: '#475569', muted: '#64748b', line: '#e2e8f0',
-  brand: '#6633cc', gold: '#f59e0b', wash: '#ffffff', glow: 'rgba(167,139,250,.25)', radius: 12
-}
-const DAILY_UNLOCK_HOUR = 5 // local time
-
-function todayKey() {
-  const now = new Date()
-  const y = now.getFullYear()
-  const m = pad(now.getMonth() + 1)
-  const d = pad(now.getDate())
-  return `${y}-${m}-${d}`
-}
-function todayUnlockTime() {
-  const t = new Date()
-  t.setHours(DAILY_UNLOCK_HOUR, 0, 0, 0)
-  if (t < new Date()) t.setDate(t.getDate() + 1)
-  return t
-}
-function timeUntilUnlockStr() {
-  return timeUntil(todayUnlockTime())
-}
-
-/* =========================================================
-   Chat component
-   ========================================================= */
 export default function ChatGenie() {
-  const firstName = useFirstName()
-  const [msgs, setMsgs] = useState([])
-  const [input, setInput] = useState('')
-  const [started, setStarted] = useState(false)
-  const [thinking, setThinking] = useState(false)
-  const [inputLocked, setInputLocked] = useState(false)
-  const listRef = useRef(null)
+  const [brain, setBrain] = useState(null);
+  const [msgs, setMsgs] = useState([]);
+  const [input, setInput] = useState('');
+  const [started, setStarted] = useState(false);
+  const [thinking, setThinking] = useState(false);
+  const [inputLocked, setInputLocked] = useState(false);
+  const listRef = useRef(null);
 
-  // wishes count (proof)
   const [count, setCount] = useState(()=>{
     if (typeof window === 'undefined') return 0
     const raw = localStorage.getItem('genie_proof_total')
@@ -117,54 +20,53 @@ export default function ChatGenie() {
   })
   useEffect(()=>{ if (typeof window!=='undefined') localStorage.setItem('genie_proof_total', String(count)) },[count])
 
-  // autoscroll
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        const mod = await import('../src/genieBrain.js');
+        if (active) setBrain(mod);
+      } catch (e) {
+        console.warn('genieBrain load failed', e);
+        if (active) setBrain(null);
+      }
+    })();
+    return () => { active = false; };
+  }, []);
+
+  const firstName = useMemo(() => {
+    try {
+      const cached = typeof window !== 'undefined' ? localStorage.getItem('mg_first_name') : null;
+      if (cached) return cached;
+      return 'Friend';
+    } catch { return 'Friend'; }
+  }, []);
+
   useEffect(()=>{ listRef.current?.scrollTo(0, 1e9) }, [msgs, thinking, started])
 
-  // Helpers to push chat content
-  function pushText(author, text) {
-    setMsgs(m => [...m, { author, text }])
-  }
-  function pushNode(author, nodeKey, node) {
-    setMsgs(m => [...m, { author, key: nodeKey, node }])
-  }
+  function pushText(author, text) { setMsgs(m => [...m, { author, text }]) }
 
-  // Typing effect helpers — word-by-word with per-line pauses
   function sleep(ms){ return new Promise(r=>setTimeout(r, ms)) }
   function withJitter(ms, jitter=0.35){
     const delta = ms * jitter * (Math.random()*2 - 1)
     return Math.max(0, Math.round(ms + delta))
   }
-// Typing effect — FIXED so ▍ doesn't leak between words
-async function typeLine(author, line, { perWordMs = 120, cursor = true } = {}) {
-  const key = 'stream-' + Date.now() + Math.random().toString(16).slice(2)
-  setMsgs(m => [...m, { author, key, text: '' }])
-
-  const words = String(line).split(/\s+/).filter(Boolean)
-
-  for (let i = 0; i < words.length; i++) {
-    await sleep(withJitter(perWordMs))
-    setMsgs(curr =>
-      curr.map(msg => {
+  async function typeLine(author, line, { perWordMs=120, cursor=true } = {}) {
+    const key = 'stream-' + Date.now() + Math.random().toString(16).slice(2)
+    setMsgs(m => [...m, { author, key, text: '' }])
+    const words = String(line).split(/\s+/).filter(Boolean)
+    for (let i=0; i<words.length; i++){
+      await sleep(withJitter(perWordMs))
+      setMsgs(curr => curr.map(msg => {
         if (msg.key !== key) return msg
-        // IMPORTANT: strip any trailing cursor before appending the next word
         const base = (msg.text || '').replace(/▍$/, '')
         const next = base ? `${base} ${words[i]}` : words[i]
         return { ...msg, text: cursor ? `${next}▍` : next }
-      })
-    )
+      }))
+    }
+    setMsgs(curr => curr.map(msg => (msg.key===key ? { ...msg, text: msg.text.replace(/▍$/,'') } : msg)))
+    return key
   }
-
-  // Remove trailing cursor at the end of the line
-  setMsgs(curr =>
-    curr.map(msg =>
-      msg.key === key ? { ...msg, text: (msg.text || '').replace(/▍$/, '') } : msg
-    )
-  )
-
-  return key
-}
-
-
   async function streamBubbles(author, bubbles = [], { perWordMs=120, linePauseMs=700 } = {}) {
     for (const b of bubbles) {
       await typeLine(author, b, { perWordMs })
@@ -172,64 +74,13 @@ async function typeLine(author, line, { perWordMs = 120, cursor = true } = {}) {
     }
   }
 
-  /* =========================================================
-     In-chat DAILY PORTAL flow
-     ========================================================= */
-  const tKey = todayKey()
-  const lastMeta = useMemo(()=>{
-    if (typeof window==='undefined') return {}
-    const raw = localStorage.getItem('genie_daily_lastmeta')
-    return raw ? JSON.parse(raw) : {}
-  },[])
-  const identityLS = () => {
-    if (typeof window==='undefined') return { name:'', dream:'' }
-    return {
-      name: localStorage.getItem('genie_user_name') || '',
-      dream: localStorage.getItem('genie_user_dream') || ''
-    }
-  }
-  const recordToday = () => {
-    if (typeof window==='undefined') return null
-    const raw = localStorage.getItem('genie_daily_'+tKey)
-    return raw ? JSON.parse(raw) : null
-  }
-
-  function startPortalInChat() {
-    setInputLocked(true)
-    const id = identityLS()
-    const rec = recordToday()
-
-    // If already completed, show done bubble and release chat
-    if (rec?.done) {
-      pushNode('Genie','portal-complete', (
-        <BubbleBox>
-          <Title>Portal complete.</Title>
-          <P>Your shift is sealed. <b>Next unlock at 5:00 AM</b> ({timeUntilUnlockStr()}).</P>
-          <Meta>Today: {rec.exerciseId} • Felt shift {rec.shift || '—'}/10 • ✨ Wishes granted: <b>{count.toLocaleString()}</b></Meta>
-        </BubbleBox>
-      ))
-      setInputLocked(false)
-      return
-    }
-
-    // … (DAILY PORTAL flow code continues unchanged below)
-  }
-
-  // replace a node bubble by key
-  function replaceNode(nodeKey, newNode) {
-    setMsgs(curr => curr.map(m => (m.key===nodeKey ? { ...m, node:newNode } : m)))
-  }
-
-  /* =========================================================
-     Genie intro and regular chat
-     ========================================================= */
   async function onLampClick() {
     if (started) return
     setStarted(true)
     setThinking(true)
     try {
-      if (localBrain?.genieIntro) {
-        const res = await localBrain.genieIntro({ user: { firstName } })
+      if (brain?.genieIntro) {
+        const res = await brain.genieIntro({ user: { firstName } })
         const bubbles = Array.isArray(res?.bubbles) && res.bubbles.length ? res.bubbles : [
           'Ahh… the lamp warms in your palm. ✨',
           'I am the Manifestation Genie — keeper of tiny moves that bend reality.',
@@ -243,20 +94,9 @@ async function typeLine(author, line, { perWordMs = 120, cursor = true } = {}) {
           'Speak your wish — a word, a sentence, a storm. I listen.'
         ])
       }
-    } catch {
-      pushText('Genie','The lamp flickered. Tap again if I go quiet.')
-    } finally {
-      setThinking(false)
-    }
+    } finally { setThinking(false) }
   }
 
-  async function callLocalBrain(prompt) {
-    if (!localBrain?.genieReply) throw new Error('no local brain')
-    const res = await localBrain.genieReply({ prompt, user: { firstName } })
-    if (Array.isArray(res?.bubbles)) return res.bubbles
-    if (typeof res?.text === 'string') return res.text.split('\n').filter(Boolean)
-    return []
-  }
   async function callApi(prompt) {
     const r = await fetch('/api/chat', {
       method:'POST',
@@ -270,7 +110,15 @@ async function typeLine(author, line, { perWordMs = 120, cursor = true } = {}) {
     return []
   }
   async function getReplyBubbles(prompt) {
-    try { return await callLocalBrain(prompt) } catch { return await callApi(prompt) }
+    if (brain?.genieReply) {
+      const res = await brain.genieReply({ input: prompt, user: { firstName } })
+      if (Array.isArray(res?.bubbles)) return res.bubbles
+      if (typeof res?.text === 'string') return res.text.split('\n').filter(Boolean)
+    }
+    if (!USE_API_FALLBACK) {
+      return ['Local brain missing. Please refresh the page.']
+    }
+    return await callApi(prompt)
   }
 
   async function onSend() {
@@ -287,45 +135,18 @@ async function typeLine(author, line, { perWordMs = 120, cursor = true } = {}) {
       await streamBubbles('Genie', safe)
     } catch {
       pushText('Genie', 'Hmm… the lamp flickered (network/brain error). Say the wish again, or refresh.')
-    } finally {
-      setThinking(false)
-    }
+    } finally { setThinking(false) }
   }
 
   function onKeyDown(e) {
     if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault()
-      onSend()
+      e.preventDefault(); onSend()
     }
   }
 
-  function onNewWish() {
-    if (inputLocked) return
-    setThinking(true)
-    try {
-      let seed = null
-      if (localBrain?.dailyAssignment) {
-        const d = localBrain.dailyAssignment({ name: firstName })
-        seed = `**${d.title}** — ${d.why}\n• ${d.steps.join('\n• ')}`
-      }
-      pushText('Genie', seed || 'It is done — write the one-line wish, then I’ll drop your first 3 moves.')
-    } catch {
-      pushText('Genie', 'It is done — what’s today’s wish?')
-    } finally {
-      setThinking(false)
-    }
-  }
-
-  /* =========================================================
-     Render
-     ========================================================= */
   return (
     <>
-      <Head>
-        <title>Manifestation Genie</title>
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
-      </Head>
-
+      <Head><title>Manifestation Genie</title><meta name="viewport" content="width=device-width, initial-scale=1" /></Head>
       <main style={{ background:'#fff', minHeight:'100vh', padding:'20px 0' }}>
         <div style={{ width:'min(960px, 92vw)', margin:'0 auto',
           background:'#f8fafc', border:'1px solid #e2e8f0', borderRadius:14, padding:20, position:'relative' }}>
@@ -339,7 +160,6 @@ async function typeLine(author, line, { perWordMs = 120, cursor = true } = {}) {
             </span>
           </div>
 
-          {/* LAMP IDLE SCREEN */}
           {!started && (
             <div onClick={onLampClick}
                  style={{ height:'60vh', border:'1px dashed #cbd5e1', borderRadius:12, display:'flex',
@@ -355,7 +175,6 @@ async function typeLine(author, line, { perWordMs = 120, cursor = true } = {}) {
             </div>
           )}
 
-          {/* CHAT */}
           {started && (
             <>
               <div ref={listRef}
@@ -387,7 +206,6 @@ async function typeLine(author, line, { perWordMs = 120, cursor = true } = {}) {
                 )}
               </div>
 
-              {/* INPUT */}
               <div style={{ display:'flex', gap:8 }}>
                 <textarea
                   value={input}
@@ -406,7 +224,7 @@ async function typeLine(author, line, { perWordMs = 120, cursor = true } = {}) {
                   Send
                 </button>
                 <button
-                  onClick={onNewWish}
+                  onClick={()=>pushText('Genie', 'It is done — what’s today’s wish?')}
                   disabled={thinking || inputLocked}
                   style={{ background:'#fff', border:'1px solid #cbd5e1', borderRadius:12,
                     padding:'10px 14px', fontWeight:700, cursor:(thinking||inputLocked)?'not-allowed':'pointer' }}>
@@ -419,20 +237,4 @@ async function typeLine(author, line, { perWordMs = 120, cursor = true } = {}) {
       </main>
     </>
   )
-}
-
-/* =========================================================
-   Small UI atoms used in DAILY PORTAL
-   ========================================================= */
-function BubbleBox({ children }) {
-  return <div style={{ background:'#fff', border:'1px solid #e2e8f0', borderRadius:12, padding:12 }}>{children}</div>
-}
-function Title({ children }) {
-  return <div style={{ fontWeight:800, marginBottom:6 }}>{children}</div>
-}
-function P({ children }) {
-  return <div style={{ color:'#334155', marginBottom:6 }}>{children}</div>
-}
-function Meta({ children }) {
-  return <div style={{ color:'#64748b', fontSize:12 }}>{children}</div>
 }
