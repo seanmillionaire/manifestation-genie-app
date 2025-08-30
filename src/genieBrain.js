@@ -16,13 +16,13 @@ const CONFIG = {
 
   // NEW — Intro copy (shown after lamp touch)
   intro: {
-    line1: "Ahh… you touched the lamp. 🔮",
-    line2: "I’ve been waiting. I’m the Manifestation Genie.",
-    line3: "Tell me what’s on your mind — one word is enough, or drop the whole story."
+    line1: "Ah… the lamp warms in your palm. ✨",
+    line2: "I am the Manifestation Genie — keeper of tiny moves that bend reality.",
+    line3: "Speak your wish — a word, a sentence, a storm. I listen."
   }
 };
 
-//////////////////// UTILS ////////////////////
+//////////////////// UTIL ////////////////////
 const rand = (arr) => arr[Math.floor(Math.random() * arr.length)];
 const title = (s='') => s.charAt(0).toUpperCase() + s.slice(1);
 const lettersOnly = (s='') => (s||'').replace(/[^a-z]/gi,'').toUpperCase();
@@ -43,16 +43,18 @@ function todayKey(s) { return `${s}_${new Date().toISOString().slice(0,10)}`; }
 
 //////////////////// YOUR VOICE DNA ////////////////////
 const DEFAULT_USER_PHRASES = [
-  "no bs", "keep it real", "facts only", "straight up",
-  "zero fluff", "don’t get it twisted", "here’s the real play",
-  "blow your mind", "get my drift?"
+  "Let it be easy.",
+  "I don’t chase; I glow.",
+  "Small moves, great spells.",
+  "Momentum loves honesty.",
+  "One message can change my month."
 ];
 function getUserPhrases(){
   try {
     if (typeof window !== 'undefined') {
-      const raw = localStorage.getItem('mg_user_phrases') || '';
-      const list = raw.split(/[\n,]/).map(s=>s.trim()).filter(Boolean);
-      return list.length ? list : DEFAULT_USER_PHRASES;
+      const raw = localStorage.getItem('mg_user_phrases') || '[]';
+      const arr = JSON.parse(raw);
+      if (Array.isArray(arr) && arr.length) return arr.filter(Boolean);
     }
   } catch {}
   return DEFAULT_USER_PHRASES;
@@ -64,17 +66,31 @@ function sprinklePhrase(line){
 }
 
 //////////////////// NUMEROLOGY ////////////////////
-function ordinalSum(name=''){ const c = lettersOnly(name); let s=0; for (let i=0;i<c.length;i++) s+=(c.charCodeAt(i)-64); return s||0; }
+function ordinalSum(name=''){
+  const c = lettersOnly(name);
+  let s = 0;
+  for (let i=0;i<c.length;i++) s += (c.charCodeAt(i)-64);
+  return s || 0;
+}
 function pythagoreanSum(name=''){
   const map = {A:1,J:1,S:1,B:2,K:2,T:2,C:3,L:3,U:3,D:4,M:4,V:4,E:5,N:5,W:5,F:6,O:6,X:6,G:7,P:7,Y:7,H:8,Q:8,Z:8,I:9,R:9};
   const c = lettersOnly(name); let s=0; for (let i=0;i<c.length;i++) s+=(map[c[i]]||0); return s||0;
 }
-function reduceToDigit(n){ const m=new Set([11,22,33]); while(n>9 && !m.has(n)) n=String(n).split('').reduce((a,b)=>a+parseInt(b,10),0); return n; }
+function reduceToDigit(n){
+  const master = new Set([11,22,33]);
+  while (n > 9 && !master.has(n)) n = String(n).split('').reduce((a,b)=>a+parseInt(b,10),0);
+  return n;
+}
 function numerologyTip(n){
-  if (n===4) return 'Build one small thing today.';
-  if (n===8) return 'Make one clear money move.';
+  if (n===1) return 'Lead with one decisive move.';
+  if (n===2) return 'Partner up or ask for help.';
+  if (n===3) return 'Publish a small creative piece.';
+  if (n===4) return 'Set one strong boundary today.';
+  if (n===5) return 'Try one fresh angle.';
+  if (n===6) return 'Tend to your space; then act.';
   if (n===7) return 'Spend 10 minutes in quiet focus.';
-  if (n===3) return 'Express yourself once today.';
+  if (n===8) return 'Make a clean ask for value.';
+  if (n===9) return 'Close one open loop with love.';
   return 'Keep a steady rhythm.';
 }
 function numerologyDownload(name=''){
@@ -99,7 +115,12 @@ function isAngelNumber(s=''){ const t=(s||'').trim(); return /^\d+$/.test(t) && 
 function angelHint(){
   if (!CONFIG.includeAngelHint) return null;
   const now=new Date(), mm=String(now.getMinutes()).padStart(2,'0'), hh=String(now.getHours()).padStart(2,'0');
-  const map = { '11':"Good time to set a clear intent.", '22':"Lay one simple brick toward your goal.", '33':"Teach or share one truth.", '44':"Picture a shield of light around your plan." };
+  const map = {
+    '11':"Good time to set a clear intent.",
+    '22':"Lay two bricks; balance is power.",
+    '33':"Make something tiny and share it.",
+    '44':"Picture a shield of light around your plan."
+  };
   return map[mm] ? `It’s ${hh}:${mm}. ${map[mm]}` : null;
 }
 
@@ -122,35 +143,28 @@ const PRAISE = /(nice|thanks|thank you|good job|love this|awesome|great)/i;
 
 const remarks = [
   "Hmm, I see where you’re going with that.",
-  "Spicy. Let’s unpack it.",
-  "Okay, noted. Let’s keep it real.",
-  "Alright — no fluff. Let’s move."
+  "Alright — no fluff. Let’s move.",
+  "I hear the signal through the noise.",
+  "Got it. We’ll make this lighter."
 ];
-
 const comebacks = {
   taunt: [
-    "Careful — insulting a Genie just gets you extra reps. 😉",
-    "Bold talk. I’ll turn it into fuel. Watch.",
-    "Cute jab. Here’s a clean move instead."
+    "Cute spell. Here’s a stronger one: move your thumb and send the message.",
+    "Talk is wind. Watch what one tiny action does.",
+    "We both know you’re sharper than that."
   ],
   challenge: [
-    "Bet. I’ll make it simple and sharp.",
-    "Deal. Short path coming up.",
-    "Okay then — let’s test your courage."
+    "Deal. Give me one sentence of the wish and we’ll act.",
+    "I accept. We prove it with a 60-second ritual.",
+    "Good. Let’s test it in the real world today."
   ],
   praise: [
-    "Facts only. Let’s stack another win.",
-    "Love that. Keep the pace.",
-    "Good — now double it."
-  ],
-  roastLoa: [
-    "Most gurus say “just visualize it.” Cool — I visualize pizza. Still gotta cook. 😂",
-    "“High vibes only”? Try paying rent with vibes. I’ll wait.",
-    "If positive thinking alone worked, every seminar line would be CEOs."
+    "We love momentum. Keep it humming.",
+    "Noted. Now stack it with one more move.",
+    "Beautiful. Let’s lock it in with action."
   ]
 };
 function detectWitCue(text=''){
-  if (!CONFIG.wittyComebacks) return null;
   if (TAUNT.test(text)) return 'taunt';
   if (CHALLENGE.test(text)) return 'challenge';
   if (PRAISE.test(text)) return 'praise';
@@ -175,9 +189,9 @@ const microSteps = {
     ["Write one worry on paper.", "Circle it once.", "Say: “I see you. I’m okay.”"]
   ],
   self: [
-    ["Pick one tiny task (2–5 min).", "Do it now.", "Mark it done and smile."],
-    ["Tidy one small spot.", "Stop when the timer hits 3 minutes.", "Notice the calm."],
-    ["Write your name.", "Underline it once.", "Say: “I allow good things.”"]
+    ["Pick the smallest next move.", "Do a 10-minute version.", "Mark it done with a ✅."],
+    ["Clear one square foot of space.", "Set a 5-minute timer.", "Stop when it dings."],
+    ["Message someone who supports you.", "Ask for one tiny thing.", "Say thanks out loud."]
   ]
 };
 const closers = [
@@ -248,21 +262,22 @@ const METAPHORS = {
     "It’s a library — silence helps you find what hurts."
   ],
   self: [
-    "It’s a slingshot — pull back with rest, then release.",
-    "It’s a toolbox — you already own the wrench you need.",
-    "It’s a lighthouse — small light, wide reach, one turn at a time."
+    "It’s a compass — tiny turns change destiny.",
+    "It’s a staircase — see only the next step, climb anyway.",
+    "It’s a lens — clean it once and the world sharpens."
   ]
 };
-async function improvMetaphor(topic, theme, name){
-  const fallback = `${rand(METAPHORS[theme] || METAPHORS.self)}`;
+
+//////////////////// METAPHOR (optional remote improv) ////////////////////
+// (Left as local bank above; /api/metaphor could be wired later)
+async function improvMetaphor(theme='self', fallback='It’s a path — one steady step is enough.'){
   try {
-    if (typeof fetch !== 'function') return fallback;
     const ctrl = new AbortController();
     const timer = setTimeout(()=>ctrl.abort(), CONFIG.metaphorTimeoutMs);
     const r = await fetch('/api/metaphor', {
       method:'POST',
-      headers:{ 'Content-Type':'application/json' },
-      body: JSON.stringify({ topic, theme, name }),
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ theme }),
       signal: ctrl.signal
     });
     clearTimeout(timer);
@@ -309,6 +324,84 @@ export async function genieIntro({ user={} } = {}){
   };
 }
 
+//////////////////// GENIE RITUAL FRAMEWORK (Reflection → Exercise → Action) ////////////////////
+const YOUTUBE = /(\byt\b|youtube|subs|subscribers|channel|creator|video)/i;
+
+function buildMysticReflection(name, input, theme){
+  const metaBank = METAPHORS[theme] || METAPHORS.self;
+  const meta = rand(metaBank);
+  const wish = (input||'').trim();
+  return `As you wish, ${title(name)} — your words are etched in the sand of time: “${wish}”. Picture it like this: ${meta}`;
+}
+
+function buildVisualization(theme, input){
+  // Lightweight ritualized mental exercise
+  if (YOUTUBE.test(input||'')){
+    return [
+      "✨ Ritual (60 seconds):",
+      "Close your eyes. Breathe out slowly.",
+      "See your channel like a golden portal; each subscriber a spark choosing your light.",
+      "Whisper: “I broadcast value; the ones who need it find me.”"
+    ].join("\n");
+  }
+  if (theme==='money'){
+    return [
+      "✨ Ritual (60 seconds):",
+      "Hand on heart; exhale longer than you inhale.",
+      "Imagine money as a clear river; watch one small gate open and water rush in.",
+      "Whisper: “I’m ready to receive and circulate.”"
+    ].join("\n");
+  }
+  if (theme==='love'){
+    return [
+      "✨ Ritual (60 seconds):",
+      "Relax your jaw and shoulders.",
+      "Picture a porch light glowing steady; the right people walk toward warmth.",
+      "Whisper: “I choose what chooses me.”"
+    ].join("\n");
+  }
+  if (theme==='health'){
+    return [
+      "✨ Ritual (60 seconds):",
+      "Inhale 4, exhale 6 — seven times.",
+      "See your nervous system as a dimmer switch lowering to calm.",
+      "Whisper: “My body is safe right now.”"
+    ].join("\n");
+  }
+  return [
+    "✨ Ritual (60 seconds):",
+    "Breathe out. Let your shoulders fall.",
+    "See the path already walked by future-you; step into those footprints.",
+    "Whisper: “It’s already mine — I act like it.”"
+  ].join("\n");
+}
+
+function buildActionNudge(theme, input){
+  if (YOUTUBE.test(input||'')){
+    return [
+      "💫 First move:",
+      "Record one 30s take with a sharp hook in the first 2 seconds.",
+      "Post it today. Then reply to 3 comments with a question.",
+      "Write 3 title options — choose the one you’d click blind."
+    ].join("\n");
+  }
+  const steps = pickSteps(theme);
+  return ["💫 First move:", steps[0], steps[1], steps[2]].join("\n");
+}
+
+function buildPerspectiveFlip(theme){
+  const q = rand(probe[theme] || probe.self);
+  return `🧠 Shift: ${q}`;
+}
+
+function buildCloser(){
+  return rand([
+    "It is sealed. One honest move opens the gate.",
+    "The lamp stays warm when you move. Small moves, great spells.",
+    "We don’t chase; we glow. Go light the next inch."
+  ]);
+}
+
 //////////////////// GENIE REPLY (multi-bubble) ////////////////////
 export async function genieReply({ input='', user={}, opts={} }){
   const name = user.firstName || user.name || 'Friend';
@@ -317,53 +410,30 @@ export async function genieReply({ input='', user={}, opts={} }){
   const themePref = (pref==='Money stress' ? 'money' : pref==='Relationship loop' ? 'love' : pref==='Health / grief' ? 'health' : pref);
   const theme = detectTheme(input, themePref);
 
-  // Angel-number fast path
-  const angelNum = isAngelNumber(input);
-  if (angelNum){
-    const b1 = sprinklePhrase(`You called ${angelNum}. ${angelMap[angelNum]}`);
-    const numerix = numerologyDownload(name);
-    const b2 = CONFIG.includeNumerology ? `Name note for ${title(name)}: ${numerix.text}` : null;
-    const b3 = angelHint();
-    const b4 = rand(closers);
-    let bubbles = [b1, b2, b3, b4].filter(Boolean).map(s => trimSentences(withOneEmoji(s, wantEmoji), 2));
-    bubbles = bubbles.slice(0, clamp(CONFIG.maxBubbles, 3, 6));
-    return packReturn({ name, theme:'self', mood:'neutral', bubbles, numerix, angel:b3 || '' });
-  }
+  // Optional numerology + angel hints
+  const numerix = CONFIG.includeNumerology ? numerologyDownload(name) : null;
+  const angel = CONFIG.includeAngelHint ? angelHint() : null;
 
-  // Normal path
-  const cue = detectWitCue(input);
-  const opening = cue ? rand(comebacks[cue]) : rand(remarks);
-  const mirror = `Alright ${title(name)}, you said: “${(input||'').trim()}”.`;
-  const dive = `Let’s dive deeper into that.`;
-  const roast = (CONFIG.includeRoastLoA && Math.random()<0.33) ? rand(comebacks.roastLoA) : null;
-  const metaphor = await improvMetaphor(input, theme, name);
-  const metaLine = `Picture it like this: ${metaphor}`;
-  const step = buildAssignment(theme);
-  const ask = rand(probe[theme] || probe.self);
-  const numerix = numerologyDownload(name);
-  const nameNote = CONFIG.includeNumerology ? `Name note for ${title(name)}: ${numerix.text}` : null;
-  const clock = angelHint();
-  const close = rand(closers);
+  // Ritualized 3-part response
+  const reflection = buildMysticReflection(name, input, theme);
+  const viz = buildVisualization(theme, input);
+  const action = buildActionNudge(theme, input);
+  const flip = buildPerspectiveFlip(theme);
+  const seal = buildCloser();
 
-  let bubbles = [
-    sprinklePhrase(opening),
-    mirror,
-    dive,
-    roast,
-    metaLine,
-    step,
-    ask,
-    nameNote,
-    clock,
-    close
-  ].filter(Boolean).map(s => trimSentences(withOneEmoji(s, wantEmoji), 2));
+  let bubbles = [reflection, viz, action, flip];
+  if (numerix) bubbles.push(`Name note for ${title(name)} — ${numerix.text}`);
+  if (angel) bubbles.push(angel);
+  bubbles.push(seal);
 
-  bubbles = bubbles.slice(0, clamp(CONFIG.maxBubbles, 4, 7));
+  bubbles = bubbles.filter(Boolean).map(s => trimSentences(withOneEmoji(s, wantEmoji), 3));
+  bubbles = bubbles.slice(0, clamp(CONFIG.maxBubbles, 4, 6));
 
-  return packReturn({ name, theme, mood: cue ? 'spicy' : 'neutral', bubbles, numerix, angel: clock || '' });
+  return packReturn({ name, theme, mood:'warm', bubbles, numerix, angel: angel || '' });
 }
 
-function packReturn({ name, theme, mood, bubbles, numerix, angel }){
+//////////////////// PACK RETURN ////////////////////
+function packReturn({ name, theme='self', mood='neutral', bubbles=[], numerix=null, angel='' }){
   const chunks = bubbles.slice();
   const text = bubbles.join('\n\n');
   return {
