@@ -1,145 +1,88 @@
 // /pages/chat-genie.js
 import { useEffect, useRef, useState } from 'react'
 import Head from 'next/head'
-import { get, set as setFlow } from '../src/flowState'
-import { supabase } from '../src/supabaseClient'
+import { get, set, newId, toPlainMessages } from '../src/flowState'
 
-function getFirstNameCached() {
-  if (typeof window === 'undefined') return get().firstName || 'Friend'
-  return get().firstName || localStorage.getItem('mg_first_name') || 'Friend'
-}
-
-function looksLikeHandle(x){ return /[0-9_]/.test(x || '') || (x || '').includes('@') }
-
-async function directHydrateFirstName() {
-  const { data: { session } } = await supabase.auth.getSession()
-  const user = session?.user
-  if (!user) return null
-
-  // Try profiles first
-  let row = null
-  try {
-    const { data } = await supabase
-      .from('profiles')
-      .select('first_name, full_name, display_name')
-      .eq('id', user.id)
-      .maybeSingle()
-    row = data || null
-  } catch {}
-
-  const m = user.user_metadata || {}
-  const cands = [
-    row?.first_name,
-    firstFrom(row?.full_name),
-    firstFrom(row?.display_name),
-    m.given_name,
-    firstFrom(m.full_name),
-    firstFrom(m.name),
-  ].filter(Boolean)
-
-  let first = cands.find(isName) || null
-  if (!first) {
-    const prefix = (user.email || '').split('@')[0]
-    if (isName(prefix)) first = prefix
-  }
-  first = first ? titleCase(first) : 'Friend'
-
-  // Write to flow state
-  setFlow({ firstName: first })
-  // Only cache real names
-  try { if (first !== 'Friend') localStorage.setItem('mg_first_name', first) } catch {}
-
-  return first
-}
-
-function firstFrom(s){ if(!s) return null; return String(s).trim().split(/\s+/)[0] || null }
-function isName(s){
-  if(!s) return false
-  const t = String(s).trim()
-  if (t.length < 2) return false
-  if (/[0-9_]/.test(t)) return false
-  if (t.includes('@')) return false
-  return true
-}
-function titleCase(s){ return String(s).replace(/\b\w/g, c => c.toUpperCase()) }
+function escapeHTML(s=''){ return s.replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])) }
 
 export default function ChatGenie() {
-  const [msgs, setMsgs] = useState([])
+  // ✅ Use the SAME state source as /pages/chat.js
+  const [S, setS] = useState(get())
   const [input, setInput] = useState('')
   const [thinking, setThinking] = useState(false)
-  const [name, setName] = useState(getFirstNameCached())
   const listRef = useRef(null)
 
-  useEffect(() => { listRef.current?.scrollTo(0, 1e9) }, [msgs, thinking])
+  useEffect(() => { listRef.current?.scrollTo(0, 1e9) }, [S.thread, thinking])
 
-  // Hydrate: helper → fallback direct → update UI; never persist "Friend"
+  // ✅ Hydrate firstName from Supabase, then re-read flowState (exactly like chat.js)
   useEffect(() => {
-    let alive = true
-    ;(async () => {
-      try {
-        // Run the shared helper first
-        const mod = await import('../src/userName') // named export
-        await mod.hydrateFirstNameFromSupabase()
-      } catch {}
-
-      let current = getFirstNameCached()
-      if (!current || current === 'Friend' || looksLikeHandle(current)) {
-        // Old-build style direct hydration fallback
-        await directHydrateFirstName()
-        current = getFirstNameCached()
+    (async () => {
+      if (typeof window === 'undefined') return
+      const cur = get()
+      if (!cur.firstName || cur.firstName === 'Friend') {
+        try {
+          const m = await import('../src/userName')     // { hydrateFirstNameFromSupabase }
+          await m.hydrateFirstNameFromSupabase()
+          setS(get())                                   // re-read → UI updates to real name
+        } catch {}
       }
-      if (alive) setName(current || 'Friend')
     })()
 
-    const onStorage = e => { if (e.key === 'mg_first_name') setName(e.newValue || 'Friend') }
-    if (typeof window !== 'undefined') window.addEventListener('storage', onStorage)
-    return () => {
-      alive = false
-      if (typeof window !== 'undefined') window.removeEventListener('storage', onStorage)
-    }
+    // keep in sync if another tab updates the cached name
+    const onStorage = (e) => { if (e.key === 'mg_first_name') setS(get()) }
+    window.addEventListener('storage', onStorage)
+    return () => window.removeEventListener('storage', onStorage)
   }, [])
 
-  function key() { return Math.random().toString(36).slice(2) }
-  function push(author, text) { setMsgs(m => [...m, { author, text, key: key() }]) }
-
   async function callApi(text) {
-    const S = get()
-    const realName = getFirstNameCached()
-    const r = await fetch('/api/chat', {
+    const state = get()
+    const resp = await fetch('/api/chat', {
       method:'POST',
-      headers:{'Content-Type':'application/json'},
+      headers:{ 'Content-Type':'application/json' },
       body: JSON.stringify({
-        userName: realName || null,
-        user: { firstName: realName || null, name: realName || null },
+        userName: state.firstName || null,      // ✅ send real first name
         context: {
-          wish: S.currentWish?.wish || null,
-          block: S.currentWish?.block || null,
-          micro: S.currentWish?.micro || null,
-          vibe: S.vibe || null
+          wish: state.currentWish?.wish || null,
+          block: state.currentWish?.block || null,
+          micro: state.currentWish?.micro || null,
+          vibe: state.vibe || null
         },
-        messages: msgs.map(m => ({
-          role: m.author === 'Genie' ? 'assistant' : 'user',
-          content: m.text
-        })).concat({ role:'user', content: text })
+        messages: [
+          ...toPlainMessages(state.thread || []),
+          { role:'user', content: text }
+        ]
       })
     })
-    const data = await r.json()
-    if (Array.isArray(data?.bubbles) && data.bubbles[0]) return data.bubbles
-    if (typeof data?.text === 'string') return [data.text]
-    return ['As you wish. What’s the specific outcome you want?']
+    const data = await resp.json()
+    return (data && (data.reply || data.text)) || 'As you wish—what exactly do you want?'
   }
 
-  async function send() {
+  const send = async () => {
     const text = (input || '').trim()
     if (!text || thinking) return
-    push(name || 'You', text)
+
+    // push user message (label uses S.firstName)
+    const msg = {
+      id: newId(),
+      role: 'user',
+      author: S.firstName || 'You',
+      content: escapeHTML(text)
+    }
+    const thread = [...(S.thread || []), msg]
+    set({ thread })
+    setS(get())
     setInput('')
     setThinking(true)
+
     try {
-      const bubbles = await callApi(text)
-      for (const b of bubbles) push('Genie', b)
+      const reply = await callApi(text)
+      const ai = { id: newId(), role:'assistant', author:'Genie', content: escapeHTML(reply) }
+      set({ thread: [...get().thread, ai] })
+      setS(get())
     } catch {
-      push('Genie', 'The lamp flickered. Try again.')
+      const ai = { id: newId(), role:'assistant', author:'Genie', content: 'The lamp flickered. Try again.' }
+      set({ thread: [...get().thread, ai] })
+      setS(get())
     } finally {
       setThinking(false)
       listRef.current?.scrollTo(0, 1e9)
@@ -151,27 +94,27 @@ export default function ChatGenie() {
       <Head><title>Genie Chat</title></Head>
       <main style={{ width:'min(900px, 94vw)', margin:'30px auto' }}>
         <h1 style={{ fontSize:28, fontWeight:900, margin:'0 0 12px' }}>
-          Genie Chat, {name || 'Friend'}
+          Genie Chat, {S.firstName || 'Friend'}
         </h1>
 
         <div ref={listRef} style={{
           minHeight:360, maxHeight:520, overflowY:'auto',
           border:'1px solid rgba(0,0,0,0.08)', borderRadius:12, padding:12, background:'#fafafa'
         }}>
-          {msgs.map(m => (
-            <div key={m.key} style={{ display:'flex', gap:8, margin:'8px 0', flexDirection: m.author === 'Genie' ? 'row' : 'row-reverse' }}>
+          {(S.thread || []).map(m => (
+            <div key={m.id} style={{ display:'flex', gap:8, margin:'8px 0', flexDirection: m.role === 'assistant' ? 'row' : 'row-reverse' }}>
               <div style={{ width:30, height:30, borderRadius:'50%', background:'rgba(0,0,0,0.05)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:16 }}>
-                {m.author === 'Genie' ? '🔮' : '🙂'}
+                {m.role === 'assistant' ? '🔮' : '🙂'}
               </div>
               <div style={{maxWidth:'80%'}}>
-                <div style={{ fontSize:12, opacity:.65, margin: m.author === 'Genie' ? '0 0 4px 6px' : '0 6px 4px 0', textAlign: m.author === 'Genie' ? 'left' : 'right' }}>
-                  {m.author === 'Genie' ? 'Genie' : (name || 'You')}
+                <div style={{ fontSize:12, opacity:.65, margin: m.role === 'assistant' ? '0 0 4px 6px' : '0 6px 4px 0', textAlign: m.role === 'assistant' ? 'left' : 'right' }}>
+                  {m.role === 'assistant' ? 'Genie' : (m.author || S.firstName || 'You')}
                 </div>
                 <div style={{
-                  background: m.author === 'Genie' ? 'rgba(0,0,0,0.04)' : 'rgba(255,214,0,0.15)',
+                  background: m.role === 'assistant' ? 'rgba(0,0,0,0.04)' : 'rgba(255,214,0,0.15)',
                   border:'1px solid rgba(0,0,0,0.08)', borderRadius:12, padding:'10px 12px'
                 }}>
-                  {m.text}
+                  {m.content}
                 </div>
               </div>
             </div>
@@ -184,7 +127,7 @@ export default function ChatGenie() {
             value={input}
             onChange={e=>setInput(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }}
-            placeholder={`Speak to your Genie, ${name || 'Friend'}…`}
+            placeholder={`Speak to your Genie, ${S.firstName || 'Friend'}…`}
             style={{flex:1, padding:'12px 14px', borderRadius:12, border:'1px solid rgba(0,0,0,0.15)'}}
           />
           <button
