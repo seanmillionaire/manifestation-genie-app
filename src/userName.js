@@ -1,31 +1,43 @@
-// /src/userName.js
-import { supabase } from './supabaseClient'
-import { set, NAME_KEY } from './flowState'
+// /src/useFirstName.js
+import { useEffect, useState } from 'react'
+import { get } from './flowState'
 
-export async function hydrateFirstNameFromSupabase() {
-  const { data: { session } } = await supabase.auth.getSession()
-  const user = session?.user
-  if (!user) return null
+export default function useFirstName() {
+  // read from flowState/localStorage first (instant), hydrate next
+  const initial =
+    typeof window === 'undefined'
+      ? 'Friend'
+      : (get().firstName || localStorage.getItem('mg_first_name') || 'Friend')
 
-  // Prefer profiles.full_name, then user metadata, then email prefix
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('full_name')
-    .eq('id', user.id)
-    .maybeSingle()
+  const [firstName, setFirstName] = useState(initial)
 
-  const raw =
-    profile?.full_name ||
-    user.user_metadata?.full_name ||
-    user.user_metadata?.name ||
-    (user.email ? user.email.split('@')[0] : '') ||
-    'Friend'
+  useEffect(() => {
+    let alive = true
+    ;(async () => {
+      try {
+        // if we don’t have a real name yet, hydrate from Supabase
+        const cur = get().firstName
+        if (!cur || cur === 'Friend') {
+          const m = await import('./userName') // uses supabase, client-only
+          await m.hydrateFirstNameFromSupabase()
+        }
+        if (alive) {
+          const next = get().firstName || localStorage.getItem('mg_first_name') || 'Friend'
+          setFirstName(next)
+        }
+      } catch {}
+    })()
 
-  const first = (raw || 'Friend').trim().split(/\s+/)[0] || 'Friend'
+    // keep in sync if another tab updates localStorage
+    const onStorage = (e) => {
+      if (e.key === 'mg_first_name') setFirstName(e.newValue || 'Friend')
+    }
+    if (typeof window !== 'undefined') window.addEventListener('storage', onStorage)
+    return () => {
+      alive = false
+      if (typeof window !== 'undefined') window.removeEventListener('storage', onStorage)
+    }
+  }, [])
 
-  // Write into flowState (persists via its save()) and mirror a plain key for quick reads
-  set({ firstName: first })
-  try { localStorage.setItem(NAME_KEY, first) } catch {}
-
-  return first
+  return firstName
 }
