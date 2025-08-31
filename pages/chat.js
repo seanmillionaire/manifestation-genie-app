@@ -44,20 +44,6 @@ export default function ChatPage(){
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // 🔹 Ensure firstName updates after Supabase hydration (client-only)
-  useEffect(() => {
-    (async () => {
-      if (typeof window === 'undefined') return;
-      const cur = get();
-      if (!cur.firstName || cur.firstName === 'Friend') {
-        try {
-          const m = await import('../src/userName');           // lazy import (avoids SSR issues)
-          await m.hydrateFirstNameFromSupabase();
-          setS(get());                                         // re-read state → re-render with name
-        } catch {}
-      }
-    })();
-  }, []);
 
   const send = async () => {
     const text = (input || '').trim();
