@@ -19,7 +19,7 @@ async function callGenie({ text, state }) {
         vibe: state.vibe || null
       },
       messages: [
-        ...toPlainMessages(state.thread),
+        ...toPlainMessages(state.thread || []),
         { role:'user', content: text }
       ]
     })
@@ -34,19 +34,18 @@ export default function ChatPage(){
   const [input, setInput] = useState('');
   const endRef = useRef(null);
 
-  // 🔒 Lock the first name we had at first paint (don’t let later effects overwrite it)
-  const nameRef = useRef(() => {
-    const cur = get();
-    const cached = typeof window !== 'undefined' ? localStorage.getItem('mg_first_name') : null;
-    return cur.firstName || cached || 'Friend';
-  })();
-  // (Optional) push it back into flowState once so API always gets it
+  // 🔒 Lock the first valid name we had at first paint
+  const nameRef = useRef(null);
   useEffect(() => {
     const cur = get();
-    if (nameRef && nameRef !== 'Friend' && cur.firstName !== nameRef) {
-      set({ firstName: nameRef });
+    const cached = typeof window !== 'undefined' ? localStorage.getItem('mg_first_name') : null;
+    nameRef.current = cur.firstName || cached || 'Friend';
+    // push it into flowState so API always gets the locked name
+    if (nameRef.current && nameRef.current !== 'Friend' && cur.firstName !== nameRef.current) {
+      set({ firstName: nameRef.current });
       setS(get());
     }
+    // never overwrite later with hydration on this page
   }, []);
 
   useEffect(()=>{ endRef.current?.scrollIntoView({behavior:'smooth'}); }, [S.thread]);
@@ -59,16 +58,16 @@ export default function ChatPage(){
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ❌ removed the hydration effect that could overwrite with "Friend"
+  // ❌ removed the “hydrate from Supabase” effect here (it caused Friend overwrite)
 
   const send = async () => {
     const text = (input || '').trim();
     if (!text) return;
 
-    // push user message using the locked name
+    // push user message, labeled with locked name
     const userMsg = normalizeMsg(
-      { id:newId(), role:'user', author:nameRef || 'You', content: escapeHTML(text) },
-      nameRef
+      { id:newId(), role:'user', author:nameRef.current || 'You', content: escapeHTML(text) },
+      nameRef.current
     );
     const thread = [...(S.thread || []), userMsg];
     set({ thread });
@@ -76,14 +75,14 @@ export default function ChatPage(){
     setInput('');
 
     try {
-      // force API payload to use the locked name
-      const current = get();
-      const reply = await callGenie({ text, state: { ...current, firstName: nameRef } });
-      const ai = normalizeMsg({ role:'assistant', author:'Genie', content: nl2br(escapeHTML(reply)) }, nameRef);
+      // use locked name in API state
+      const stateForApi = { ...get(), firstName: nameRef.current };
+      const reply = await callGenie({ text, state: stateForApi });
+      const ai = normalizeMsg({ role:'assistant', author:'Genie', content: nl2br(escapeHTML(reply)) }, nameRef.current);
       pushThread(ai);
       setS(get());
     } catch {
-      const ai = normalizeMsg({ role:'assistant', author:'Genie', content: 'The lamp flickered. Try again.' }, nameRef);
+      const ai = normalizeMsg({ role:'assistant', author:'Genie', content: 'The lamp flickered. Try again.' }, nameRef.current);
       pushThread(ai);
       setS(get());
     }
@@ -94,7 +93,7 @@ export default function ChatPage(){
   return (
     <div style={{ background:'#fff', border:'1px solid rgba(0,0,0,0.08)', borderRadius:18, padding:16 }}>
       <h1 style={{fontSize:24, fontWeight:900, margin:'4px 0 8px'}}>
-        Genie Chat, {nameRef || 'Friend'}
+        Genie Chat, {nameRef.current || 'Friend'}
       </h1>
 
       <div style={{
@@ -114,7 +113,7 @@ export default function ChatPage(){
                 <div style={{
                   fontSize:12, opacity:.65, margin: isAI ? '0 0 4px 6px' : '0 6px 4px 0',
                   textAlign: isAI ? 'left' : 'right'
-                }}>{isAI ? 'Genie' : (m.author || nameRef || 'You')}</div>
+                }}>{isAI ? 'Genie' : (m.author || nameRef.current || 'You')}</div>
 
                 <div
                   style={{
@@ -137,7 +136,7 @@ export default function ChatPage(){
           value={input}
           onChange={e=>setInput(e.target.value)}
           onKeyDown={onKey}
-          placeholder={`Speak to your Genie, ${nameRef || 'Friend'}…`}
+          placeholder={`Speak to your Genie, ${nameRef.current || 'Friend'}…`}
           style={{flex:1, padding:'12px 14px', borderRadius:12, border:'1px solid rgba(0,0,0,0.15)'}}
         />
         <button onClick={send} style={{ padding:'12px 16px', borderRadius:14, border:0, background:'#ffd600', fontWeight:900 }}>
