@@ -195,7 +195,7 @@ export default function HomeScreen() {
               Open Chat
             </button>
             <button
-              onClick={() => router.push("/vibe-select")}
+              onClick={() => router.push("/vibe")}
               style={{
                 background: "#facc15",
                 border: "1px solid #eab308",
