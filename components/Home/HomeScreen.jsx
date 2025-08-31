@@ -15,6 +15,7 @@ export default function HomeScreen() {
   const [profile, setProfile] = useState(null);
   const [tipStep, setTipStep] = useState(0);
   const [justAgreed, setJustAgreed] = useState(false);
+  const [error, setError] = useState(null);
 
   const agreed =
     !!profile?.agreements?.manifestForGood?.accepted &&
@@ -23,11 +24,20 @@ export default function HomeScreen() {
   useEffect(() => {
     let mounted = true;
     (async () => {
-      const me = await getMe();
-      if (!mounted) return;
-      setProfile(me);
-      setTipStep(me.onboarding?.tipGuide?.step ?? 0);
-      setLoading(false);
+      try {
+        const me = await getMe();
+        if (!mounted) return;
+        setProfile(me);
+        setTipStep(me.onboarding?.tipGuide?.step ?? 0);
+      } catch (e) {
+        console.error("[Home] getMe failed:", e);
+        // Fallback so the page is never blank
+        if (!mounted) return;
+        setError("Could not load your profile. Showing default view.");
+        setProfile({ firstName: "friend" });
+      } finally {
+        if (mounted) setLoading(false);
+      }
     })();
     return () => {
       mounted = false;
@@ -52,6 +62,9 @@ export default function HomeScreen() {
       }));
       setJustAgreed(true);
       setTimeout(() => setJustAgreed(false), 900);
+    } catch (e) {
+      console.error("[Home] acceptManifestForGood failed:", e);
+      alert("Couldn’t save your agreement. Please try again.");
     } finally {
       setSavingAgree(false);
     }
@@ -62,7 +75,7 @@ export default function HomeScreen() {
     saveTipStep({
       step: nextStep,
       completedAt: completed ? new Date().toISOString() : undefined,
-    }).catch(() => {});
+    }).catch((e) => console.warn("[Home] saveTipStep failed:", e));
   };
 
   const welcome = useMemo(
@@ -81,6 +94,12 @@ export default function HomeScreen() {
 
   return (
     <main className="px-6 py-6 max-w-screen-md mx-auto">
+      {error && (
+        <p className="mb-3 text-sm text-amber-700 bg-amber-50 px-3 py-2 rounded">
+          {error}
+        </p>
+      )}
+
       <h1 className="text-2xl font-semibold tracking-tight">{welcome}</h1>
 
       <section className="mt-4">
