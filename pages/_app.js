@@ -11,10 +11,11 @@ const LOGO_SRC = 'https://storage.googleapis.com/mixo-sites/images/file-a7eebac5
 
 const navLinks = [
   { href: '/home', label: 'Home' },
-  { href: '/flow', label: 'Start Manifesting' }
-    { href: '/chat', label: 'Chat' },
+  { href: '/chat', label: 'Chat' },
   { href: '/chat-genie', label: 'Chat V2' },
-    { href: '/profile', label: 'Profile' },
+  { href: '/vibe', label: 'Vibe' },
+  { href: '/profile', label: 'Profile' },
+  { href: '/flow', label: 'Win Tracker' }
 ]
 
 function NavLink({ href, label, isActive }) {
