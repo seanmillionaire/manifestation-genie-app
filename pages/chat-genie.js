@@ -17,11 +17,12 @@ export default function ChatGenie() {
 
   useEffect(() => { listRef.current?.scrollTo(0, 1e9) }, [msgs, thinking])
 
-  // 🔹 Hydrate from Supabase and avoid handles → updates UI when real first name arrives
+  // Hydrate first name from Supabase and refresh UI once
   useEffect(() => {
     let alive = true
     ;(async () => {
       try {
+        // If missing or looks like a handle, hydrate again
         if (!name || name === 'Friend' || /[0-9_]/.test(name)) {
           const m = await import('../src/userName') // { hydrateFirstNameFromSupabase }
           await m.hydrateFirstNameFromSupabase()
@@ -29,25 +30,27 @@ export default function ChatGenie() {
       } catch {}
       if (alive) setName(getFirstNameCached())
     })()
+
+    // keep in sync if another tab updates the name
     const onStorage = e => { if (e.key === 'mg_first_name') setName(e.newValue || 'Friend') }
     if (typeof window !== 'undefined') window.addEventListener('storage', onStorage)
     return () => {
       alive = false
       if (typeof window !== 'undefined') window.removeEventListener('storage', onStorage)
     }
-  }, []) // once on mount
+  }, []) // mount
 
   function key() { return Math.random().toString(36).slice(2) }
   function push(author, text) { setMsgs(m => [...m, { author, text, key: key() }]) }
 
   async function callApi(text) {
     const S = get()
-    const realName = getFirstNameCached()
+    const realName = getFirstNameCached() // read fresh
     const r = await fetch('/api/chat', {
       method:'POST',
       headers:{'Content-Type':'application/json'},
       body: JSON.stringify({
-        // send multiple shapes so backend always finds it
+        // send name in both shapes so backend can’t miss it
         userName: realName || null,
         user: { firstName: realName || null, name: realName || null },
         context: {
@@ -71,8 +74,7 @@ export default function ChatGenie() {
   async function send() {
     const text = (input || '').trim()
     if (!text || thinking) return
-    // Label user bubble with their first name
-    push(name || 'You', text)
+    push(name || 'You', text) // label with your first name
     setInput('')
     setThinking(true)
     try {
