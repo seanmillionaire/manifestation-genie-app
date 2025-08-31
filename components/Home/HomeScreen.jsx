@@ -28,9 +28,7 @@ export default function HomeScreen() {
       setTipStep(me.onboarding?.tipGuide?.step ?? 0);
       setLoading(false);
     })();
-    return () => {
-      mounted = false;
-    };
+    return () => { mounted = false; };
   }, []);
 
   const onAgree = async () => {
@@ -81,7 +79,7 @@ export default function HomeScreen() {
 
   return (
     <main className="px-6 py-6 max-w-screen-md mx-auto">
-      {/* Global header is handled by your layout/_app */}
+      {/* Global header handled in /pages/_app.js */}
       <h1 className="text-2xl font-semibold tracking-tight">{welcome}</h1>
 
       <section className="mt-4">
@@ -101,7 +99,7 @@ export default function HomeScreen() {
             slides={TIP_SLIDES}
             step={tipStep}
             onStepChange={onTipStep}
-            onFinish={() => router.push("/vibe-select")}
+            onFinish={() => router.push("/vibe")}  {/* your existing route */}
           />
         </section>
       )}
