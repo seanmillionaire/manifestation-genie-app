@@ -10,12 +10,12 @@ import { hydrateFirstNameFromSupabase } from '../src/userName'
 const LOGO_SRC = 'https://storage.googleapis.com/mixo-sites/images/file-a7eebac5-6af9-4253-bc71-34c0d455a852.png'
 
 const navLinks = [
-  { href: '/flow', label: 'Home' },
+  { href: '/home', label: 'Home' },
   { href: '/chat', label: 'Chat' },
   { href: '/chat-genie', label: 'Chat V2' },
   { href: '/vibe', label: 'Vibe' },
   { href: '/profile', label: 'Profile' },
-  { href: '/win-tracker', label: 'Win Tracker' }
+  { href: '/flow', label: 'Win Tracker' }
 ]
 
 function NavLink({ href, label, isActive }) {
