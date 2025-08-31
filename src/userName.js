@@ -2,43 +2,60 @@
 import { supabase } from './supabaseClient'
 import { set } from './flowState'
 
-// Tries multiple places: profiles.full_name/name/first_name/last_name, user_metadata, then email prefix
-async function hydrateFirstNameFromSupabase() {
-  try {
-    const { data: { session } } = await supabase.auth.getSession()
-    const u = session?.user
-    if (!u) return null
+export async function hydrateFirstNameFromSupabase() {
+  const { data: { session } } = await supabase.auth.getSession()
+  const user = session?.user
+  if (!user) return null
 
-    const { data: row } = await supabase
-      .from('profiles')
-      .select('full_name, name, first_name, last_name')
-      .eq('id', u.id)
-      .maybeSingle()
+  // Pull everything we might need from your profile row
+  const { data: row } = await supabase
+    .from('profiles')
+    .select('first_name, full_name, display_name')
+    .eq('id', user.id)
+    .maybeSingle()
 
-    const raw =
-      row?.full_name ||
-      row?.name ||
-      [row?.first_name, row?.last_name].filter(Boolean).join(' ') ||
-      u.user_metadata?.full_name ||
-      u.user_metadata?.name ||
-      (u.email ? u.email.split('@')[0] : '') ||
-      'Friend'
+  // Candidate list (best → worst)
+  const candidates = [
+    row?.first_name,
+    user.user_metadata?.given_name,
+    firstFrom(row?.full_name),
+    firstFrom(user.user_metadata?.full_name),
+    firstFrom(user.user_metadata?.name),
+    firstFrom(row?.display_name),
+  ].filter(Boolean)
 
-    const first = (raw || '').trim().split(/\s+/)[0] || 'Friend'
+  // Pick the first thing that looks like a real first name (not a handle)
+  let first = candidates.find(isLikelyFirstName) || null
 
-    // Persist into app state + localStorage (read by pages instantly)
-    set({ firstName: first })
-    try { localStorage.setItem('mg_first_name', first) } catch {}
-
-    return first
-  } catch {
-    return null
+  // LAST resort: email prefix only if it looks like a name
+  if (!first) {
+    const prefix = (user.email || '').split('@')[0]
+    if (isLikelyFirstName(prefix)) first = prefix
   }
+
+  // Fallback
+  first = titleCase(first || 'Friend')
+
+  // Save to flowState + localStorage for fast reads everywhere
+  set({ firstName: first })
+  try { localStorage.setItem('mg_first_name', first) } catch {}
+
+  return first
 }
 
-export { hydrateFirstNameFromSupabase }
-export default hydrateFirstNameFromSupabase
-export async function hydrateFirstNameFromSupabase() {
-  // reads Supabase, then:
-  // set({ firstName }); and localStorage.setItem('mg_first_name', firstName)
+// helpers
+function firstFrom(s) {
+  if (!s || typeof s !== 'string') return null
+  return s.trim().split(/\s+/)[0]
+}
+function isLikelyFirstName(s) {
+  if (!s) return false
+  const t = s.trim()
+  if (t.length < 2) return false
+  if (/[0-9_]/.test(t)) return false  // reject handles like blitzbeats7 or anna_01
+  if (t.includes('@')) return false   // reject emails
+  return true
+}
+function titleCase(s) {
+  return s.replace(/\b\w/g, c => c.toUpperCase())
 }
