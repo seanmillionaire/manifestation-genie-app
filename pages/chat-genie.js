@@ -1,15 +1,70 @@
 // /pages/chat-genie.js
 import { useEffect, useRef, useState } from 'react'
 import Head from 'next/head'
-import { get } from '../src/flowState'
+import { get, set as setFlow } from '../src/flowState'
+import { supabase } from '../src/supabaseClient'
 
 function getFirstNameCached() {
   if (typeof window === 'undefined') return get().firstName || 'Friend'
   return get().firstName || localStorage.getItem('mg_first_name') || 'Friend'
 }
 
+function looksLikeHandle(x){ return /[0-9_]/.test(x || '') || (x || '').includes('@') }
+
+async function directHydrateFirstName() {
+  const { data: { session } } = await supabase.auth.getSession()
+  const user = session?.user
+  if (!user) return null
+
+  // Try profiles first
+  let row = null
+  try {
+    const { data } = await supabase
+      .from('profiles')
+      .select('first_name, full_name, display_name')
+      .eq('id', user.id)
+      .maybeSingle()
+    row = data || null
+  } catch {}
+
+  const m = user.user_metadata || {}
+  const cands = [
+    row?.first_name,
+    firstFrom(row?.full_name),
+    firstFrom(row?.display_name),
+    m.given_name,
+    firstFrom(m.full_name),
+    firstFrom(m.name),
+  ].filter(Boolean)
+
+  let first = cands.find(isName) || null
+  if (!first) {
+    const prefix = (user.email || '').split('@')[0]
+    if (isName(prefix)) first = prefix
+  }
+  first = first ? titleCase(first) : 'Friend'
+
+  // Write to flow state
+  setFlow({ firstName: first })
+  // Only cache real names
+  try { if (first !== 'Friend') localStorage.setItem('mg_first_name', first) } catch {}
+
+  return first
+}
+
+function firstFrom(s){ if(!s) return null; return String(s).trim().split(/\s+/)[0] || null }
+function isName(s){
+  if(!s) return false
+  const t = String(s).trim()
+  if (t.length < 2) return false
+  if (/[0-9_]/.test(t)) return false
+  if (t.includes('@')) return false
+  return true
+}
+function titleCase(s){ return String(s).replace(/\b\w/g, c => c.toUpperCase()) }
+
 export default function ChatGenie() {
-  const [msgs, setMsgs] = useState([])   // {author:'User'|'Genie', text, key}
+  const [msgs, setMsgs] = useState([])
   const [input, setInput] = useState('')
   const [thinking, setThinking] = useState(false)
   const [name, setName] = useState(getFirstNameCached())
@@ -17,25 +72,32 @@ export default function ChatGenie() {
 
   useEffect(() => { listRef.current?.scrollTo(0, 1e9) }, [msgs, thinking])
 
-  // 🔹 Hydrate from Supabase and avoid handles → updates UI when real first name arrives
+  // Hydrate: helper → fallback direct → update UI; never persist "Friend"
   useEffect(() => {
     let alive = true
     ;(async () => {
       try {
-        if (!name || name === 'Friend' || /[0-9_]/.test(name)) {
-          const m = await import('../src/userName') // { hydrateFirstNameFromSupabase }
-          await m.hydrateFirstNameFromSupabase()
-        }
+        // Run the shared helper first
+        const mod = await import('../src/userName') // named export
+        await mod.hydrateFirstNameFromSupabase()
       } catch {}
-      if (alive) setName(getFirstNameCached())
+
+      let current = getFirstNameCached()
+      if (!current || current === 'Friend' || looksLikeHandle(current)) {
+        // Old-build style direct hydration fallback
+        await directHydrateFirstName()
+        current = getFirstNameCached()
+      }
+      if (alive) setName(current || 'Friend')
     })()
+
     const onStorage = e => { if (e.key === 'mg_first_name') setName(e.newValue || 'Friend') }
     if (typeof window !== 'undefined') window.addEventListener('storage', onStorage)
     return () => {
       alive = false
       if (typeof window !== 'undefined') window.removeEventListener('storage', onStorage)
     }
-  }, []) // once on mount
+  }, [])
 
   function key() { return Math.random().toString(36).slice(2) }
   function push(author, text) { setMsgs(m => [...m, { author, text, key: key() }]) }
@@ -47,7 +109,6 @@ export default function ChatGenie() {
       method:'POST',
       headers:{'Content-Type':'application/json'},
       body: JSON.stringify({
-        // send multiple shapes so backend always finds it
         userName: realName || null,
         user: { firstName: realName || null, name: realName || null },
         context: {
@@ -71,7 +132,6 @@ export default function ChatGenie() {
   async function send() {
     const text = (input || '').trim()
     if (!text || thinking) return
-    // Label user bubble with their first name
     push(name || 'You', text)
     setInput('')
     setThinking(true)
