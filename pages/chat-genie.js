@@ -1,44 +1,30 @@
-// pages/chat-genie.js — stripped UI (no intros, counters, emojis, or "New wish")
+// pages/chat-genie.js — API-first free-flow UI (no hard-coded copy)
 import { useEffect, useRef, useState } from 'react'
 import Head from 'next/head'
 
 export default function ChatGenie() {
-  const [brain, setBrain] = useState(null)   // local brain module
-  const [msgs, setMsgs] = useState([])       // {author:'User'|'Genie', text:string, key:string}
+  const [msgs, setMsgs] = useState([])   // {author:'User'|'Genie', text:string, key:string}
   const [input, setInput] = useState('')
   const [thinking, setThinking] = useState(false)
   const listRef = useRef(null)
-  const firstName = 'You'
 
   useEffect(() => {
-    let active = true
-    ;(async () => {
-      try {
-        const mod = await import('../src/genieBrain.js')
-        if (active) setBrain(mod)
-      } catch (e) {
-        console.warn('genieBrain load failed', e)
-        if (active) setBrain(null)
-      }
-    })()
-    return () => { active = false }
-  }, [])
-
-  useEffect(() => {
-    if (!listRef.current) return
-    listRef.current.scrollTop = listRef.current.scrollHeight
+    listRef.current?.scrollTo(0, 1e9)
   }, [msgs, thinking])
 
   function key() { return Math.random().toString(36).slice(2) }
   function push(author, text) { setMsgs(m => [...m, { author, text, key: key() }]) }
 
-  async function getReply(prompt) {
-    if (brain?.genieReply) {
-      const res = await brain.genieReply({ input: prompt, user: { firstName } })
-      if (Array.isArray(res?.bubbles) && res.bubbles[0]) return res.bubbles[0]
-      if (typeof res?.text === 'string') return res.text
-    }
-    return 'Sorry, the Genie is offline.'
+  async function callApi(prompt) {
+    const r = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messages: msgs.map(m => ({ author: m.author, content: m.text })), input: prompt })
+    })
+    const data = await r.json()
+    if (Array.isArray(data?.bubbles) && data.bubbles[0]) return data.bubbles
+    if (typeof data?.text === 'string') return [data.text]
+    return ['As you wish. What’s the specific outcome you want?']
   }
 
   async function send() {
@@ -48,20 +34,17 @@ export default function ChatGenie() {
     setInput('')
     setThinking(true)
     try {
-      const reply = await getReply(text)
-      push('Genie', reply)
-    } catch (e) {
-      push('Genie', 'Sorry, something went wrong.')
+      const bubbles = await callApi(text)
+      for (const b of bubbles) push('Genie', b)
+    } catch {
+      push('Genie', 'Hmm… the lamp flickered. Say it again?')
     } finally {
       setThinking(false)
     }
   }
 
   function onKeyDown(e) {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault()
-      send()
-    }
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() }
   }
 
   return (
@@ -83,7 +66,7 @@ export default function ChatGenie() {
 
           <div ref={listRef} style={{
             height:'60vh', overflow:'auto', background:'#fff',
-            border:'1px solid #e2e8f0', borderRadius:12, padding:16
+            border:'1px solid #e2e8f0', borderRadius:12, padding:12, marginBottom:12
           }}>
             {msgs.map(m => (
               <div key={m.key} style={{
@@ -92,33 +75,26 @@ export default function ChatGenie() {
                 margin:'8px 0'
               }}>
                 <div style={{
-                  maxWidth:'80%', whiteSpace:'pre-wrap',
-                  border:'1px solid #e5e7eb', padding:'10px 12px',
-                  borderRadius:10, background: m.author === 'User' ? '#eef2ff' : '#f8fafc'
+                  maxWidth:'75%', whiteSpace:'pre-wrap',
+                  background: m.author === 'User' ? '#eef2ff' : '#f8fafc',
+                  border:'1px solid #e2e8f0', padding:'10px 12px', borderRadius:12
                 }}>
                   {m.text}
                 </div>
               </div>
             ))}
-            {thinking && (
-              <div style={{ color:'#64748b', fontSize:12, padding:'6px 2px' }}>thinking…</div>
-            )}
+            {thinking && <div style={{ color:'#64748b', fontSize:12 }}>thinking…</div>}
           </div>
 
-          <div style={{
-            display:'flex', gap:8, marginTop:12, alignItems:'center',
-            background:'#fff', border:'1px solid #e2e8f0', borderRadius:12, padding:8
-          }}>
+          <div style={{ display:'flex', gap:8 }}>
             <textarea
-              placeholder="Type your goal…"
+              placeholder="Speak to your Genie…"
               value={input}
-              onChange={e => setInput(e.target.value)}
+              onChange={e=>setInput(e.target.value)}
               onKeyDown={onKeyDown}
+              rows={2}
+              style={{ flex:1, padding:'12px 14px', borderRadius:10, border:'1px solid #cbd5e1', outline:'none' }}
               disabled={thinking}
-              style={{
-                flex:1, resize:'none', border:'none', outline:'none',
-                minHeight:44, fontSize:16, background:'transparent'
-              }}
             />
             <button
               onClick={send}
