@@ -38,3 +38,7 @@ async function hydrateFirstNameFromSupabase() {
 
 export { hydrateFirstNameFromSupabase }
 export default hydrateFirstNameFromSupabase
+export async function hydrateFirstNameFromSupabase() {
+  // reads Supabase, then:
+  // set({ firstName }); and localStorage.setItem('mg_first_name', firstName)
+}
