@@ -11,7 +11,7 @@ async function callGenie({ text, state }) {
     method:'POST',
     headers:{ 'Content-Type':'application/json' },
     body: JSON.stringify({
-      userName: state.firstName || null,     // ← send name to API too
+      userName: state.firstName || null,
       context: {
         wish: state.currentWish?.wish || null,
         block: state.currentWish?.block || null,
@@ -34,6 +34,21 @@ export default function ChatPage(){
   const [input, setInput] = useState('');
   const endRef = useRef(null);
 
+  // 🔒 Lock the first name we had at first paint (don’t let later effects overwrite it)
+  const nameRef = useRef(() => {
+    const cur = get();
+    const cached = typeof window !== 'undefined' ? localStorage.getItem('mg_first_name') : null;
+    return cur.firstName || cached || 'Friend';
+  })();
+  // (Optional) push it back into flowState once so API always gets it
+  useEffect(() => {
+    const cur = get();
+    if (nameRef && nameRef !== 'Friend' && cur.firstName !== nameRef) {
+      set({ firstName: nameRef });
+      setS(get());
+    }
+  }, []);
+
   useEffect(()=>{ endRef.current?.scrollIntoView({behavior:'smooth'}); }, [S.thread]);
 
   useEffect(()=>{
@@ -44,27 +59,31 @@ export default function ChatPage(){
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // ❌ removed the hydration effect that could overwrite with "Friend"
 
   const send = async () => {
     const text = (input || '').trim();
     if (!text) return;
 
+    // push user message using the locked name
     const userMsg = normalizeMsg(
-      { id:newId(), role:'user', author:S.firstName || 'You', content: escapeHTML(text) },
-      S.firstName
+      { id:newId(), role:'user', author:nameRef || 'You', content: escapeHTML(text) },
+      nameRef
     );
-    const thread = [...S.thread, userMsg];
+    const thread = [...(S.thread || []), userMsg];
     set({ thread });
     setS(get());
     setInput('');
 
     try {
-      const reply = await callGenie({ text, state: get() });
-      const ai = normalizeMsg({ role:'assistant', author:'Genie', content: nl2br(escapeHTML(reply)) }, S.firstName);
+      // force API payload to use the locked name
+      const current = get();
+      const reply = await callGenie({ text, state: { ...current, firstName: nameRef } });
+      const ai = normalizeMsg({ role:'assistant', author:'Genie', content: nl2br(escapeHTML(reply)) }, nameRef);
       pushThread(ai);
       setS(get());
     } catch {
-      const ai = normalizeMsg({ role:'assistant', author:'Genie', content: 'The lamp flickered. Try again.' }, S.firstName);
+      const ai = normalizeMsg({ role:'assistant', author:'Genie', content: 'The lamp flickered. Try again.' }, nameRef);
       pushThread(ai);
       setS(get());
     }
@@ -75,7 +94,7 @@ export default function ChatPage(){
   return (
     <div style={{ background:'#fff', border:'1px solid rgba(0,0,0,0.08)', borderRadius:18, padding:16 }}>
       <h1 style={{fontSize:24, fontWeight:900, margin:'4px 0 8px'}}>
-        Genie Chat, {S.firstName || 'Friend'} {/* ← show name in UI */}
+        Genie Chat, {nameRef || 'Friend'}
       </h1>
 
       <div style={{
@@ -95,7 +114,7 @@ export default function ChatPage(){
                 <div style={{
                   fontSize:12, opacity:.65, margin: isAI ? '0 0 4px 6px' : '0 6px 4px 0',
                   textAlign: isAI ? 'left' : 'right'
-                }}>{isAI ? 'Genie' : (m.author || S.firstName || 'You')}</div>
+                }}>{isAI ? 'Genie' : (m.author || nameRef || 'You')}</div>
 
                 <div
                   style={{
@@ -118,7 +137,7 @@ export default function ChatPage(){
           value={input}
           onChange={e=>setInput(e.target.value)}
           onKeyDown={onKey}
-          placeholder={`Speak to your Genie, ${S.firstName || 'Friend'}…`}  // ← personalize placeholder
+          placeholder={`Speak to your Genie, ${nameRef || 'Friend'}…`}
           style={{flex:1, padding:'12px 14px', borderRadius:12, border:'1px solid rgba(0,0,0,0.15)'}}
         />
         <button onClick={send} style={{ padding:'12px 16px', borderRadius:14, border:0, background:'#ffd600', fontWeight:900 }}>
