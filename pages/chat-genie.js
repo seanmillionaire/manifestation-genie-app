@@ -2,42 +2,61 @@
 import { useEffect, useRef, useState } from 'react'
 import Head from 'next/head'
 import { get } from '../src/flowState'
-import userName from '../src/userName'
+
+// Read first name from flowState, then localStorage (fast), else "Friend"
+function getFirstNameCached() {
+  if (typeof window === 'undefined') return get().firstName || 'Friend'
+  return get().firstName || localStorage.getItem('mg_first_name') || 'Friend'
+}
 
 export default function ChatGenie() {
   const [msgs, setMsgs] = useState([])   // {author:'User'|'Genie', text, key}
   const [input, setInput] = useState('')
   const [thinking, setThinking] = useState(false)
-  const [name, setName] = useState(get().firstName || 'Friend')
+  const [name, setName] = useState(getFirstNameCached())
   const listRef = useRef(null)
 
   useEffect(() => { listRef.current?.scrollTo(0, 1e9) }, [msgs, thinking])
 
-  // 🔹 Ensure name appears after Supabase hydration
+  // Ensure the name arrives from Supabase and keep it in sync
   useEffect(() => {
-    (async () => {
-      if (typeof window === 'undefined') return
-      const cur = get()
-      if (!cur.firstName || cur.firstName === 'Friend') {
-        try {
-          const m = await import('../src/userName')
+    let alive = true
+    ;(async () => {
+      try {
+        if (!name || name === 'Friend') {
+          const m = await import('../src/userName') // { hydrateFirstNameFromSupabase }
           await m.hydrateFirstNameFromSupabase()
-        } catch {}
-      }
-      setName(get().firstName || 'Friend')   // refresh local name
+        }
+      } catch {}
+      if (alive) setName(getFirstNameCached())
     })()
-  }, [])
+
+    // If another tab updates 'mg_first_name', reflect it here
+    const onStorage = e => { if (e.key === 'mg_first_name') setName(e.newValue || 'Friend') }
+    if (typeof window !== 'undefined') window.addEventListener('storage', onStorage)
+    return () => {
+      alive = false
+      if (typeof window !== 'undefined') window.removeEventListener('storage', onStorage)
+    }
+  }, []) // run once on mount
 
   function key() { return Math.random().toString(36).slice(2) }
   function push(author, text) { setMsgs(m => [...m, { author, text, key: key() }]) }
 
   async function callApi(text) {
     const S = get()
+    const realName = name || getFirstNameCached()
     const r = await fetch('/api/chat', {
       method:'POST',
       headers:{'Content-Type':'application/json'},
       body: JSON.stringify({
-        userName: S.firstName || null,                         // ← pass the name
+        userName: realName || null, // ← send your name to the Genie
+        context: {
+          wish: S.currentWish?.wish || null,
+          block: S.currentWish?.block || null,
+          micro: S.currentWish?.micro || null,
+          vibe: S.vibe || null
+        },
         messages: msgs.map(m => ({
           role: m.author === 'Genie' ? 'assistant' : 'user',
           content: m.text
@@ -53,7 +72,7 @@ export default function ChatGenie() {
   async function send() {
     const text = (input || '').trim()
     if (!text || thinking) return
-    push('User', text)
+    push('User', text) // label stays 'User'; UI shows your name below
     setInput('')
     setThinking(true)
     try {
@@ -72,7 +91,7 @@ export default function ChatGenie() {
       <Head><title>Genie Chat</title></Head>
       <main style={{ width:'min(900px, 94vw)', margin:'30px auto' }}>
         <h1 style={{ fontSize:28, fontWeight:900, margin:'0 0 12px' }}>
-          Genie Chat, {name}
+          Genie Chat, {name || 'Friend'}
         </h1>
 
         <div ref={listRef} style={{
@@ -105,7 +124,7 @@ export default function ChatGenie() {
             value={input}
             onChange={e=>setInput(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }}
-            placeholder={`Speak to your Genie, ${name}…`}   // ← personalize placeholder
+            placeholder={`Speak to your Genie, ${name || 'Friend'}…`}
             style={{flex:1, padding:'12px 14px', borderRadius:12, border:'1px solid rgba(0,0,0,0.15)'}}
           />
           <button
