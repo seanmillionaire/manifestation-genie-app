@@ -7,33 +7,57 @@ export async function hydrateFirstNameFromSupabase() {
   const user = session?.user
   if (!user) return null
 
-  const { data: row } = await supabase
-    .from('profiles')
-    .select('first_name, full_name, display_name')
-    .eq('id', user.id)
-    .maybeSingle()
+  // Read profile
+  let row = null
+  try {
+    const { data } = await supabase
+      .from('profiles')
+      .select('first_name, full_name, display_name')
+      .eq('id', user.id)
+      .maybeSingle()
+    row = data || null
+  } catch {}
 
-  const candidates = [
-    row?.first_name,
-    firstFrom(row?.full_name),
-    firstFrom(row?.display_name),
-    user.user_metadata?.given_name,
-    firstFrom(user.user_metadata?.full_name),
-    firstFrom(user.user_metadata?.name),
-  ].filter(Boolean)
+  // Pick a real first name (ignore handles)
+  const first = pickFirstName(row, user) || 'Friend'
 
-  let first = candidates.find(isLikelyFirstName) || null
-  if (!first) {
-    const prefix = (user.email || '').split('@')[0]
-    if (isLikelyFirstName(prefix)) first = prefix
-  }
-
-  first = titleCase(first || 'Friend')
+  // Update app state
   set({ firstName: first })
-  try { localStorage.setItem('mg_first_name', first) } catch {}
+
+  // Only cache if it’s a real name (never persist "Friend")
+  try {
+    if (first && first !== 'Friend') localStorage.setItem('mg_first_name', first)
+  } catch {}
+
   return first
 }
 
-function firstFrom(s){ return (s||'').trim().split(/\s+/)[0] || null }
-function isLikelyFirstName(s){ return !!s && !/[0-9_]/.test(s) && !String(s).includes('@') && String(s).trim().length >= 2 }
+export function pickFirstName(row, user) {
+  const m = user?.user_metadata || {}
+  const cands = [
+    row?.first_name,
+    firstFrom(row?.full_name),
+    firstFrom(row?.display_name),
+    m.given_name,
+    firstFrom(m.full_name),
+    firstFrom(m.name),
+  ].filter(Boolean)
+
+  let first = cands.find(isLikelyFirstName) || null
+  if (!first) {
+    const prefix = (user?.email || '').split('@')[0]
+    if (isLikelyFirstName(prefix)) first = prefix
+  }
+  return first ? titleCase(first) : null
+}
+
+function firstFrom(s){ if(!s) return null; return String(s).trim().split(/\s+/)[0] || null }
+function isLikelyFirstName(s){
+  if(!s) return false
+  const t = String(s).trim()
+  if (t.length < 2) return false
+  if (/[0-9_]/.test(t)) return false
+  if (t.includes('@')) return false
+  return true
+}
 function titleCase(s){ return String(s).replace(/\b\w/g, c => c.toUpperCase()) }
