@@ -3,7 +3,6 @@ import { useEffect, useRef, useState } from 'react'
 import Head from 'next/head'
 import { get } from '../src/flowState'
 
-// Read first name from flowState, then localStorage (fast), else "Friend"
 function getFirstNameCached() {
   if (typeof window === 'undefined') return get().firstName || 'Friend'
   return get().firstName || localStorage.getItem('mg_first_name') || 'Friend'
@@ -18,39 +17,39 @@ export default function ChatGenie() {
 
   useEffect(() => { listRef.current?.scrollTo(0, 1e9) }, [msgs, thinking])
 
-  // Ensure the name arrives from Supabase and keep it in sync
+  // 🔹 Hydrate from Supabase and avoid handles → updates UI when real first name arrives
   useEffect(() => {
     let alive = true
     ;(async () => {
       try {
-        if (!name || name === 'Friend') {
+        if (!name || name === 'Friend' || /[0-9_]/.test(name)) {
           const m = await import('../src/userName') // { hydrateFirstNameFromSupabase }
           await m.hydrateFirstNameFromSupabase()
         }
       } catch {}
       if (alive) setName(getFirstNameCached())
     })()
-
-    // If another tab updates 'mg_first_name', reflect it here
     const onStorage = e => { if (e.key === 'mg_first_name') setName(e.newValue || 'Friend') }
     if (typeof window !== 'undefined') window.addEventListener('storage', onStorage)
     return () => {
       alive = false
       if (typeof window !== 'undefined') window.removeEventListener('storage', onStorage)
     }
-  }, []) // run once on mount
+  }, []) // once on mount
 
   function key() { return Math.random().toString(36).slice(2) }
   function push(author, text) { setMsgs(m => [...m, { author, text, key: key() }]) }
 
   async function callApi(text) {
     const S = get()
-    const realName = name || getFirstNameCached()
+    const realName = getFirstNameCached()
     const r = await fetch('/api/chat', {
       method:'POST',
       headers:{'Content-Type':'application/json'},
       body: JSON.stringify({
-        userName: realName || null, // ← send your name to the Genie
+        // send multiple shapes so backend always finds it
+        userName: realName || null,
+        user: { firstName: realName || null, name: realName || null },
         context: {
           wish: S.currentWish?.wish || null,
           block: S.currentWish?.block || null,
@@ -72,7 +71,8 @@ export default function ChatGenie() {
   async function send() {
     const text = (input || '').trim()
     if (!text || thinking) return
-    push('User', text) // label stays 'User'; UI shows your name below
+    // Label user bubble with their first name
+    push(name || 'You', text)
     setInput('')
     setThinking(true)
     try {
