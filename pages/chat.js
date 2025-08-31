@@ -1,4 +1,5 @@
 // /pages/chat.js — Chat console only (free-flow replies via /api/chat)
+import { copy } from '../src/genieCopy';
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
 import { get, set, newId, normalizeMsg, pushThread, toPlainMessages } from '../src/flowState';
@@ -116,7 +117,7 @@ export default function ChatPage(){
           value={input}
           onChange={e=>setInput(e.target.value)}
           onKeyDown={onKey}
-          placeholder="Speak to your Genie…"
+          placeholder={copy.chat.prompt(get().firstName)}
           style={{flex:1, padding:'12px 14px', borderRadius:12, border:'1px solid rgba(0,0,0,0.15)'}}
         />
         <button onClick={send} style={{ padding:'12px 16px', borderRadius:14, border:0, background:'#ffd600', fontWeight:900 }}>
