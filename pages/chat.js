@@ -3,6 +3,11 @@ import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
 import { get, set, newId, normalizeMsg, pushThread, toPlainMessages } from '../src/flowState';
 import { supabase } from '../src/supabaseClient';
+import { loadAllIntoFlowState } from "@/src/persist";
+
+useEffect(() => {
+  loadAllIntoFlowState(); // pulls from Supabase → fills flowState
+}, []);
 
 function escapeHTML(s=''){ return s.replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
 function nl2br(s=''){ return s.replace(/\n/g, '<br/>'); }
