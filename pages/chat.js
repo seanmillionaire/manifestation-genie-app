@@ -1,4 +1,4 @@
-// /pages/chat.js — Chat console only (free-flow replies via /api/chat)
+// /pages/chat.js
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
 import { get, set, newId, normalizeMsg, pushThread, toPlainMessages } from '../src/flowState';
@@ -11,7 +11,7 @@ async function callGenie({ text, state }) {
     method:'POST',
     headers:{ 'Content-Type':'application/json' },
     body: JSON.stringify({
-      userName: state.firstName || null,
+      userName: state.firstName || null,     // ← send name to API too
       context: {
         wish: state.currentWish?.wish || null,
         block: state.currentWish?.block || null,
@@ -44,18 +44,34 @@ export default function ChatPage(){
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // 🔹 Ensure firstName updates after Supabase hydration (client-only)
+  useEffect(() => {
+    (async () => {
+      if (typeof window === 'undefined') return;
+      const cur = get();
+      if (!cur.firstName || cur.firstName === 'Friend') {
+        try {
+          const m = await import('../src/userName');           // lazy import (avoids SSR issues)
+          await m.hydrateFirstNameFromSupabase();
+          setS(get());                                         // re-read state → re-render with name
+        } catch {}
+      }
+    })();
+  }, []);
+
   const send = async () => {
     const text = (input || '').trim();
     if (!text) return;
 
-    // push user message
-    const userMsg = normalizeMsg({ id:newId(), role:'user', author:S.firstName || 'You', content: escapeHTML(text) }, S.firstName);
+    const userMsg = normalizeMsg(
+      { id:newId(), role:'user', author:S.firstName || 'You', content: escapeHTML(text) },
+      S.firstName
+    );
     const thread = [...S.thread, userMsg];
     set({ thread });
     setS(get());
     setInput('');
 
-    // get reply
     try {
       const reply = await callGenie({ text, state: get() });
       const ai = normalizeMsg({ role:'assistant', author:'Genie', content: nl2br(escapeHTML(reply)) }, S.firstName);
@@ -72,7 +88,10 @@ export default function ChatPage(){
 
   return (
     <div style={{ background:'#fff', border:'1px solid rgba(0,0,0,0.08)', borderRadius:18, padding:16 }}>
-      <h1 style={{fontSize:24, fontWeight:900, margin:'4px 0 8px'}}>Genie Chat</h1>
+      <h1 style={{fontSize:24, fontWeight:900, margin:'4px 0 8px'}}>
+        Genie Chat, {S.firstName || 'Friend'} {/* ← show name in UI */}
+      </h1>
+
       <div style={{
         minHeight:360, maxHeight:520, overflowY:'auto',
         border:'1px solid rgba(0,0,0,0.08)', borderRadius:12, padding:12, background:'#fafafa'
@@ -80,10 +99,7 @@ export default function ChatPage(){
         {(S.thread || []).map(m => {
           const isAI = m.role === 'assistant';
           return (
-            <div key={m.id} style={{
-              display:'flex', gap:8, margin:'8px 0',
-              flexDirection: isAI ? 'row' : 'row-reverse'
-            }}>
+            <div key={m.id} style={{ display:'flex', gap:8, margin:'8px 0', flexDirection: isAI ? 'row' : 'row-reverse' }}>
               <div style={{
                 width:30, height:30, borderRadius:'50%', background:'rgba(0,0,0,0.05)',
                 display:'flex', alignItems:'center', justifyContent:'center', fontSize:16
@@ -116,7 +132,7 @@ export default function ChatPage(){
           value={input}
           onChange={e=>setInput(e.target.value)}
           onKeyDown={onKey}
-          placeholder="Speak to your Genie…"
+          placeholder={`Speak to your Genie, ${S.firstName || 'Friend'}…`}  // ← personalize placeholder
           style={{flex:1, padding:'12px 14px', borderRadius:12, border:'1px solid rgba(0,0,0,0.15)'}}
         />
         <button onClick={send} style={{ padding:'12px 16px', borderRadius:14, border:0, background:'#ffd600', fontWeight:900 }}>
