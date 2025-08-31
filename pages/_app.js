@@ -4,21 +4,8 @@ import '../styles/light-theme.css'
 import Head from 'next/head'
 import Link from 'next/link'
 import { useRouter } from 'next/router'
-import { useEffect } from 'react';
-import { hydrateFirstNameFromSupabase } from '../src/userName';
-
-export default function App({ Component, pageProps }) {
-  useEffect(() => {
-    // Only hydrate if we don't already have a saved name
-    try {
-      const cached = localStorage.getItem('mg_first_name');
-      if (!cached || cached === 'Friend') hydrateFirstNameFromSupabase();
-    } catch { hydrateFirstNameFromSupabase(); }
-  }, []);
-  // ⬇️ keep your existing layout/header/footer; just ensure Component is rendered
-  return <Component {...pageProps} />
-}
-}
+import { useEffect } from 'react'
+import { hydrateFirstNameFromSupabase } from '../src/userName'
 
 const LOGO_SRC = 'https://storage.googleapis.com/mixo-sites/images/file-a7eebac5-6af9-4253-bc71-34c0d455a852.png'
 
@@ -101,6 +88,19 @@ function LogoHeader({ currentPath }) {
 
 export default function App({ Component, pageProps }) {
   const router = useRouter()
+
+  // 🔹 Hydrate firstName from Supabase → flowState/localStorage on client
+  useEffect(() => {
+    (async () => {
+      try {
+        const cached = localStorage.getItem('mg_first_name')
+        if (!cached || cached === 'Friend') await hydrateFirstNameFromSupabase()
+      } catch {
+        await hydrateFirstNameFromSupabase()
+      }
+    })()
+  }, [])
+
   return (
     <>
       <Head>
