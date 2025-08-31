@@ -50,7 +50,7 @@ export default function ChatGenie() {
   return (
     <>
       <Head>
-        <title>Manifestation Genie</title>
+        <title>Tap the lamp below to summon the Genie...</title>
         <meta name="viewport" content="width=device-width, initial-scale=1" />
       </Head>
 
