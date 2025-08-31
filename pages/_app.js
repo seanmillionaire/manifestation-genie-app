@@ -19,7 +19,7 @@ const navLinks = [
   { href: '/chat-genie', label: 'Chat V2' },
   { href: '/vibe', label: 'Vibe' },
   { href: '/profile', label: 'Profile' },
-  { href: '/flow', label: 'Win Tracker' }
+  { href: '/flow', label: 'Flow' }
 ]
 
 function NavLink({ href, label, isActive }) {
