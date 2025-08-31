@@ -2,22 +2,90 @@
 import '../styles/globals.css'
 import '../styles/light-theme.css'
 import Head from 'next/head'
+import Link from 'next/link'
+import { useRouter } from 'next/router'
 
 const LOGO_SRC = 'https://storage.googleapis.com/mixo-sites/images/file-a7eebac5-6af9-4253-bc71-34c0d455a852.png'
 
-function LogoHeader() {
+const navLinks = [
+  { href: '/', label: 'Home' },
+  { href: '/chat', label: 'Chat' },
+  { href: '/chat-genie', label: 'Chat V2' },
+  { href: '/vibe', label: 'Vibe' },
+  { href: '/profile', label: 'Profile' },
+  { href: '/win-tracker', label: 'Win Tracker' }
+]
+
+function NavLink({ href, label, isActive }) {
+  return (
+    <Link href={href} legacyBehavior>
+      <a
+        aria-current={isActive ? 'page' : undefined}
+        style={{
+          padding: '8px 12px',
+          borderRadius: 10,
+          fontWeight: isActive ? 800 : 600,
+          textDecoration: 'none',
+          border: isActive ? `1px solid var(--brand)` : '1px solid transparent',
+          background: isActive ? 'var(--soft)' : 'transparent',
+          color: 'var(--text)',
+          whiteSpace: 'nowrap'
+        }}
+      >
+        {label}
+      </a>
+    </Link>
+  )
+}
+
+function LogoHeader({ currentPath }) {
   return (
     <div style={{
-      width:'100%', display:'flex', alignItems:'center', justifyContent:'center',
-      padding:'14px 12px', borderBottom:'1px solid #e5e7eb', background:'#fff',
+      width:'100%',
+      borderBottom:'1px solid var(--border)',
+      background:'#fff',
       position:'sticky', top:0, zIndex:50
     }}>
-      <img src={LOGO_SRC} alt="Manifestation Genie" style={{height:36, width:'auto'}} />
+      <div style={{
+        width:'min(1100px, 94vw)',
+        margin:'0 auto',
+        display:'flex',
+        alignItems:'center',
+        gap:14,
+        padding:'10px 12px'
+      }}>
+        <img src={LOGO_SRC} alt="Manifestation Genie" style={{height:36, width:'auto'}} />
+
+        <nav
+          aria-label="Primary"
+          style={{
+            marginLeft:'auto',
+            display:'flex',
+            alignItems:'center',
+            gap:6,
+            overflowX:'auto',
+            padding:'4px 0'
+          }}
+        >
+          {navLinks.map(l => (
+            <NavLink
+              key={l.href}
+              href={l.href}
+              label={l.label}
+              isActive={
+                currentPath === l.href ||
+                (l.href !== '/' && currentPath.startsWith(l.href))
+              }
+            />
+          ))}
+        </nav>
+      </div>
     </div>
   )
 }
 
 export default function App({ Component, pageProps }) {
+  const router = useRouter()
   return (
     <>
       <Head>
@@ -72,7 +140,7 @@ export default function App({ Component, pageProps }) {
         `}</style>
       </Head>
       <div className="pageWrap">
-        <LogoHeader />
+        <LogoHeader currentPath={router.pathname} />
         <main>
           <Component {...pageProps} />
         </main>
