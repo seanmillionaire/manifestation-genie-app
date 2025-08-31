@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from 'react'
 import Head from 'next/head'
 import { get } from '../src/flowState'
-import useFirstName from '../src/useFirstName'
+import userName from '../src/userName'
 
 export default function ChatGenie() {
   const [msgs, setMsgs] = useState([])   // {author:'User'|'Genie', text, key}
