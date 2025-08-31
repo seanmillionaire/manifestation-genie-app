@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
 import { get, set, newId, normalizeMsg, pushThread, toPlainMessages } from '../src/flowState';
+import { supabase } from '../src/supabaseClient';
 
 function escapeHTML(s=''){ return s.replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
 function nl2br(s=''){ return s.replace(/\n/g, '<br/>'); }
@@ -34,20 +35,6 @@ export default function ChatPage(){
   const [input, setInput] = useState('');
   const endRef = useRef(null);
 
-  // 🔒 Lock the first valid name we had at first paint
-  const nameRef = useRef(null);
-  useEffect(() => {
-    const cur = get();
-    const cached = typeof window !== 'undefined' ? localStorage.getItem('mg_first_name') : null;
-    nameRef.current = cur.firstName || cached || 'Friend';
-    // push it into flowState so API always gets the locked name
-    if (nameRef.current && nameRef.current !== 'Friend' && cur.firstName !== nameRef.current) {
-      set({ firstName: nameRef.current });
-      setS(get());
-    }
-    // never overwrite later with hydration on this page
-  }, []);
-
   useEffect(()=>{ endRef.current?.scrollIntoView({behavior:'smooth'}); }, [S.thread]);
 
   useEffect(()=>{
@@ -58,16 +45,59 @@ export default function ChatPage(){
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ❌ removed the “hydrate from Supabase” effect here (it caused Friend overwrite)
+  // 🔹 OLD-BUILD NAME HYDRATION (exact logic)
+  // profiles.full_name → auth metadata (full_name/name/given_name) → email prefix
+  // writes to localStorage + flowState, then re-renders
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        const user = session?.user;
+        if (!alive || !user) return;
+
+        let fn = null;
+
+        // profiles.full_name (first token)
+        try {
+          const { data: p } = await supabase
+            .from('profiles')
+            .select('full_name')
+            .eq('id', user.id)
+            .maybeSingle();
+          if (p?.full_name) fn = String(p.full_name).trim().split(' ')[0];
+        } catch {}
+
+        // metadata fallbacks
+        if (!fn) {
+          const meta = user.user_metadata || {};
+          fn =
+            (meta.full_name?.trim().split(' ')[0]) ||
+            (meta.name?.trim().split(' ')[0]) ||
+            meta.given_name ||
+            (user.email || '').split('@')[0] ||
+            null;
+        }
+
+        if (alive && fn) {
+          try { localStorage.setItem('mg_first_name', fn); } catch {}
+          set({ firstName: fn });         // push into global flow state
+          setS(get());                    // re-render with name
+        }
+      } catch {}
+    })();
+    return () => { alive = false; };
+  }, []);
+
+  // ❌ IMPORTANT: no other name hydrator on this page (that’s what flipped to "Friend")
 
   const send = async () => {
     const text = (input || '').trim();
     if (!text) return;
 
-    // push user message, labeled with locked name
     const userMsg = normalizeMsg(
-      { id:newId(), role:'user', author:nameRef.current || 'You', content: escapeHTML(text) },
-      nameRef.current
+      { id:newId(), role:'user', author:S.firstName || 'You', content: escapeHTML(text) },
+      S.firstName
     );
     const thread = [...(S.thread || []), userMsg];
     set({ thread });
@@ -75,14 +105,12 @@ export default function ChatPage(){
     setInput('');
 
     try {
-      // use locked name in API state
-      const stateForApi = { ...get(), firstName: nameRef.current };
-      const reply = await callGenie({ text, state: stateForApi });
-      const ai = normalizeMsg({ role:'assistant', author:'Genie', content: nl2br(escapeHTML(reply)) }, nameRef.current);
+      const reply = await callGenie({ text, state: get() });
+      const ai = normalizeMsg({ role:'assistant', author:'Genie', content: nl2br(escapeHTML(reply)) }, S.firstName);
       pushThread(ai);
       setS(get());
     } catch {
-      const ai = normalizeMsg({ role:'assistant', author:'Genie', content: 'The lamp flickered. Try again.' }, nameRef.current);
+      const ai = normalizeMsg({ role:'assistant', author:'Genie', content: 'The lamp flickered. Try again.' }, S.firstName);
       pushThread(ai);
       setS(get());
     }
@@ -93,7 +121,7 @@ export default function ChatPage(){
   return (
     <div style={{ background:'#fff', border:'1px solid rgba(0,0,0,0.08)', borderRadius:18, padding:16 }}>
       <h1 style={{fontSize:24, fontWeight:900, margin:'4px 0 8px'}}>
-        Genie Chat, {nameRef.current || 'Friend'}
+        Genie Chat, {S.firstName || 'Friend'}
       </h1>
 
       <div style={{
@@ -113,7 +141,7 @@ export default function ChatPage(){
                 <div style={{
                   fontSize:12, opacity:.65, margin: isAI ? '0 0 4px 6px' : '0 6px 4px 0',
                   textAlign: isAI ? 'left' : 'right'
-                }}>{isAI ? 'Genie' : (m.author || nameRef.current || 'You')}</div>
+                }}>{isAI ? 'Genie' : (m.author || S.firstName || 'You')}</div>
 
                 <div
                   style={{
@@ -136,7 +164,7 @@ export default function ChatPage(){
           value={input}
           onChange={e=>setInput(e.target.value)}
           onKeyDown={onKey}
-          placeholder={`Speak to your Genie, ${nameRef.current || 'Friend'}…`}
+          placeholder={`Speak to your Genie, ${S.firstName || 'Friend'}…`}
           style={{flex:1, padding:'12px 14px', borderRadius:12, border:'1px solid rgba(0,0,0,0.15)'}}
         />
         <button onClick={send} style={{ padding:'12px 16px', borderRadius:14, border:0, background:'#ffd600', fontWeight:900 }}>
