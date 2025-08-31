@@ -5,6 +5,10 @@ import Head from 'next/head'
 import Link from 'next/link'
 import { useRouter } from 'next/router'
 import { useEffect } from 'react'
+
+// If you DID set up the "@" alias, keep this line.
+// If not, change to:  import { loadAllIntoFlowState } from '../src/persist'
+import { loadAllIntoFlowState } from '../src/persist'
 import { hydrateFirstNameFromSupabase } from '../src/userName'
 
 const LOGO_SRC = 'https://storage.googleapis.com/mixo-sites/images/file-a7eebac5-6af9-4253-bc71-34c0d455a852.png'
@@ -89,16 +93,20 @@ function LogoHeader({ currentPath }) {
 export default function App({ Component, pageProps }) {
   const router = useRouter()
 
-  // 🔹 Hydrate firstName from Supabase → flowState/localStorage on client
+  // 🔑 Load saved data from Supabase → flowState (client-side only)
   useEffect(() => {
-    (async () => {
+    // Pull everything (firstName, vibe, wish, agreement) into the shared store
+    loadAllIntoFlowState().then(() => {
+      // Safety net: if name is still missing, try the name hydrator Chat uses
       try {
         const cached = localStorage.getItem('mg_first_name')
-        if (!cached || cached === 'Friend') await hydrateFirstNameFromSupabase()
+        if (!cached || cached === 'Friend') {
+          hydrateFirstNameFromSupabase?.()
+        }
       } catch {
-        await hydrateFirstNameFromSupabase()
+        hydrateFirstNameFromSupabase?.()
       }
-    })()
+    })
   }, [])
 
   return (
@@ -111,46 +119,17 @@ export default function App({ Component, pageProps }) {
         />
         <style>{`
           :root{
-            --bg:#ffffff;
-            --card:#ffffff;
-            --soft:#f8fafc;
-            --text:#111111;
-            --muted:#334155;
-            --brand:#6633CC;
-            --gold:#FFD600;
-            --green:#16a34a;
-            --purple:#6633CC;
-            --border:#e5e7eb;
+            --bg:#ffffff; --card:#ffffff; --soft:#f8fafc; --text:#111111; --muted:#334155;
+            --brand:#6633CC; --gold:#FFD600; --green:#16a34a; --purple:#6633CC; --border:#e5e7eb;
           }
-          html,body{
-            margin:0;
-            padding:0;
-            background:var(--bg);
-            color:var(--text);
-            font-family:Poppins,system-ui,Arial;
-            min-height:100%;
-          }
-          *{box-sizing:border-box}
-          .pageWrap{
-            display:flex;
-            flex-direction:column;
-            min-height:100vh;
-          }
+          html,body{ margin:0; padding:0; background:var(--bg); color:var(--text);
+            font-family:Poppins,system-ui,Arial; min-height:100%; }
+          *{ box-sizing:border-box }
+          .pageWrap{ display:flex; flex-direction:column; min-height:100vh; }
           main{ flex:1; }
-          footer{
-            text-align:center;
-            padding:20px 12px;
-            font-size:14px;
-            color:var(--muted);
-            border-top:1px solid var(--border);
-            line-height:1.6;
-            background:#fff;
-          }
-          footer a{
-            color:#0b67ff;
-            text-decoration:none;
-            font-weight:600;
-          }
+          footer{ text-align:center; padding:20px 12px; font-size:14px; color:var(--muted);
+            border-top:1px solid var(--border); line-height:1.6; background:#fff; }
+          footer a{ color:#0b67ff; text-decoration:none; font-weight:600; }
           footer a:hover{ text-decoration:underline; }
         `}</style>
       </Head>
