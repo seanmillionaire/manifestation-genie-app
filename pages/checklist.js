@@ -1,8 +1,6 @@
-
 // /pages/checklist.js
 import { useRouter } from 'next/router';
 import { get, set } from '../src/flowState';
-import { copy } from '../src/genieCopy';
 
 const styles = {
   card: { background:'#fff', border:'1px solid rgba(0,0,0,0.08)', borderRadius:18, padding:24 },
@@ -23,34 +21,32 @@ export default function ChecklistPage(){
   const enterChat = () => { set({ phase:'chat' }); router.push('/chat'); };
   const skip = () => { set({ phase:'chat' }); router.push('/chat'); };
 
-  const labels = copy.checklist.labels();
-
   return (
     <div style={styles.card}>
-      <h1 style={{fontSize:28, fontWeight:900, margin:0}}>Checklist</h1>
-      <p style={{whiteSpace:'pre-line', margin:'8px 0 10px'}}>{copy.checklist.caught(S?.currentWish?.wish || '')}</p>
-      <p style={{margin:'8px 0 10px'}}>{copy.checklist.pathLead()}</p>
+      <h1 style={{fontSize:26, fontWeight:900, margin:0}}>Do this now</h1>
+      <p style={{opacity:.85}}>For: <b>{S.currentWish?.wish || 'your wish'}</b></p>
 
-      <ul style={{listStyle:'none', padding:0, margin:'12px 0'}}>
-        {steps.map(s => (
+      <ul style={{listStyle:'none', paddingLeft:0, margin:'8px 0 12px'}}>
+        {steps.map((s,i)=>(
           <li key={s.id} style={styles.li}>
-            <label style={{display:'flex', alignItems:'center', gap:10}}>
-              <input type="checkbox" checked={!!s.done} onChange={()=>toggle(s.id)} />
-              <span>{s.text}</span>
+            <label style={{display:'flex', gap:10, alignItems:'center', cursor:'pointer'}}>
+              <input type="checkbox" checked={!!s.done} onChange={()=>toggle(s.id)} style={{width:18, height:18, accentColor:'#ffd600'}} />
+              <span>{i+1}. {s.text}</span>
             </label>
           </li>
         ))}
       </ul>
 
-      <p style={{opacity:.7}}>{copy.checklist.doneNote()}</p>
-
-      <div style={{display:'flex', gap:12, marginTop:8}}>
+      <div style={{display:'flex', gap:10, marginTop:8, flexWrap:'wrap'}}>
         <button
           onClick={enterChat}
           disabled={!allDone}
-          style={{ padding:'12px 16px', borderRadius:14, border:0, background: allDone ? '#ffd600' : '#ffe680', fontWeight:820, cursor: allDone ? 'pointer' : 'not-allowed' }}
+          style={{
+            padding:'12px 16px', borderRadius:14, border:0,
+            background: allDone ? '#ffd600' : '#ffe680', fontWeight:900, cursor: allDone ? 'pointer' : 'not-allowed'
+          }}
         >
-          {copy.checklist.toChat()} →
+          All done → Enter chat
         </button>
         <button
           onClick={skip}
