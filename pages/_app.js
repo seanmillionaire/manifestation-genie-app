@@ -8,7 +8,7 @@ import { useRouter } from 'next/router'
 const LOGO_SRC = 'https://storage.googleapis.com/mixo-sites/images/file-a7eebac5-6af9-4253-bc71-34c0d455a852.png'
 
 const navLinks = [
-  { href: '/', label: 'Home' },
+  { href: '/flow', label: 'Home' },
   { href: '/chat', label: 'Chat' },
   { href: '/chat-genie', label: 'Chat V2' },
   { href: '/vibe', label: 'Vibe' },
