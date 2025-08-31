@@ -1,80 +1,122 @@
-// pages/api/chat.js
+// /pages/api/chat.js
 import OpenAI from "openai";
-import { buildSystemPrompt, modelConfig } from "../../src/genieBrain";
 
-const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
 
-function coerceString(x) {
-  return (typeof x === "string" ? x : x?.toString?.() || "").slice(0, 4000).trim();
+// pick a default model or use env override
+const MODEL = process.env.OPENAI_MODEL || "gpt-4o-mini";
+
+/** Turn any response into a single line */
+function oneLine(s = "") {
+  return String(s)
+    .replace(/\s+/g, " ")
+    .replace(/\s*[\r\n]+\s*/g, " ")
+    .trim();
 }
 
-function mapClientMessages(messages = []) {
-  // Accepts various shapes from /pages/chat.js and /pages/chat-genie.js
-  return (Array.isArray(messages) ? messages : [])
-    .map(m => {
-      const roleRaw = m.role || m.author || "user";
-      const role = /assistant|genie/i.test(roleRaw) ? "assistant" : "user";
-      const content = coerceString(m.content ?? m.text ?? "");
-      return content ? { role, content } : null;
-    })
-    .filter(Boolean);
+/** Count how many user messages exist in the transcript */
+function countUserMessages(messages = []) {
+  return messages.filter((m) => m && m.role === "user" && m.content?.trim()).length;
 }
 
-function pickLastUserText({ body }) {
-  const { messages = [], input = "", prompt = "" } = body || {};
-  const convo = mapClientMessages(messages);
-  if (convo.length) {
-    const last = convo[convo.length - 1];
-    if (last.role === "user" && last.content) return last.content;
+/** Infer genie from referer if not provided */
+function inferGenieFromReferer(req) {
+  const ref = (req.headers?.referer || "").toLowerCase();
+  if (ref.includes("/chat-genie")) return "genie2";
+  if (ref.includes("/chat")) return "genie1";
+  return "genie2"; // safe default
+}
+
+/** Build rail-guarded system prompt per genie */
+function buildSystemPrompt(genie) {
+  if (genie === "genie1") {
+    // Blunt “sniper” Genie for /chat
+    return oneLine(`
+      You are Genie One: a blunt, direct, surgical manifestation coach.
+      Speak in a SINGLE short line ONLY. No bullets. No paragraphs.
+      Start the relationship by asking: "What do you want to manifest?" if it's the first turn.
+      Each turn: (1) mirror the user's goal back in fewer, sharper words, (2) immediately ask how they FEEL about it.
+      Always include a short, targeted next-step question if needed, but keep it ONE line total.
+      You are an expert in advanced manifestation: Law of Mentalism, cosmology, Hermetic principles, identity-based change.
+      Use those frameworks subtly and only when they sharpen the next step; do not lecture.
+      No fluff. No motivational cliches. No hedging. No emojis.
+      Refuse unsafe or harmful requests and redirect to safe, growth-oriented options.
+    `);
   }
-  return coerceString(input || prompt);
+
+  // Genie Two: default, your current tone (kept lightweight)
+  return oneLine(`
+    You are Genie Two: helpful, warm, concise manifestation guide.
+    Keep replies brief (1–2 short sentences max). Be practical and supportive.
+    Refuse unsafe or harmful requests and offer safer alternatives.
+  `);
 }
 
 export default async function handler(req, res) {
+  if (req.method !== "POST") {
+    res.setHeader("Allow", ["POST"]);
+    return res.status(405).json({ error: "Method not allowed" });
+  }
+
   try {
-    if (req.method !== "POST") {
-      return res.status(405).json({ ok: false, error: "Method not allowed" });
+    const { userName = null, context = {}, messages = [], genie: genieOverride = null } = req.body || {};
+
+    // determine which genie to use
+    const genie = genieOverride || inferGenieFromReferer(req);
+    const systemPrompt = buildSystemPrompt(genie);
+
+    // If first user turn and Genie1, force the opener
+    const userTurns = countUserMessages(messages);
+    if (genie === "genie1" && userTurns === 0) {
+      const opener = "What do you want to manifest?";
+      return res.status(200).json({ reply: opener });
     }
 
-    const userName = req.body?.userName || req.body?.user?.firstName || null;
-    const lastUserUtterance = pickLastUserText({ body: req.body });
-    const convo = mapClientMessages(req.body?.messages);
+    // Build full message array
+    const sys = { role: "system", content: systemPrompt };
 
-    // Build rails
-    const system = buildSystemPrompt({ user: { firstName: userName || null } });
+    // Optional: light context priming (not pre-programmed responses, just facts)
+    const nameLine = userName ? `User's name is ${userName}.` : "";
+    const ctxParts = [];
+    if (context?.vibe) ctxParts.push(`Vibe: ${context.vibe}`);
+    if (context?.wish) ctxParts.push(`Wish: ${context.wish}`);
+    if (context?.block) ctxParts.push(`Block: ${context.block}`);
+    if (context?.micro) ctxParts.push(`Micro: ${context.micro}`);
+    const contextNote = ctxParts.length ? `Context → ${ctxParts.join(" | ")}` : "";
+    const ctx = (nameLine || contextNote) ? [{ role: "system", content: oneLine(`${nameLine} ${contextNote}`) }] : [];
 
-    // If empty input, nudge lightly (still 200 to keep UI flow)
-    if (!lastUserUtterance) {
-      const msg = "Say one clear wish or outcome you want to work on.";
-      return res.status(200).json({ ok: true, reply: msg, text: msg, bubbles: [msg] });
-    }
-
-    // Call OpenAI (free-flow)
-    const completion = await client.chat.completions.create({
-      model: modelConfig.model,
-      temperature: modelConfig.temperature,
-      top_p: modelConfig.top_p,
-      presence_penalty: modelConfig.presence_penalty,
-      frequency_penalty: modelConfig.frequency_penalty,
-      max_tokens: modelConfig.max_output_tokens,
-      messages: [
-        { role: "system", content: system },
-        ...convo,
-        // Ensure the latest user turn is present
-        ...(convo.length && convo[convo.length - 1].role === "user"
-          ? []
-          : [{ role: "user", content: lastUserUtterance }])
-      ]
+    // Call OpenAI
+    const completion = await openai.chat.completions.create({
+      model: MODEL,
+      messages: [sys, ...ctx, ...messages],
+      temperature: genie === "genie1" ? 0.4 : 0.7,
+      max_tokens: genie === "genie1" ? 80 : 140, // keep it tight; Genie1 is single-line
     });
 
-    const text = coerceString(completion.choices?.[0]?.message?.content) || "As you wish. What’s the outcome you want?";
-    return res.status(200).json({ ok: true, reply: text, text, bubbles: [text] });
+    let reply = completion?.choices?.[0]?.message?.content || "";
+    reply = oneLine(reply); // enforce single line
 
+    // Extra rail: for Genie1, ensure it ends with an explicit feeling check
+    if (genie === "genie1" && !/\bfeel\b/i.test(reply)) {
+      // tack on a short feeling probe if missing
+      reply = oneLine(`${reply}. How do you feel about that?`);
+    }
+
+    // Safety: if somehow nothing comes back, provide a neutral, safe prompt
+    if (!reply) {
+      reply = genie === "genie1"
+        ? "What do you want to manifest?"
+        : "How can I help you today?";
+    }
+
+    return res.status(200).json({ reply, genie });
   } catch (err) {
-    console.error("api/chat error:", err?.message || err);
-
-    // Friendly fallback so the UI doesn’t crash
-    const fallback = "The lamp flickered. Try again with one clear wish.";
-    return res.status(200).json({ ok: false, reply: fallback, text: fallback, bubbles: [fallback] });
+    console.error("API /chat error:", err);
+    return res.status(200).json({
+      reply: "The lamp flickered. Try again.",
+      error: "chat_api_error",
+    });
   }
 }
