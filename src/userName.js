@@ -1,43 +1,40 @@
-// /src/useFirstName.js
-import { useEffect, useState } from 'react'
-import { get } from './flowState'
+// /src/userName.js
+import { supabase } from './supabaseClient'
+import { set } from './flowState'
 
-export default function useFirstName() {
-  // read from flowState/localStorage first (instant), hydrate next
-  const initial =
-    typeof window === 'undefined'
-      ? 'Friend'
-      : (get().firstName || localStorage.getItem('mg_first_name') || 'Friend')
+// Tries multiple places: profiles.full_name/name/first_name/last_name, user_metadata, then email prefix
+async function hydrateFirstNameFromSupabase() {
+  try {
+    const { data: { session } } = await supabase.auth.getSession()
+    const u = session?.user
+    if (!u) return null
 
-  const [firstName, setFirstName] = useState(initial)
+    const { data: row } = await supabase
+      .from('profiles')
+      .select('full_name, name, first_name, last_name')
+      .eq('id', u.id)
+      .maybeSingle()
 
-  useEffect(() => {
-    let alive = true
-    ;(async () => {
-      try {
-        // if we don’t have a real name yet, hydrate from Supabase
-        const cur = get().firstName
-        if (!cur || cur === 'Friend') {
-          const m = await import('./userName') // uses supabase, client-only
-          await m.hydrateFirstNameFromSupabase()
-        }
-        if (alive) {
-          const next = get().firstName || localStorage.getItem('mg_first_name') || 'Friend'
-          setFirstName(next)
-        }
-      } catch {}
-    })()
+    const raw =
+      row?.full_name ||
+      row?.name ||
+      [row?.first_name, row?.last_name].filter(Boolean).join(' ') ||
+      u.user_metadata?.full_name ||
+      u.user_metadata?.name ||
+      (u.email ? u.email.split('@')[0] : '') ||
+      'Friend'
 
-    // keep in sync if another tab updates localStorage
-    const onStorage = (e) => {
-      if (e.key === 'mg_first_name') setFirstName(e.newValue || 'Friend')
-    }
-    if (typeof window !== 'undefined') window.addEventListener('storage', onStorage)
-    return () => {
-      alive = false
-      if (typeof window !== 'undefined') window.removeEventListener('storage', onStorage)
-    }
-  }, [])
+    const first = (raw || '').trim().split(/\s+/)[0] || 'Friend'
 
-  return firstName
+    // Persist into app state + localStorage (read by pages instantly)
+    set({ firstName: first })
+    try { localStorage.setItem('mg_first_name', first) } catch {}
+
+    return first
+  } catch {
+    return null
+  }
 }
+
+export { hydrateFirstNameFromSupabase }
+export default hydrateFirstNameFromSupabase
