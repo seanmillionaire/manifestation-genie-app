@@ -99,7 +99,7 @@ export default function HomeScreen() {
   return (
     <main style={{ width: "min(900px, 94vw)", margin: "30px auto" }}>
       <h1 style={{ fontSize: 28, fontWeight: 900, margin: "0 0 12px" }}>
-        Genie Chat, {firstName}
+        Welcome to the portal, {firstName} 🔮
       </h1>
 
       <p className="text-sm text-black/60 h-5" aria-live="polite">
