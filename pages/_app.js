@@ -1,4 +1,4 @@
-// /pages/_app.js
+// /pages/_app.js — minimal shell + sticky Buy button on every page
 import '../styles/globals.css'
 import '../styles/light-theme.css'
 import Head from 'next/head'
@@ -6,147 +6,86 @@ import Link from 'next/link'
 import { useRouter } from 'next/router'
 import { useEffect } from 'react'
 
-// If you DID set up the "@" alias, keep this line.
-// If not, change to:  import { loadAllIntoFlowState } from '../src/persist'
+// Load flow state + first name early so pages can use them
 import { loadAllIntoFlowState } from '../src/persist'
 import { hydrateFirstNameFromSupabase } from '../src/userName'
 
-const LOGO_SRC = 'https://storage.googleapis.com/mixo-sites/images/file-a7eebac5-6af9-4253-bc71-34c0d455a852.png'
+const PAY_URL = process.env.NEXT_PUBLIC_PAY_URL || process.env.NEXT_PUBLIC_PAYHIP_URL || 'https://hypnoticmeditations.ai'
 
-const navLinks = [
-  { href: '/home', label: 'Home' },
-  { href: '/chat', label: 'Chat' },
-  { href: '/chat-genie', label: 'Chat V2' },
-  { href: '/vibe', label: 'Vibe' },
-  { href: '/profile', label: 'Profile' },
-  { href: '/flow', label: 'Flow' }
-]
-
-function NavLink({ href, label, isActive }) {
+function StickyPayBar(){
+  if (!PAY_URL) return null
   return (
-    <Link href={href} legacyBehavior>
+    <div
+      style={{
+        position:'fixed', left:'50%', transform:'translateX(-50%)',
+        bottom:12, width:'min(900px, 94vw)', zIndex:60,
+        display:'flex', justifyContent:'space-between', alignItems:'center',
+        gap:12, background:'#0f172a', color:'#fff', padding:'10px 12px',
+        border:'1px solid rgba(255,255,255,0.12)', borderRadius:14,
+        boxShadow:'0 20px 50px rgba(0,0,0,0.35)'
+      }}
+      role="region"
+      aria-label="Buy bar"
+    >
+      <div style={{fontWeight:800, fontSize:14}}>7‑Minute Reset ready</div>
       <a
-        aria-current={isActive ? 'page' : undefined}
-        style={{
-          padding: '8px 12px',
-          borderRadius: 10,
-          fontWeight: isActive ? 800 : 600,
-          textDecoration: 'none',
-          border: isActive ? `1px solid var(--brand)` : '1px solid transparent',
-          background: isActive ? 'var(--soft)' : 'transparent',
-          color: 'var(--text)',
-          whiteSpace: 'nowrap'
-        }}
+        href={PAY_URL}
+        target="_blank"
+        rel="noopener noreferrer"
+        style={{background:'#ffd600', color:'#000', fontWeight:900, borderRadius:12, padding:'10px 14px', textDecoration:'none'}}
       >
-        {label}
+        Get the Reset
       </a>
-    </Link>
-  )
-}
-
-function LogoHeader({ currentPath }) {
-  return (
-    <div style={{
-      width:'100%',
-      borderBottom:'1px solid var(--border)',
-      background:'#fff',
-      position:'sticky', top:0, zIndex:50
-    }}>
-      <div style={{
-        width:'min(1100px, 94vw)',
-        margin:'0 auto',
-        display:'flex',
-        alignItems:'center',
-        gap:14,
-        padding:'10px 12px'
-      }}>
-        <img src={LOGO_SRC} alt="Manifestation Genie" style={{height:36, width:'auto'}} />
-
-        <nav
-          aria-label="Primary"
-          style={{
-            marginLeft:'auto',
-            display:'flex',
-            alignItems:'center',
-            gap:6,
-            overflowX:'auto',
-            padding:'4px 0'
-          }}
-        >
-          {navLinks.map(l => (
-            <NavLink
-              key={l.href}
-              href={l.href}
-              label={l.label}
-              isActive={
-                currentPath === l.href ||
-                (l.href !== '/' && currentPath.startsWith(l.href))
-              }
-            />
-          ))}
-        </nav>
-      </div>
     </div>
   )
 }
 
-export default function App({ Component, pageProps }) {
+export default function App({ Component, pageProps }){
   const router = useRouter()
 
-  // 🔑 Load saved data from Supabase → flowState (client-side only)
   useEffect(() => {
-    // Pull everything (firstName, vibe, wish, agreement) into the shared store
-    loadAllIntoFlowState().then(() => {
-      // Safety net: if name is still missing, try the name hydrator Chat uses
-      try {
-        const cached = localStorage.getItem('mg_first_name')
-        if (!cached || cached === 'Friend') {
-          hydrateFirstNameFromSupabase?.()
-        }
-      } catch {
-        hydrateFirstNameFromSupabase?.()
-      }
-    })
+    // hydrate local flow + first name
+    try { loadAllIntoFlowState() } catch {}
+    try { hydrateFirstNameFromSupabase() } catch {}
   }, [])
 
   return (
     <>
       <Head>
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
-        <link
-          href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap"
-          rel="stylesheet"
-        />
-        <style>{`
-          :root{
-            --bg:#ffffff; --card:#ffffff; --soft:#f8fafc; --text:#111111; --muted:#334155;
-            --brand:#6633CC; --gold:#FFD600; --green:#16a34a; --purple:#6633CC; --border:#e5e7eb;
-          }
-          html,body{ margin:0; padding:0; background:var(--bg); color:var(--text);
-            font-family:Poppins,system-ui,Arial; min-height:100%; }
-          *{ box-sizing:border-box }
-          .pageWrap{ display:flex; flex-direction:column; min-height:100vh; }
-          main{ flex:1; }
-          footer{ text-align:center; padding:20px 12px; font-size:14px; color:var(--muted);
-            border-top:1px solid var(--border); line-height:1.6; background:#fff; }
-          footer a{ color:#0b67ff; text-decoration:none; font-weight:600; }
-          footer a:hover{ text-decoration:underline; }
-        `}</style>
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Manifestation Genie</title>
       </Head>
-      <div className="pageWrap">
-        <LogoHeader currentPath={router.pathname} />
-        <main>
+
+      <div style={{minHeight:'100vh', display:'flex', flexDirection:'column'}}>
+        <header style={{borderBottom:'1px solid rgba(0,0,0,0.08)', background:'#fff'}}>
+          <div style={{maxWidth:980, margin:'0 auto', padding:'10px 14px', display:'flex', alignItems:'center', justifyContent:'space-between'}}>
+            <Link href="/home" style={{display:'inline-flex', alignItems:'center', gap:10, textDecoration:'none'}}>
+              <img src="https://storage.googleapis.com/mixo-sites/images/file-a7eebac5-6af9-4253-bc71-34c0d455a852.png" alt="Genie" width="34" height="34" style={{borderRadius:6}} />
+              <strong style={{color:'#0f172a'}}>Manifestation Genie</strong>
+            </Link>
+            <nav style={{display:'flex', gap:14}}>
+              <Link href="/home">Home</Link>
+              <Link href="/vibe">Flow</Link>
+              <Link href="/chat">Chat</Link>
+            </nav>
+          </div>
+        </header>
+
+        <main style={{flex:1}}>
           <Component {...pageProps} />
         </main>
-        <footer>
-          <div>© {new Date().getFullYear()} Manifestation Genie. All rights reserved.</div>
-          <div>
-            Powered by{' '}
-            <a href="https://hypnoticmeditations.ai" target="_blank" rel="noopener noreferrer">
-              HypnoticMeditations.ai
-            </a>
+
+        <footer style={{borderTop:'1px solid rgba(0,0,0,0.08)', background:'#fff'}}>
+          <div style={{maxWidth:980, margin:'0 auto', padding:'14px', display:'flex', justifyContent:'space-between', alignItems:'center', fontSize:13, color:'#334155'}}>
+            <span>© {new Date().getFullYear()} Manifestation Genie</span>
+            <span style={{display:'flex', gap:12}}>
+              <a href="/legal" style={{textDecoration:'none'}}>Legal</a>
+              <a href="https://hypnoticmeditations.ai" target="_blank" rel="noopener noreferrer" style={{textDecoration:'none'}}>HypnoticMeditations.ai</a>
+            </span>
           </div>
         </footer>
+
+        <StickyPayBar />
       </div>
     </>
   )
