@@ -90,7 +90,7 @@ export default function ChecklistPage() {
               cursor: 'pointer'
             }}
           >
-            ✨ I’m ready → Enter chat
+            ✨ I’m ready → NEXT >>
           </button>
         </div>
       </section>
