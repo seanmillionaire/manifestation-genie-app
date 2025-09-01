@@ -1,9 +1,9 @@
-// /pages/chat.js — instant first reply + proof strip
+// /pages/chat.js — instant first reply + proof strip (no subscribe needed)
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
-import { get, set, subscribe, newId, normalizeMsg, pushThread, toPlainMessages } from '../src/flowState';
-import { supabase } from '../src/supabaseClient';
-import FomoFeed from '../components/FomoFeed'
+import { get, set, newId, normalizeMsg, pushThread, toPlainMessages } from '../src/flowState';
+import { hydrateFirstNameFromSupabase } from '../src/userName'; // 👈 add
+import FomoFeed from '../components/FomoFeed';
 
 function escapeHTML(s=''){ return s.replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'" :'&#39;'}[m])); }
 function nl2br(s=''){ return s.replace(/\n/g, '<br/>'); }
@@ -36,41 +36,57 @@ export default function ChatPage(){
   const [thinking, setThinking] = useState(false);
   const listRef = useRef(null);
 
-  // 🔁 subscribe so this page updates when firstName/thread change
-  useEffect(() => {
-    const unsub = subscribe((next) => {
-      if (
-        next?.firstName &&
-        next.firstName !== 'Friend' &&
-        Array.isArray(next.thread) &&
-        next.thread.length > 0 &&
-        next.thread[0].role === 'assistant' &&
-        /I’m here,\s*Friend\b/.test(next.thread[0].content || '')
-      ) {
-        const firstMsg = { ...next.thread[0] };
-        firstMsg.content = firstMsg.content.replace(/I’m here,\s*Friend\b/, `I’m here, ${next.firstName}`);
-        set({ thread: [firstMsg, ...next.thread.slice(1)] });
-        return;
-      }
-      setS(next);
-    });
-    return () => unsub?.();
-  }, []);
-
+  // 🌟 Hydrate name BEFORE creating the first assistant line
   useEffect(() => {
     const cur = get();
+
+    // guard rails: you already had these
     if (!cur.vibe) { router.replace('/vibe'); return; }
     if (!cur.currentWish) { router.replace('/flow'); return; }
 
-    if (!cur.thread || cur.thread.length === 0){
-      pushThread({
-        role:'assistant',
-        content: `The lamp glows… I’m here, ${cur.firstName || 'Friend'}.\nOne tiny move today beats a thousand tomorrows. What’s the snag we’ll clear right now?`
-      });
+    // 1) try cache
+    try {
+      const cached = localStorage.getItem('mg_first_name');
+      if (cached && cached.trim() && cached !== 'Friend') {
+        set({ firstName: cached.trim() });
+      }
+    } catch {}
+
+    // 2) if still missing, ask Supabase (this helper should NOT overwrite with "Friend")
+    (async () => {
+      const nameBefore = get().firstName;
+      if (!nameBefore || nameBefore === 'Friend') {
+        try {
+          const found = await hydrateFirstNameFromSupabase();
+          if (found && found !== 'Friend') {
+            set({ firstName: found });
+          }
+        } catch {}
+      }
+
+      // 3) now that we’ve done our best to know the name, create the first line if thread is empty
+      const after = get();
+      if (!after.thread || after.thread.length === 0){
+        pushThread({
+          role:'assistant',
+          content: `The lamp glows… I’m here, ${after.firstName || 'Friend'}.\nOne tiny move today beats a thousand tomorrows. What’s the snag we’ll clear right now?`
+        });
+      } else {
+        // If first line already exists and says Friend but we now know the name, patch it once.
+        const hasReal = after.firstName && after.firstName !== 'Friend';
+        const t0 = after.thread?.[0];
+        if (hasReal && t0?.role === 'assistant' && /I’m here,\s*Friend\b/.test(t0.content || '')) {
+          const fixed = { ...t0, content: t0.content.replace(/I’m here,\s*Friend\b/, `I’m here, ${after.firstName}`) };
+          set({ thread: [fixed, ...after.thread.slice(1)] });
+        }
+      }
+
+      // 4) reflect latest store to this component
       setS(get());
-    }
+    })();
   }, [router]);
 
+  // keep list scrolled
   useEffect(() => {
     const el = listRef.current;
     if (el) el.scrollTop = el.scrollHeight;
@@ -82,7 +98,7 @@ export default function ChatPage(){
     setInput('');
     setThinking(true);
 
-    pushThread({ role:'user', author: S.firstName || 'You', content: text });
+    pushThread({ role:'user', author: get().firstName || 'You', content: text });
     setS(get());
 
     try {
@@ -132,9 +148,6 @@ export default function ChatPage(){
                 </div>
               )
             })}
-            {thinking && (
-              <div style={{opacity:.7, fontStyle:'italic'}}>Genie is thinking…</div>
-            )}
           </div>
 
           <div style={{display:'flex', gap:10, marginTop:12}}>
