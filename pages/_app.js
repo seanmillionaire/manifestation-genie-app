@@ -59,10 +59,19 @@ export default function App({ Component, pageProps }){
       <div style={{minHeight:'100vh', display:'flex', flexDirection:'column'}}>
         <header style={{borderBottom:'1px solid rgba(0,0,0,0.08)', background:'#fff'}}>
           <div style={{maxWidth:980, margin:'0 auto', padding:'10px 14px', display:'flex', alignItems:'center', justifyContent:'space-between'}}>
-            <Link href="/home" style={{display:'inline-flex', alignItems:'center', gap:10, textDecoration:'none'}}>
-              <img src="https://storage.googleapis.com/mixo-sites/images/file-a7eebac5-6af9-4253-bc71-34c0d455a852.png" alt="Genie" width="34" height="34" style={{borderRadius:6}} />
-              <strong style={{color:'#0f172a'}}>Manifestation Genie</strong>
-            </Link>
+           <Link href="/home" style={{display:'inline-flex', alignItems:'center', gap:10, textDecoration:'none'}}>
+  <img
+    src="https://storage.googleapis.com/mixo-sites/images/file-a7eebac5-6af9-4253-bc71-34c0d455a852.png"
+    alt="Genie"
+    style={{
+      height: 48,       // bigger, looks balanced with text
+      width: 'auto',    // keeps proportions
+      borderRadius: 8   // optional, adjust if you want square
+    }}
+  />
+
+</Link>
+
             <nav style={{display:'flex', gap:14}}>
               <Link href="/home">Home</Link>
               <Link href="/vibe">Flow</Link>
