@@ -36,13 +36,11 @@ export default function ChatPage(){
   const [thinking, setThinking] = useState(false);
   const listRef = useRef(null);
 
-  // Redirect if user skipped earlier pages (no vibe or no wish)
   useEffect(() => {
     const cur = get();
     if (!cur.vibe) { router.replace('/vibe'); return; }
     if (!cur.currentWish) { router.replace('/flow'); return; }
 
-    // Instant first reply (only once when thread is empty)
     if (!cur.thread || cur.thread.length === 0){
       pushThread({
         role:'assistant',
@@ -52,7 +50,6 @@ export default function ChatPage(){
     }
   }, [router]);
 
-  // Auto-scroll to latest
   useEffect(() => {
     const el = listRef.current;
     if (el) el.scrollTop = el.scrollHeight;
@@ -64,7 +61,6 @@ export default function ChatPage(){
     setInput('');
     setThinking(true);
 
-    // Push user message
     pushThread({ role:'user', author: S.firstName || 'You', content: text });
     setS(get());
 
@@ -89,7 +85,6 @@ export default function ChatPage(){
   return (
     <div style={{maxWidth:980, margin:'24px auto', padding:'0 14px'}}>
       <div style={{display:'grid', gridTemplateColumns:'1fr', gap:14}}>
-        {/* Chat panel */}
         <div style={{ background:'#fff', border:'1px solid rgba(0,0,0,0.08)', borderRadius:18, padding:16 }}>
           <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:10}}>
             <div style={{fontWeight:900, fontSize:18}}>Genie Chat</div>
@@ -136,7 +131,6 @@ export default function ChatPage(){
           </div>
         </div>
 
-        {/* Proof strip below chat */}
         <div>
           <FomoFeed />
         </div>

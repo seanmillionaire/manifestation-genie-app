@@ -1,4 +1,4 @@
-// /pages/_app.js — minimal shell + sticky Buy button on every page
+// /pages/_app.js — minimal shell + sticky Buy button (hard‑coded link)
 import '../styles/globals.css'
 import '../styles/light-theme.css'
 import Head from 'next/head'
@@ -6,14 +6,13 @@ import Link from 'next/link'
 import { useRouter } from 'next/router'
 import { useEffect } from 'react'
 
-// Load flow state + first name early so pages can use them
 import { loadAllIntoFlowState } from '../src/persist'
 import { hydrateFirstNameFromSupabase } from '../src/userName'
 
-const PAY_URL = process.env.NEXT_PUBLIC_PAY_URL || process.env.NEXT_PUBLIC_PAYHIP_URL || 'https://hypnoticmeditations.ai'
+// 👇 Your live order page (with UTM tags for attribution)
+const PAY_URL = 'https://hypnoticmeditations.ai/order?link=SiQ1E&utm_source=genie&utm_medium=app&utm_campaign=v1_launch'
 
 function StickyPayBar(){
-  if (!PAY_URL) return null
   return (
     <div
       style={{
@@ -44,7 +43,6 @@ export default function App({ Component, pageProps }){
   const router = useRouter()
 
   useEffect(() => {
-    // hydrate local flow + first name
     try { loadAllIntoFlowState() } catch {}
     try { hydrateFirstNameFromSupabase() } catch {}
   }, [])
