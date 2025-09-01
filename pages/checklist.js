@@ -66,10 +66,10 @@ export default function ChecklistPage() {
           >
             <ol style={{ margin: 0, paddingLeft: 18, lineHeight: 1.6 }}>
               <li>
-                <b>Prepare.</b> Turn on Do Not Disturb, close other tabs, clear your space.
+                <b>Prepare.</b> Turn your phone on Do Not Disturb, close other website tabs, clear your desk.
               </li>
               <li style={{ marginTop: 8 }}>
-                <b>Focus.</b> Start a 15-minute timer and do: “{microText}”.
+                <b>Focus.</b> Start a 15-minute timer to ensure you are fully focused.
               </li>
               <li style={{ marginTop: 8 }}>
                 <b>Manifest.</b> Say or post one sentence about “{wishText}” to one person/platform.
