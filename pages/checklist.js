@@ -1,4 +1,4 @@
-// /pages/checklist.js — Primer screen (no checkboxes, no waiting)
+// /pages/checklist.js — Manifestor primer (clear + actionable)
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import { get, set } from '../src/flowState';
@@ -9,7 +9,6 @@ export default function ChecklistPage() {
 
   useEffect(() => { setS(get()); }, []);
 
-  // Resolve name at render (don't freeze)
   function firstName() {
     const n = (S.firstName || '').trim();
     if (n && n !== 'Friend') return n;
@@ -21,7 +20,7 @@ export default function ChecklistPage() {
   }
 
   const wishText  = S.currentWish?.wish  || 'your intention';
-  const microText = S.currentWish?.micro || 'your smallest next step';
+  const microText = S.currentWish?.micro || 'your next tiny step';
 
   function goChat() {
     set({ phase: 'chat' });
@@ -58,17 +57,27 @@ export default function ChecklistPage() {
             padding: '14px 16px'
           }}
         >
-          {/* Simple primer — no interactions */}
-          <div style={{
-            padding: 12,
-            borderRadius: 12,
-            background: 'rgba(0,0,0,0.03)',
-            border: '1px solid rgba(0,0,0,0.08)',
-            marginBottom: 12
-          }}>
-            <p style={{ margin: 0 }}><b>Focus:</b> turn on DND, one tab only (2 min).</p>
-            <p style={{ margin: '8px 0 0' }}><b>Aligned move:</b> {microText} (15 min timer).</p>
-            <p style={{ margin: '8px 0 0' }}><b>Momentum:</b> share one message or tell one person today.</p>
+          {/* Clear, manifestor-style primer */}
+          <div
+            style={{
+              padding: 12,
+              borderRadius: 12,
+              background: 'rgba(0,0,0,0.03)',
+              border: '1px solid rgba(0,0,0,0.08)',
+              marginBottom: 12
+            }}
+          >
+            <ol style={{ margin: 0, paddingLeft: 18, lineHeight: 1.5 }}>
+              <li>
+                <b>Set the field (2 min).</b> Turn on Do Not Disturb, close other tabs, clear your space.
+              </li>
+              <li style={{ marginTop: 8 }}>
+                <b>Move the energy (15 min).</b> Start a 15-minute timer and do: “{microText}”.
+              </li>
+              <li style={{ marginTop: 8 }}>
+                <b>Anchor it (today).</b> Say or post one sentence about “{wishText}” to one person/platform.
+              </li>
+            </ol>
           </div>
 
           {/* Primary actions */}
