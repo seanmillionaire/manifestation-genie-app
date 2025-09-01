@@ -25,15 +25,22 @@ export default function HomeScreen() {
     typeof window !== "undefined" ? localStorage.getItem(AGREED_KEY) : null
   );
 
-  // hydrate name exactly like Chat
+  // --- Name hydration (more reliable) ---
   useEffect(() => {
     let alive = true;
     (async () => {
       try {
-        const cur = get();
-        if (!cur.firstName || cur.firstName === "Friend") {
-          await hydrateName();
+        // always try server/profile hydration
+        await hydrateName();
+
+        // immediate localStorage fallback
+        if (typeof window !== "undefined") {
+          const lsName = (localStorage.getItem("mg_first_name") || "").trim();
+          if (lsName && (!get().firstName || get().firstName === "Friend")) {
+            set({ firstName: lsName });
+          }
         }
+
         if (alive) setS(get());
       } catch (e) {
         if (alive) setErr("Could not load your profile. Showing default view.");
@@ -43,7 +50,11 @@ export default function HomeScreen() {
     })();
 
     const onStorage = (e) => {
-      if (e.key === "mg_first_name") setS(get());
+      if (e.key === "mg_first_name") {
+        const val = (e.newValue || "").trim();
+        if (val) set({ firstName: val });
+        setS(get());
+      }
       if (e.key === AGREED_KEY) setAgreedAt(e.newValue);
     };
     if (typeof window !== "undefined") window.addEventListener("storage", onStorage);
@@ -53,7 +64,16 @@ export default function HomeScreen() {
     };
   }, []);
 
-  const firstName = S.firstName || "Friend";
+  const resolveFirstName = () => {
+    const stateName = (S.firstName || "").trim();
+    if (stateName && stateName !== "Friend") return stateName;
+    if (typeof window !== "undefined") {
+      const ls = (localStorage.getItem("mg_first_name") || "").trim();
+      if (ls) return ls;
+    }
+    return "Friend";
+  };
+  const firstName = resolveFirstName();
 
   const acceptAgreement = async () => {
     const ts = new Date().toISOString();
@@ -62,7 +82,7 @@ export default function HomeScreen() {
     set({ agreement: { version: AGREEMENT_VERSION, acceptedAt: ts } });
   };
 
-  // friendly long date, e.g. "Monday, September 1, 2025"
+  // friendly long date
   const today = new Date().toLocaleDateString(undefined, {
     weekday: "long",
     month: "long",
@@ -70,7 +90,6 @@ export default function HomeScreen() {
     year: "numeric",
   });
 
-  // one-button start: if no vibe yet -> pick vibe, else -> chat
   const startManifesting = () => {
     const cur = get();
     const hasVibe = !!(cur?.vibe && (cur.vibe.name || cur.vibe.id));
@@ -79,17 +98,14 @@ export default function HomeScreen() {
 
   return (
     <main style={{ width: "min(900px, 94vw)", margin: "30px auto" }}>
-      {/* === MATCH CHAT HEADER === */}
       <h1 style={{ fontSize: 28, fontWeight: 900, margin: "0 0 12px" }}>
         Genie Chat, {firstName}
       </h1>
 
-      {/* tiny status line like Chat uses subtle text */}
       <p className="text-sm text-black/60 h-5" aria-live="polite">
         {loading ? "Loading your profile…" : err ? err : ""}
       </p>
 
-      {/* === MATCH CHAT CONSOLE PANEL === */}
       <section
         style={{
           border: "1px solid rgba(0,0,0,0.08)",
@@ -98,7 +114,7 @@ export default function HomeScreen() {
           background: "#fafafa",
         }}
       >
-        {/* card 1 — Ethical Agreement (prefame + crystal clear) */}
+        {/* card 1 — Ethical Agreement (short + playful + real) */}
         <div
           style={{
             background: "white",
@@ -111,12 +127,10 @@ export default function HomeScreen() {
             Ethical agreement
           </div>
 
-          <div style={{ fontSize: 14, lineHeight: 1.5 }}>
-            I use Manifestation Genie as a positive focusing tool. I take
-            responsibility for my intentions and direct them toward my highest
-            good and the well-being of others. I understand this is
-            educational/spiritual guidance and not medical, legal, or
-            financial advice.
+          <div style={{ fontSize: 14, lineHeight: 1.6 }}>
+            <strong>Pinky promise:</strong> I use Manifestation Genie for good vibes only—uplifting
+            myself and others. No harm, no coercion, no shady wishes. I own my choices. This is
+            spiritual self-help, not medical, legal, or financial advice.
           </div>
 
           {agreedAt ? (
@@ -192,13 +206,11 @@ export default function HomeScreen() {
             {firstName}&apos;s manifestation technique for {today}
           </div>
 
-          {/* single super download from the cosmos */}
           <div style={{ fontSize: 14, lineHeight: 1.6 }}>
-            <strong>3-Breath Quantum Lock-In:</strong> Close your eyes. On each
-            inhale, feel your desired reality already true. On each exhale,
-            softly say (in present tense): <em>“It’s done. I am {`{your result}`} now.
-            Thank you.”</em> Do three slow cycles, then open your eyes and take
-            one tiny action that matches this reality within the next 60 minutes.
+            <strong>3-Breath Quantum Lock-In:</strong> Close your eyes. On each inhale, feel your
+            desired reality already true. On each exhale, whisper:{" "}
+            <em>“It’s done. I am {'{your result}'} now. Thank you.”</em> Do this three times, then
+            take one tiny action that matches this reality within 60 minutes.
           </div>
 
           <div style={{ marginTop: 14 }}>
@@ -218,7 +230,7 @@ export default function HomeScreen() {
               }}
               aria-label="Start Manifesting"
             >
-              START MANIFESTING &raquo;
+              START MANIFESTING »
             </button>
           </div>
         </div>
