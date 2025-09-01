@@ -1,30 +1,39 @@
-//temp
 // components/Profile/ProfileScreen.jsx
 import { useEffect, useState } from "react";
-import { get, set } from "../../src/flowState";
+
+/**
+ * SUPER SAFE PROFILE
+ * - No external app imports
+ * - Never reads localStorage during SSR render
+ * - Guards *everything* so it cannot crash
+ */
 
 const AGREEMENT_VERSION = "v1";
 const AGREED_KEY = `mg_agreed_${AGREEMENT_VERSION}`;
 
-async function hydrateNameFromSupabaseSafe() {
-  try {
-    const m = await import("../../src/userName");
-    if (m && typeof m.hydrateFirstNameFromSupabase === "function") {
-      await m.hydrateFirstNameFromSupabase();
-    }
-  } catch {
-    // ignore
-  }
-}
-
 function safeText(val) {
   if (val == null) return "—";
-  if (typeof val === "string" || typeof val === "number") return String(val);
-  if (typeof val === "object" && "name" in val) return String(val.name);
+  const t = typeof val;
+  if (t === "string" || t === "number" || t === "boolean") return String(val);
+  if (t === "object") {
+    try {
+      if ("name" in val && (typeof val.name === "string" || typeof val.name === "number")) {
+        return String(val.name);
+      }
+      return JSON.stringify(val);
+    } catch {
+      return "—";
+    }
+  }
+  return "—";
+}
+
+function safeParseJSON(s, fallback) {
+  if (!s || typeof s !== "string") return fallback;
   try {
-    return JSON.stringify(val);
+    return JSON.parse(s);
   } catch {
-    return "—";
+    return fallback;
   }
 }
 
@@ -36,78 +45,70 @@ function safeDateLabel(iso) {
 }
 
 export default function ProfileScreen() {
-  // 1) render nothing until mounted (avoid SSR/localStorage mismatches)
   const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
-  if (!mounted) return null;
-
-  // 2) local snapshot + UI state
-  const [S, setS] = useState(get());
   const [loading, setLoading] = useState(true);
-  const [err, setErr] = useState(null);
-  const [agreedAt, setAgreedAt] = useState(null);
+  const [err, setErr] = useState("");
+  const [state, setState] = useState({
+    firstName: "Friend",
+    vibe: null,
+    currentWish: { wish: null, block: null, micro: null },
+    agreement: { acceptedAt: null, version: AGREEMENT_VERSION },
+  });
 
-  // 3) hydrate from localStorage / supabase
+  useEffect(() => setMounted(true), []);
+  if (!mounted) return null; // never render on server
+
+  // Hydrate only on client
   useEffect(() => {
-    let alive = true;
-
+    let done = false;
     (async () => {
       try {
-        // localStorage: agreement time
-        try {
-          const val = localStorage.getItem(AGREED_KEY);
-          if (val) setAgreedAt(val);
-        } catch {}
+        // Everything wrapped so a single bad key can't crash
+        const firstName =
+          (typeof window !== "undefined" && localStorage.getItem("mg_first_name")) ||
+          "Friend";
 
-        // name: prefer store; if missing, try localStorage then supabase
-        let cur = get();
-        if (!cur.firstName || cur.firstName === "Friend") {
-          try {
-            const ls = (localStorage.getItem("mg_first_name") || "").trim();
-            if (ls && ls !== "Friend") set({ firstName: ls });
-          } catch {}
-          cur = get();
-          if (!cur.firstName || cur.firstName === "Friend") {
-            await hydrateNameFromSupabaseSafe();
-          }
-        }
+        const vibe =
+          (typeof window !== "undefined" && localStorage.getItem("mg_vibe")) || null;
 
-        if (alive) setS(get());
-      } catch {
-        if (alive) setErr("Could not load your profile. Showing default view.");
+        const currentWish =
+          (typeof window !== "undefined" &&
+            safeParseJSON(localStorage.getItem("mg_current_wish"), {
+              wish: null,
+              block: null,
+              micro: null,
+            })) || { wish: null, block: null, micro: null };
+
+        const agreedAt =
+          (typeof window !== "undefined" && localStorage.getItem(AGREED_KEY)) || null;
+
+        setState({
+          firstName,
+          vibe,
+          currentWish,
+          agreement: { acceptedAt: agreedAt, version: AGREEMENT_VERSION },
+        });
+      } catch (e) {
+        console.error("Profile hydrate error:", e);
+        setErr("Could not load saved profile. Showing defaults.");
       } finally {
-        if (alive) setLoading(false);
+        if (!done) setLoading(false);
       }
     })();
-
-    // keep tabs in sync
-    function onStorage(e) {
-      if (e.key === "mg_first_name") setS(get());
-      if (e.key === AGREED_KEY) setAgreedAt(e.newValue);
-    }
-    window.addEventListener("storage", onStorage);
     return () => {
-      alive = false;
-      window.removeEventListener("storage", onStorage);
+      done = true;
     };
   }, []);
 
-  // ---- derived, safe labels
-  const firstName = safeText(S.firstName === "Friend" ? "Friend" : S.firstName);
-  const vibeLabel = safeText(S.vibe);
-  const wish = safeText(S.currentWish?.wish);
-  const block = safeText(S.currentWish?.block);
-  const micro = safeText(S.currentWish?.micro);
+  const firstName = safeText(state.firstName);
+  const vibeLabel = safeText(state.vibe);
+  const wish = safeText(state.currentWish?.wish);
+  const block = safeText(state.currentWish?.block);
+  const micro = safeText(state.currentWish?.micro);
 
-  const acceptedIso = agreedAt || S?.agreement?.acceptedAt || null;
-  const acceptedLabel = safeDateLabel(acceptedIso); // <<< was missing
-
-  async function refreshFromSupabase() {
-    setLoading(true);
-    await hydrateNameFromSupabaseSafe();
-    setS(get());
-    setLoading(false);
-  }
+  const acceptedIso =
+    state.agreement?.acceptedAt ? String(state.agreement.acceptedAt) : null;
+  const acceptedLabel = safeDateLabel(acceptedIso);
 
   return (
     <main style={{ width: "min(900px, 94vw)", margin: "30px auto" }}>
@@ -143,31 +144,6 @@ export default function ProfileScreen() {
           <div style={{ fontSize: 14, lineHeight: 1.6 }}>
             <div>
               <strong>Name:</strong> {firstName}
-            </div>
-            <div
-              style={{
-                marginTop: 6,
-                display: "flex",
-                gap: 10,
-                flexWrap: "wrap",
-              }}
-            >
-              <button
-                onClick={refreshFromSupabase}
-                style={{
-                  background: "white",
-                  border: "1px solid rgba(0,0,0,0.20)",
-                  borderRadius: 10,
-                  padding: "10px 16px",
-                  fontWeight: 700,
-                  minHeight: 44,
-                  minWidth: 44,
-                  cursor: "pointer",
-                }}
-                title="Re-sync name from Supabase"
-              >
-                Refresh from Supabase
-              </button>
             </div>
           </div>
         </div>
@@ -239,9 +215,7 @@ export default function ProfileScreen() {
               Accepted {acceptedLabel} (version {AGREEMENT_VERSION})
             </div>
           ) : (
-            <div style={{ fontSize: 14 }}>
-              Not accepted yet on this version.
-            </div>
+            <div style={{ fontSize: 14 }}>Not accepted yet on this version.</div>
           )}
         </div>
       </section>
