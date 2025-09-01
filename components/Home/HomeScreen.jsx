@@ -209,7 +209,7 @@ export default function HomeScreen() {
           <div style={{ fontSize: 14, lineHeight: 1.6 }}>
             <strong>3-Breath Quantum Lock-In:</strong> Close your eyes. On each inhale, feel your
             desired reality already true. On each exhale, whisper:{" "}
-            <em>“It’s done. I am {'{your result}'} now. Thank you.”</em> Do this three times, then
+            <em>“It’s done. I am now so thankful to have this in my life."</em> Do this three times, then
             take one tiny action that matches this reality within 60 minutes.
           </div>
 
