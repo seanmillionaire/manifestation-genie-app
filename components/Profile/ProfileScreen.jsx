@@ -35,7 +35,7 @@ export default function ProfileScreen() {
       </h1>
 
       <p className="text-sm text-black/60 h-5" aria-live="polite">
-        Rebuilding fields safely (name + vibe + agreement).
+        More coming soon!
       </p>
 
       <section
