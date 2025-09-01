@@ -1,40 +1,35 @@
-import React from 'react'
-import Head from 'next/head'
-import { useRouter } from 'next/router'
-import { useSession } from '../src/state/sessionStore'
+// /pages/vibe.js
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/router';
+import { get, set } from '../src/flowState';
+
+const styles = {
+  card: { background:'#fff', border:'1px solid rgba(0,0,0,0.08)', borderRadius:18, padding:24 },
+  lead: { fontSize:18, opacity:.9 },
+  row: { display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:12, marginTop:12 },
+  btn: { padding:'14px 16px', borderRadius:14, border:'1px solid rgba(0,0,0,0.12)', background:'#fff', cursor:'pointer' }
+};
 
 export default function Vibe(){
-  const r = useRouter()
-  const { set } = useSession()
+  const router = useRouter();
+  const [firstName, setFirstName] = useState('Friend');
 
-  const pick = (v, g) => {
-    set({ vibe:v, genie:g })
-    r.push('/wish')
-  }
+  useEffect(() => { setFirstName(get().firstName || 'Friend'); }, []);
+
+  const pick = (v) => {
+    set({ vibe: v, phase:'resumeNew' });
+    router.push('/onboard');
+  };
 
   return (
-    <>
-      <Head><title>Pick Today’s Energy</title></Head>
-      <main style={S.wrap}>
-        <div style={S.card}>
-          <h1 style={S.h1}>Pick Today’s Energy</h1>
-          <p style={S.sub}>Choose your power mode and guide.</p>
-          <div style={S.grid}>
-            <button style={S.btn} onClick={()=>pick('bold','genie2')}>🔥 Bold • Trickster Coach</button>
-            <button style={S.btn} onClick={()=>pick('calm','genie1')}>🙏 Calm • Mentor of Light</button>
-            <button style={S.btn} onClick={()=>pick('rich','genie1')}>💰 Rich • Mentor of Light</button>
-          </div>
-        </div>
-      </main>
-    </>
-  )
-}
-
-const S = {
-  wrap:{minHeight:'100vh', display:'grid', placeItems:'center', background:'#0f172a'},
-  card:{width:'100%', maxWidth:720, background:'#fff', borderRadius:16, boxShadow:'0 16px 40px rgba(0,0,0,.15)', padding:24},
-  h1:{margin:0, fontSize:26},
-  sub:{margin:'8px 0 16px', color:'#475569'},
-  grid:{display:'grid', gap:12},
-  btn:{background:'#111827', color:'#fff', padding:'12px 16px', borderRadius:10, border:'1px solid #222', cursor:'pointer', textAlign:'left', fontWeight:700}
+    <div style={styles.card}>
+      <h1 style={{fontSize:28, fontWeight:900, margin:0}}>Pick your vibe</h1>
+      <p style={styles.lead}>What are we feeling today, {firstName}?</p>
+      <div style={styles.row}>
+        <button style={styles.btn} onClick={()=>pick('BOLD')}>🔥 BOLD</button>
+        <button style={styles.btn} onClick={()=>pick('CALM')}>🙏 CALM</button>
+        <button style={styles.btn} onClick={()=>pick('RICH')}>💰 RICH</button>
+      </div>
+    </div>
+  );
 }
