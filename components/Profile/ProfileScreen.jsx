@@ -15,6 +15,12 @@ async function hydrateNameFromSupabaseSafe() {
     // ignore
   }
 }
+function safeText(val) {
+  if (val == null) return "—";
+  if (typeof val === "string" || typeof val === "number") return String(val);
+  if (typeof val === "object" && "name" in val) return String(val.name);
+  return JSON.stringify(val); // last resort fallback
+}
 
 function safeDateLabel(iso) {
   if (!iso || typeof iso !== "string") return null;
@@ -81,20 +87,13 @@ export default function ProfileScreen() {
   }, []);
 
 // derive safe, renderable strings only
-const firstName =
-  (S.firstName && S.firstName !== "Friend") ? String(S.firstName) : "Friend";
+const firstName = safeText(S.firstName === "Friend" ? "Friend" : S.firstName);
+const vibeLabel = safeText(S.vibe);
+const wish  = safeText(S.currentWish?.wish);
+const block = safeText(S.currentWish?.block);
+const micro = safeText(S.currentWish?.micro);
 
-const vibeLabel =
-  typeof S?.vibe === "string"
-    ? S.vibe
-    : (S?.vibe?.name ? String(S.vibe.name) : "—");
-
-const wish  = S?.currentWish?.wish  ? String(S.currentWish.wish)  : "—";
-const block = S?.currentWish?.block ? String(S.currentWish.block) : "—";
-const micro = S?.currentWish?.micro ? String(S.currentWish.micro) : "—";
-
-const acceptedIso = (agreedAt || S?.agreement?.acceptedAt) ?? null;
-const acceptedLabel = safeDateLabel(acceptedIso);
+const acceptedIso = agreedAt || S?.agreement?.acceptedAt || null;
 
 
   async function refreshFromSupabase() {
@@ -187,10 +186,10 @@ const acceptedLabel = safeDateLabel(acceptedIso);
           <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 6 }}>
             Current wish
           </div>
-          <div style={{ fontSize: 14, lineHeight: 1.6 }}>
-            <div><strong>Wish:</strong> {wish}</div>
-            <div><strong>Block:</strong> {block}</div>
-            <div><strong>Micro-step:</strong> {micro}</div>
+<div style={{ fontSize: 14 }}>{vibeLabel}</div>
+<div><strong>Wish:</strong> {wish}</div>
+<div><strong>Block:</strong> {block}</div>
+<div><strong>Micro-step:</strong> {micro}</div>
           </div>
         </div>
 
