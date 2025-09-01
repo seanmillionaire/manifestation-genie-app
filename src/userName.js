@@ -23,6 +23,11 @@ export async function hydrateFirstNameFromSupabase() {
 
   // Update app state
   set({ firstName: first })
+if (first && first !== 'Friend') {
+  set({ firstName: first });
+  try { localStorage.setItem('mg_first_name', first); } catch {}
+}
+// if we didn't find a name, do nothing: keep whatever we already had
 
   // Only cache if it’s a real name (never persist "Friend")
   try {
