@@ -55,6 +55,17 @@ export default function ChatPage(){
   const [thinking, setThinking] = useState(false);
   const listRef = useRef(null);
 
+  // DEBUG state: show all places we’re pulling name from
+  const [D, setD] = useState({
+    snapFirst: get().firstName,
+    stateFirst: S.firstName,
+    lsFirst: '(n/a)',
+    profFirst: '(loading)',
+    profFull: '(loading)',
+    upFirst: '(loading)',
+    authEmail: '(loading)'
+  });
+
   // hydrate name BEFORE creating first assistant line; also fill debug fields
   useEffect(() => {
     const cur = get();
