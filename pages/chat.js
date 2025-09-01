@@ -1,11 +1,11 @@
 // /pages/chat.js — instant first reply + proof strip
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
-import { get, set, newId, normalizeMsg, pushThread, toPlainMessages } from '../src/flowState';
+import { get, set, subscribe, newId, normalizeMsg, pushThread, toPlainMessages } from '../src/flowState';
 import { supabase } from '../src/supabaseClient';
 import FomoFeed from '../components/FomoFeed'
 
-function escapeHTML(s=''){ return s.replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+function escapeHTML(s=''){ return s.replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'" :'&#39;'}[m])); }
 function nl2br(s=''){ return s.replace(/\n/g, '<br/>'); }
 
 async function callGenie({ text, state }) {
@@ -35,6 +35,27 @@ export default function ChatPage(){
   const [input, setInput] = useState('');
   const [thinking, setThinking] = useState(false);
   const listRef = useRef(null);
+
+  // 🔁 subscribe so this page updates when firstName/thread change
+  useEffect(() => {
+    const unsub = subscribe((next) => {
+      if (
+        next?.firstName &&
+        next.firstName !== 'Friend' &&
+        Array.isArray(next.thread) &&
+        next.thread.length > 0 &&
+        next.thread[0].role === 'assistant' &&
+        /I’m here,\s*Friend\b/.test(next.thread[0].content || '')
+      ) {
+        const firstMsg = { ...next.thread[0] };
+        firstMsg.content = firstMsg.content.replace(/I’m here,\s*Friend\b/, `I’m here, ${next.firstName}`);
+        set({ thread: [firstMsg, ...next.thread.slice(1)] });
+        return;
+      }
+      setS(next);
+    });
+    return () => unsub?.();
+  }, []);
 
   useEffect(() => {
     const cur = get();
