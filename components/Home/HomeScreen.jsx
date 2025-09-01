@@ -62,6 +62,21 @@ export default function HomeScreen() {
     set({ agreement: { version: AGREEMENT_VERSION, acceptedAt: ts } });
   };
 
+  // friendly long date, e.g. "Monday, September 1, 2025"
+  const today = new Date().toLocaleDateString(undefined, {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
+
+  // one-button start: if no vibe yet -> pick vibe, else -> chat
+  const startManifesting = () => {
+    const cur = get();
+    const hasVibe = !!(cur?.vibe && (cur.vibe.name || cur.vibe.id));
+    router.push(hasVibe ? "/chat" : "/vibe");
+  };
+
   return (
     <main style={{ width: "min(900px, 94vw)", margin: "30px auto" }}>
       {/* === MATCH CHAT HEADER === */}
@@ -83,7 +98,7 @@ export default function HomeScreen() {
           background: "#fafafa",
         }}
       >
-        {/* card 1 — Ethical Agreement */}
+        {/* card 1 — Ethical Agreement (prefame + crystal clear) */}
         <div
           style={{
             background: "white",
@@ -95,10 +110,13 @@ export default function HomeScreen() {
           <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 6 }}>
             Ethical agreement
           </div>
-          <div style={{ fontSize: 14, lineHeight: 1.4 }}>
-            I will use the Genie’s magic for good.
-            <br />
-            Toward my highest self and the well-being of others.
+
+          <div style={{ fontSize: 14, lineHeight: 1.5 }}>
+            I use Manifestation Genie as a positive focusing tool. I take
+            responsibility for my intentions and direct them toward my highest
+            good and the well-being of others. I understand this is
+            educational/spiritual guidance and not medical, legal, or
+            financial advice.
           </div>
 
           {agreedAt ? (
@@ -160,7 +178,7 @@ export default function HomeScreen() {
           )}
         </div>
 
-        {/* card 2 — Tips (matches same card look) */}
+        {/* card 2 — One Super Tip + One Big CTA */}
         <div
           style={{
             marginTop: 12,
@@ -171,43 +189,36 @@ export default function HomeScreen() {
           }}
         >
           <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 6 }}>
-            Manifestation tips
+            {firstName}&apos;s manifestation technique for {today}
           </div>
-          <ol style={{ paddingLeft: 20, fontSize: 14, lineHeight: 1.5 }}>
-            <li>Be clear about your wish.</li>
-            <li>Speak in the present tense.</li>
-            <li>Keep it positive and simple.</li>
-          </ol>
 
-          <div style={{ display: "flex", gap: 10, marginTop: 10, flexWrap: "wrap" }}>
+          {/* single super download from the cosmos */}
+          <div style={{ fontSize: 14, lineHeight: 1.6 }}>
+            <strong>3-Breath Quantum Lock-In:</strong> Close your eyes. On each
+            inhale, feel your desired reality already true. On each exhale,
+            softly say (in present tense): <em>“It’s done. I am {`{your result}`} now.
+            Thank you.”</em> Do three slow cycles, then open your eyes and take
+            one tiny action that matches this reality within the next 60 minutes.
+          </div>
+
+          <div style={{ marginTop: 14 }}>
             <button
-              onClick={() => router.push("/chat")}
+              onClick={startManifesting}
               style={{
-                background: "white",
-                border: "1px solid rgba(0,0,0,0.20)",
-                borderRadius: 10,
-                padding: "10px 16px",
-                fontWeight: 700,
-                minHeight: 44,
-                minWidth: 44,
-              }}
-            >
-              Open Chat
-            </button>
-            <button
-              onClick={() => router.push("/vibe")}
-              style={{
+                width: "100%",
                 background: "#facc15",
                 border: "1px solid #eab308",
-                borderRadius: 10,
-                padding: "10px 16px",
-                fontWeight: 700,
-                minHeight: 44,
-                minWidth: 44,
+                borderRadius: 12,
+                padding: "14px 18px",
+                fontWeight: 900,
+                fontSize: 16,
+                letterSpacing: 0.3,
+                minHeight: 48,
                 cursor: "pointer",
               }}
+              aria-label="Start Manifesting"
             >
-              Choose Your Vibe
+              START MANIFESTING &raquo;
             </button>
           </div>
         </div>
