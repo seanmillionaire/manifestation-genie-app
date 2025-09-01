@@ -87,60 +87,109 @@ export default function Vibe() {
           }}
         >
           <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(3, 1fr)',
-              gap: 12,
-            }}
-          >
-            <button
-              onClick={() => pick('BOLD')}
-              style={{
-                minHeight: 48,
-                background: '#fff',
-                border: '1px solid rgba(0,0,0,0.12)',
-                borderRadius: 12,
-                padding: '14px 16px',
-                fontWeight: 800,
-                cursor: 'pointer',
-              }}
-              aria-label="Pick Bold vibe"
-            >
-              🔥 BOLD
-            </button>
+  style={{
+    display: 'grid',
+    gridTemplateColumns: 'repeat(3, 1fr)',
+    gap: 12,
+  }}
+>
+  <button
+    onClick={() => pick('BOLD')}
+    style={{
+      minHeight: 48,
+      background: '#fff',
+      border: '1px solid rgba(0,0,0,0.12)',
+      borderRadius: 12,
+      padding: '14px 16px',
+      fontWeight: 800,
+      cursor: 'pointer',
+    }}
+    aria-label="Pick Bold vibe"
+  >
+    🔥 BOLD
+  </button>
 
-            <button
-              onClick={() => pick('CALM')}
-              style={{
-                minHeight: 48,
-                background: '#fff',
-                border: '1px solid rgba(0,0,0,0.12)',
-                borderRadius: 12,
-                padding: '14px 16px',
-                fontWeight: 800,
-                cursor: 'pointer',
-              }}
-              aria-label="Pick Calm vibe"
-            >
-              🙏 CALM
-            </button>
+  <button
+    onClick={() => pick('CALM')}
+    style={{
+      minHeight: 48,
+      background: '#fff',
+      border: '1px solid rgba(0,0,0,0.12)',
+      borderRadius: 12,
+      padding: '14px 16px',
+      fontWeight: 800,
+      cursor: 'pointer',
+    }}
+    aria-label="Pick Calm vibe"
+  >
+    🙏 CALM
+  </button>
 
-            <button
-              onClick={() => pick('RICH')}
-              style={{
-                minHeight: 48,
-                background: '#fff',
-                border: '1px solid rgba(0,0,0,0.12)',
-                borderRadius: 12,
-                padding: '14px 16px',
-                fontWeight: 800,
-                cursor: 'pointer',
-              }}
-              aria-label="Pick Rich vibe"
-            >
-              💰 RICH
-            </button>
-          </div>
+  <button
+    onClick={() => pick('RICH')}
+    style={{
+      minHeight: 48,
+      background: '#fff',
+      border: '1px solid rgba(0,0,0,0.12)',
+      borderRadius: 12,
+      padding: '14px 16px',
+      fontWeight: 800,
+      cursor: 'pointer',
+    }}
+    aria-label="Pick Rich vibe"
+  >
+    💰 RICH
+  </button>
+
+  <button
+    onClick={() => pick('LOVING')}
+    style={{
+      minHeight: 48,
+      background: '#fff',
+      border: '1px solid rgba(0,0,0,0.12)',
+      borderRadius: 12,
+      padding: '14px 16px',
+      fontWeight: 800,
+      cursor: 'pointer',
+    }}
+    aria-label="Pick Loving vibe"
+  >
+    🌸 LOVING
+  </button>
+
+  <button
+    onClick={() => pick('FOCUSED')}
+    style={{
+      minHeight: 48,
+      background: '#fff',
+      border: '1px solid rgba(0,0,0,0.12)',
+      borderRadius: 12,
+      padding: '14px 16px',
+      fontWeight: 800,
+      cursor: 'pointer',
+    }}
+    aria-label="Pick Focused vibe"
+  >
+    🎯 FOCUSED
+  </button>
+
+  <button
+    onClick={() => pick('FREE')}
+    style={{
+      minHeight: 48,
+      background: '#fff',
+      border: '1px solid rgba(0,0,0,0.12)',
+      borderRadius: 12,
+      padding: '14px 16px',
+      fontWeight: 800,
+      cursor: 'pointer',
+    }}
+    aria-label="Pick Free vibe"
+  >
+    🌍 FREE
+  </button>
+</div>
+
         </div>
       </section>
     </main>
