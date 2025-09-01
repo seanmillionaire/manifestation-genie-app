@@ -37,7 +37,18 @@ export default function Flow() {
       vibe: S.vibe,
       date: new Date().toISOString().slice(0, 10),
     };
-    const steps = generateChecklist(current);
+    let steps;
+try {
+  steps = generateChecklist(current);
+  if (!Array.isArray(steps) || steps.length === 0) throw new Error('empty');
+} catch {
+  steps = [
+    { id: 's1', text: `Clear your space for "${current.wish || 'your wish'}" (DND on, one tab, tidy desk).`, done: false },
+    { id: 's2', text: `Start a 15-minute timer and begin: "${current.micro || 'your smallest action'}".`, done: false },
+    { id: 's3', text: `Share one message about "${current.wish || 'your wish'}" today.`, done: false },
+  ];
+}
+
     set({ currentWish: current, lastWish: current, steps, phase: 'checklist' });
     router.push('/checklist');
   }
