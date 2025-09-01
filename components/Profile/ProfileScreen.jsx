@@ -80,14 +80,22 @@ export default function ProfileScreen() {
     };
   }, []);
 
-  const firstName = (S.firstName && S.firstName !== "Friend") ? S.firstName : "Friend";
-  const vibe  = S?.vibe?.name || S?.vibe || "—";
-  const wish  = S?.currentWish?.wish  || "—";
-  const block = S?.currentWish?.block || "—";
-  const micro = S?.currentWish?.micro || "—";
+// derive safe, renderable strings only
+const firstName =
+  (S.firstName && S.firstName !== "Friend") ? String(S.firstName) : "Friend";
 
-  const acceptedIso = agreedAt || S?.agreement?.acceptedAt || null;
-  const acceptedLabel = safeDateLabel(acceptedIso);
+const vibeLabel =
+  typeof S?.vibe === "string"
+    ? S.vibe
+    : (S?.vibe?.name ? String(S.vibe.name) : "—");
+
+const wish  = S?.currentWish?.wish  ? String(S.currentWish.wish)  : "—";
+const block = S?.currentWish?.block ? String(S.currentWish.block) : "—";
+const micro = S?.currentWish?.micro ? String(S.currentWish.micro) : "—";
+
+const acceptedIso = (agreedAt || S?.agreement?.acceptedAt) ?? null;
+const acceptedLabel = safeDateLabel(acceptedIso);
+
 
   async function refreshFromSupabase() {
     setLoading(true);
