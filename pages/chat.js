@@ -120,6 +120,17 @@ export default function ChatPage(){
   }
 
   return (
+{/* DEBUG — show all possible first name sources */}
+<div style={{padding:20, background:'#fee', margin:'10px 0'}}>
+  <div>flowState.get().firstName: {get().firstName}</div>
+  <div>S.firstName: {S.firstName}</div>
+  <div>localStorage.mg_first_name: 
+    {typeof window !== 'undefined' ? localStorage.getItem('mg_first_name') : '(server)'}
+  </div>
+  <div>profile.full_name from Supabase (hydrator needed)</div>
+</div>
+
+    
     <div style={{maxWidth:980, margin:'24px auto', padding:'0 14px'}}>
       <div style={{display:'grid', gridTemplateColumns:'1fr', gap:14}}>
         <div style={{ background:'#fff', border:'1px solid rgba(0,0,0,0.08)', borderRadius:18, padding:16 }}>
