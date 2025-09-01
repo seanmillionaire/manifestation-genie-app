@@ -15,11 +15,16 @@ async function hydrateNameFromSupabaseSafe() {
     // ignore
   }
 }
+
 function safeText(val) {
   if (val == null) return "—";
   if (typeof val === "string" || typeof val === "number") return String(val);
   if (typeof val === "object" && "name" in val) return String(val.name);
-  return JSON.stringify(val); // last resort fallback
+  try {
+    return JSON.stringify(val);
+  } catch {
+    return "—";
+  }
 }
 
 function safeDateLabel(iso) {
@@ -30,18 +35,18 @@ function safeDateLabel(iso) {
 }
 
 export default function ProfileScreen() {
-  // 1) render nothing until we're mounted on the client
+  // 1) render nothing until mounted (avoid SSR/localStorage mismatches)
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
   if (!mounted) return null;
 
-  // 2) local state snapshot (don’t read localStorage in render)
+  // 2) local snapshot + UI state
   const [S, setS] = useState(get());
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState(null);
   const [agreedAt, setAgreedAt] = useState(null);
 
-  // 3) hydrate from store/localStorage/supabase on mount
+  // 3) hydrate from localStorage / supabase
   useEffect(() => {
     let alive = true;
 
@@ -74,7 +79,7 @@ export default function ProfileScreen() {
       }
     })();
 
-    // keep in sync with other tabs
+    // keep tabs in sync
     function onStorage(e) {
       if (e.key === "mg_first_name") setS(get());
       if (e.key === AGREED_KEY) setAgreedAt(e.newValue);
@@ -86,15 +91,15 @@ export default function ProfileScreen() {
     };
   }, []);
 
-// derive safe, renderable strings only
-const firstName = safeText(S.firstName === "Friend" ? "Friend" : S.firstName);
-const vibeLabel = safeText(S.vibe);
-const wish  = safeText(S.currentWish?.wish);
-const block = safeText(S.currentWish?.block);
-const micro = safeText(S.currentWish?.micro);
+  // ---- derived, safe labels
+  const firstName = safeText(S.firstName === "Friend" ? "Friend" : S.firstName);
+  const vibeLabel = safeText(S.vibe);
+  const wish = safeText(S.currentWish?.wish);
+  const block = safeText(S.currentWish?.block);
+  const micro = safeText(S.currentWish?.micro);
 
-const acceptedIso = agreedAt || S?.agreement?.acceptedAt || null;
-
+  const acceptedIso = agreedAt || S?.agreement?.acceptedAt || null;
+  const acceptedLabel = safeDateLabel(acceptedIso); // <<< was missing
 
   async function refreshFromSupabase() {
     setLoading(true);
@@ -135,8 +140,17 @@ const acceptedIso = agreedAt || S?.agreement?.acceptedAt || null;
             Your info
           </div>
           <div style={{ fontSize: 14, lineHeight: 1.6 }}>
-            <div><strong>Name:</strong> {firstName}</div>
-            <div style={{ marginTop: 6, display: "flex", gap: 10, flexWrap: "wrap" }}>
+            <div>
+              <strong>Name:</strong> {firstName}
+            </div>
+            <div
+              style={{
+                marginTop: 6,
+                display: "flex",
+                gap: 10,
+                flexWrap: "wrap",
+              }}
+            >
               <button
                 onClick={refreshFromSupabase}
                 style={{
@@ -170,7 +184,7 @@ const acceptedIso = agreedAt || S?.agreement?.acceptedAt || null;
           <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 6 }}>
             Current vibe
           </div>
-          <div style={{ fontSize: 14 }}>{vibe}</div>
+          <div style={{ fontSize: 14 }}>{vibeLabel}</div>
         </div>
 
         {/* Current wish */}
@@ -186,10 +200,14 @@ const acceptedIso = agreedAt || S?.agreement?.acceptedAt || null;
           <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 6 }}>
             Current wish
           </div>
-<div style={{ fontSize: 14 }}>{vibeLabel}</div>
-<div><strong>Wish:</strong> {wish}</div>
-<div><strong>Block:</strong> {block}</div>
-<div><strong>Micro-step:</strong> {micro}</div>
+          <div>
+            <strong>Wish:</strong> {wish}
+          </div>
+          <div>
+            <strong>Block:</strong> {block}
+          </div>
+          <div>
+            <strong>Micro-step:</strong> {micro}
           </div>
         </div>
 
@@ -220,7 +238,9 @@ const acceptedIso = agreedAt || S?.agreement?.acceptedAt || null;
               Accepted {acceptedLabel} (version {AGREEMENT_VERSION})
             </div>
           ) : (
-            <div style={{ fontSize: 14 }}>Not accepted yet on this version.</div>
+            <div style={{ fontSize: 14 }}>
+              Not accepted yet on this version.
+            </div>
           )}
         </div>
       </section>
