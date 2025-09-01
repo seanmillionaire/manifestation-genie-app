@@ -1,12 +1,31 @@
-// /pages/chat.js — instant first reply + proof strip (no subscribe needed)
+// /pages/chat.js — debug first-name sources, no console
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
-import { get, set, newId, normalizeMsg, pushThread, toPlainMessages } from '../src/flowState';
-import { hydrateFirstNameFromSupabase } from '../src/userName'; // 👈 add
+import { get, set, newId, pushThread, toPlainMessages } from '../src/flowState';
+import { supabase } from '../src/supabaseClient';
 import FomoFeed from '../components/FomoFeed';
 
 function escapeHTML(s=''){ return s.replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'" :'&#39;'}[m])); }
 function nl2br(s=''){ return s.replace(/\n/g, '<br/>'); }
+
+// choose the best available first name from many fields
+function pickFirstName(src){
+  const tryFirst = (v)=> v ? String(v).trim().split(/\s+/)[0] : '';
+  const cands = [
+    src?.first_name, src?.firstName, // snake & camel
+    src?.display_name, src?.displayName,
+    src?.name,
+    src?.full_name, src?.fullName
+  ].map(tryFirst).filter(Boolean);
+  for (const c of cands){
+    const t = c.trim();
+    if (!t) continue;
+    if (t.toLowerCase() === 'friend') continue;
+    if (/[0-9_@]/.test(t)) continue;
+    return t[0].toUpperCase() + t.slice(1);
+  }
+  return '';
+}
 
 async function callGenie({ text, state }) {
   const resp = await fetch('/api/chat', {
@@ -36,35 +55,82 @@ export default function ChatPage(){
   const [thinking, setThinking] = useState(false);
   const listRef = useRef(null);
 
-  // 🌟 Hydrate name BEFORE creating the first assistant line
+  // DEBUG state: show all places we’re pulling name from
+  const [D, setD] = useState({
+    snapFirst: get().firstName,
+    stateFirst: S.firstName,
+    lsFirst: '(n/a)',
+    profFirst: '(loading)',
+    profFull: '(loading)',
+    upFirst: '(loading)',
+    authEmail: '(loading)'
+  });
+
+  // hydrate name BEFORE creating first assistant line; also fill debug fields
   useEffect(() => {
     const cur = get();
 
-    // guard rails: you already had these
     if (!cur.vibe) { router.replace('/vibe'); return; }
     if (!cur.currentWish) { router.replace('/flow'); return; }
 
-    // 1) try cache
+    // 1) localStorage first
+    let lsName = '';
     try {
       const cached = localStorage.getItem('mg_first_name');
       if (cached && cached.trim() && cached !== 'Friend') {
-        set({ firstName: cached.trim() });
+        lsName = cached.trim();
+        set({ firstName: lsName });
       }
     } catch {}
 
-    // 2) if still missing, ask Supabase (this helper should NOT overwrite with "Friend")
+    // 2) Supabase profile rows
     (async () => {
-      const nameBefore = get().firstName;
-      if (!nameBefore || nameBefore === 'Friend') {
-        try {
-          const found = await hydrateFirstNameFromSupabase();
-          if (found && found !== 'Friend') {
-            set({ firstName: found });
-          }
-        } catch {}
-      }
+      let authEmail = '';
+      let profFirst = '';
+      let profFull = '';
+      let upFirst = '';
 
-      // 3) now that we’ve done our best to know the name, create the first line if thread is empty
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        const user = session?.user;
+        if (user) {
+          authEmail = user.email || '';
+
+          // profiles
+          const { data: p } = await supabase
+            .from('profiles')
+            .select('first_name, full_name')
+            .eq('id', user.id)
+            .maybeSingle();
+
+          profFirst = p?.first_name || '';
+          profFull  = p?.full_name || '';
+
+          // user_profile (if exists)
+          const { data: up } = await supabase
+            .from('user_profile')
+            .select('first_name, full_name')
+            .eq('user_id', user.id)
+            .maybeSingle();
+
+          upFirst = up?.first_name || '';
+
+          // decide best name and push to store/cache
+          const best = pickFirstName({
+            first_name: profFirst || upFirst,
+            full_name: profFull || up?.full_name,
+            name: user.user_metadata?.name,
+            display_name: user.user_metadata?.full_name
+          }) || lsName;
+
+          if (best && best !== 'Friend') {
+            set({ firstName: best });
+            try { localStorage.setItem('mg_first_name', best); } catch {}
+          }
+        }
+      } catch {}
+
+      // create first line if empty (after we tried to know the name)
       const after = get();
       if (!after.thread || after.thread.length === 0){
         pushThread({
@@ -72,7 +138,7 @@ export default function ChatPage(){
           content: `The lamp glows… I’m here, ${after.firstName || 'Friend'}.\nOne tiny move today beats a thousand tomorrows. What’s the snag we’ll clear right now?`
         });
       } else {
-        // If first line already exists and says Friend but we now know the name, patch it once.
+        // patch "Friend" to real name if needed
         const hasReal = after.firstName && after.firstName !== 'Friend';
         const t0 = after.thread?.[0];
         if (hasReal && t0?.role === 'assistant' && /I’m here,\s*Friend\b/.test(t0.content || '')) {
@@ -81,9 +147,20 @@ export default function ChatPage(){
         }
       }
 
-      // 4) reflect latest store to this component
-      setS(get());
+      // reflect latest store + debug
+      const snap = get();
+      setS(snap);
+      setD({
+        snapFirst: snap.firstName,
+        stateFirst: snap.firstName,     // now same as S after setS(snap)
+        lsFirst: lsName || (typeof window !== 'undefined' ? (localStorage.getItem('mg_first_name') || '(empty)') : '(server)'),
+        profFirst: profFirst || '(null)',
+        profFull: profFull || '(null)',
+        upFirst: upFirst || '(null)',
+        authEmail: authEmail || '(null)'
+      });
     })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router]);
 
   // keep list scrolled
@@ -98,7 +175,7 @@ export default function ChatPage(){
     setInput('');
     setThinking(true);
 
-    pushThread({ role:'user', author: get().firstName || 'You', content: text });
+    pushThread({ role:'user', author: (get().firstName || 'You'), content: text });
     setS(get());
 
     try {
@@ -120,18 +197,18 @@ export default function ChatPage(){
   }
 
   return (
-{/* DEBUG — show all possible first name sources */}
-<div style={{padding:20, background:'#fee', margin:'10px 0'}}>
-  <div>flowState.get().firstName: {get().firstName}</div>
-  <div>S.firstName: {S.firstName}</div>
-  <div>localStorage.mg_first_name: 
-    {typeof window !== 'undefined' ? localStorage.getItem('mg_first_name') : '(server)'}
-  </div>
-  <div>profile.full_name from Supabase (hydrator needed)</div>
-</div>
-
-    
     <div style={{maxWidth:980, margin:'24px auto', padding:'0 14px'}}>
+      {/* DEBUG PANEL — which name is actually filled? */}
+      <div style={{padding:12, background:'#ffe5e5', border:'1px solid #ffb3b3', borderRadius:8, margin:'10px 0', fontFamily:'monospace'}}>
+        <div>flowState.get().firstName: <b>{D.snapFirst || '(empty)'}</b></div>
+        <div>Component state S.firstName: <b>{D.stateFirst || '(empty)'}</b></div>
+        <div>localStorage.mg_first_name: <b>{D.lsFirst || '(empty)'}</b></div>
+        <div>profiles.first_name: <b>{D.profFirst}</b></div>
+        <div>profiles.full_name: <b>{D.profFull}</b></div>
+        <div>user_profile.first_name: <b>{D.upFirst}</b></div>
+        <div>auth.users.email: <b>{D.authEmail}</b></div>
+      </div>
+
       <div style={{display:'grid', gridTemplateColumns:'1fr', gap:14}}>
         <div style={{ background:'#fff', border:'1px solid rgba(0,0,0,0.08)', borderRadius:18, padding:16 }}>
           <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:10}}>
@@ -159,6 +236,9 @@ export default function ChatPage(){
                 </div>
               )
             })}
+            {thinking && (
+              <div style={{opacity:.7, fontStyle:'italic'}}>Genie is thinking…</div>
+            )}
           </div>
 
           <div style={{display:'flex', gap:10, marginTop:12}}>
