@@ -1,5 +1,5 @@
-// /pages/flow.js — match Home/Vibe/Onboard design + clearer copy
-import { useState } from 'react';
+// /pages/flow.js — Manifestor style with personalized name
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { get, set } from '../src/flowState';
 import { generateChecklist } from '../src/checklistGen';
@@ -12,6 +12,20 @@ export default function Flow() {
   const [wish, setWish]   = useState(init.wish || '');
   const [block, setBlock] = useState(init.block || '');
   const [micro, setMicro] = useState(init.micro || '');
+  const [firstName, setFirstName] = useState('Friend');
+
+  useEffect(() => {
+    const snap = get();
+    let n = (snap.firstName || '').trim();
+    if (!n || n === 'Friend') {
+      try {
+        const ls = (localStorage.getItem('mg_first_name') || '').trim();
+        if (ls) n = ls;
+      } catch {}
+    }
+    if (!n) n = 'Friend';
+    setFirstName(n);
+  }, []);
 
   const can = wish.trim() && micro.trim();
 
@@ -31,11 +45,11 @@ export default function Flow() {
   return (
     <main style={{ width: 'min(900px, 94vw)', margin: '30px auto' }}>
       <h1 style={{ fontSize: 28, fontWeight: 900, margin: '0 0 12px' }}>
-        Your plan for today
+        Your manifestation plan for today
       </h1>
 
       <p className="text-sm text-black/60 h-5" aria-live="polite">
-        Let’s map your wish, your snag, and the one tiny step you’ll take today.
+        {`${firstName}, let’s set your intention, clear the block, and lock in the inspired action that moves your dream closer.`}
       </p>
 
       <section
@@ -55,35 +69,35 @@ export default function Flow() {
           }}
         >
           <label style={{ margin: '12px 0 6px', display: 'block', fontWeight: 600 }}>
-            What’s the outcome you want?
+            What do you desire to call in?
           </label>
           <textarea
             rows={3}
             style={input}
             value={wish}
             onChange={e => setWish(e.target.value)}
-            placeholder="One line. No fluff."
+            placeholder="State it simply. One line of power."
           />
 
           <label style={{ margin: '12px 0 6px', display: 'block', fontWeight: 600 }}>
-            What’s blocking you?
+            What’s the resistance in the way?
           </label>
           <textarea
             rows={2}
             style={input}
             value={block}
             onChange={e => setBlock(e.target.value)}
-            placeholder="Say the snag. Simple + true."
+            placeholder="Name the snag. Honest + clear."
           />
 
           <label style={{ margin: '12px 0 6px', display: 'block', fontWeight: 600 }}>
-            What’s 1 micro-move you can make today?
+            What aligned step can you take right now?
           </label>
           <input
             style={input}
             value={micro}
             onChange={e => setMicro(e.target.value)}
-            placeholder="Send it. Start it. Ship it."
+            placeholder="Send it. Start it. Claim it."
           />
 
           <button
@@ -100,7 +114,7 @@ export default function Flow() {
               width: '100%',
             }}
           >
-            Lock it in →
+            ✨ Lock in my manifestation →
           </button>
         </div>
       </section>
