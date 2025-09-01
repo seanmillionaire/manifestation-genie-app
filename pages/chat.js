@@ -1,8 +1,9 @@
-// /pages/chat.js
+// /pages/chat.js — instant first reply + proof strip
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
 import { get, set, newId, normalizeMsg, pushThread, toPlainMessages } from '../src/flowState';
 import { supabase } from '../src/supabaseClient';
+import FomoFeed from '../components/FomoFeed'
 
 function escapeHTML(s=''){ return s.replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
 function nl2br(s=''){ return s.replace(/\n/g, '<br/>'); }
@@ -19,157 +20,126 @@ async function callGenie({ text, state }) {
         micro: state.currentWish?.micro || null,
         vibe: state.vibe || null
       },
-      messages: [
-        ...toPlainMessages(state.thread || []),
-        { role:'user', content: text }
-      ]
+      messages: toPlainMessages(state.thread || []),
+      text
     })
   });
+  if (!resp.ok) throw new Error('Genie API error');
   const data = await resp.json();
-  return (data && (data.reply || data.text)) || 'As you wish—what exactly do you want?';
+  return data?.reply || 'I’m here.';
 }
 
 export default function ChatPage(){
   const router = useRouter();
   const [S, setS] = useState(get());
   const [input, setInput] = useState('');
-  const endRef = useRef(null);
+  const [thinking, setThinking] = useState(false);
+  const listRef = useRef(null);
 
-  useEffect(()=>{ endRef.current?.scrollIntoView({behavior:'smooth'}); }, [S.thread]);
-
-  useEffect(()=>{
-    // Redirect if user skipped earlier pages (no vibe or no wish)
-    const cur = get();
-    if (!cur.vibe) return router.replace('/vibe');
-    if (!cur.currentWish) return router.replace('/flow');
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // 🔹 OLD-BUILD NAME HYDRATION (exact logic)
-  // profiles.full_name → auth metadata (full_name/name/given_name) → email prefix
-  // writes to localStorage + flowState, then re-renders
+  // Redirect if user skipped earlier pages (no vibe or no wish)
   useEffect(() => {
-    let alive = true;
-    (async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        const user = session?.user;
-        if (!alive || !user) return;
+    const cur = get();
+    if (!cur.vibe) { router.replace('/vibe'); return; }
+    if (!cur.currentWish) { router.replace('/flow'); return; }
 
-        let fn = null;
+    // Instant first reply (only once when thread is empty)
+    if (!cur.thread || cur.thread.length === 0){
+      pushThread({
+        role:'assistant',
+        content: `The lamp glows… I’m here, ${cur.firstName || 'Friend'}.\nOne tiny move today beats a thousand tomorrows. What’s the snag we’ll clear right now?`
+      });
+      setS(get());
+    }
+  }, [router]);
 
-        // profiles.full_name (first token)
-        try {
-          const { data: p } = await supabase
-            .from('profiles')
-            .select('full_name')
-            .eq('id', user.id)
-            .maybeSingle();
-          if (p?.full_name) fn = String(p.full_name).trim().split(' ')[0];
-        } catch {}
+  // Auto-scroll to latest
+  useEffect(() => {
+    const el = listRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [S.thread]);
 
-        // metadata fallbacks
-        if (!fn) {
-          const meta = user.user_metadata || {};
-          fn =
-            (meta.full_name?.trim().split(' ')[0]) ||
-            (meta.name?.trim().split(' ')[0]) ||
-            meta.given_name ||
-            (user.email || '').split('@')[0] ||
-            null;
-        }
-
-        if (alive && fn) {
-          try { localStorage.setItem('mg_first_name', fn); } catch {}
-          set({ firstName: fn });         // push into global flow state
-          setS(get());                    // re-render with name
-        }
-      } catch {}
-    })();
-    return () => { alive = false; };
-  }, []);
-
-  // ❌ IMPORTANT: no other name hydrator on this page (that’s what flipped to "Friend")
-
-  const send = async () => {
-    const text = (input || '').trim();
-    if (!text) return;
-
-    const userMsg = normalizeMsg(
-      { id:newId(), role:'user', author:S.firstName || 'You', content: escapeHTML(text) },
-      S.firstName
-    );
-    const thread = [...(S.thread || []), userMsg];
-    set({ thread });
-    setS(get());
+  async function send(){
+    const text = input.trim();
+    if (!text || thinking) return;
     setInput('');
+    setThinking(true);
+
+    // Push user message
+    pushThread({ role:'user', author: S.firstName || 'You', content: text });
+    setS(get());
 
     try {
       const reply = await callGenie({ text, state: get() });
-      const ai = normalizeMsg({ role:'assistant', author:'Genie', content: nl2br(escapeHTML(reply)) }, S.firstName);
-      pushThread(ai);
+      pushThread({ role:'assistant', content: reply });
       setS(get());
-    } catch {
-      const ai = normalizeMsg({ role:'assistant', author:'Genie', content: 'The lamp flickered. Try again.' }, S.firstName);
-      pushThread(ai);
+    } catch (err) {
+      pushThread({ role:'assistant', content: 'The lamp flickered. Try again in a moment.' });
       setS(get());
+    } finally {
+      setThinking(false);
     }
-  };
+  }
 
-  const onKey = (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } };
+  function onKey(e){
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault(); send();
+    }
+  }
 
   return (
-    <div style={{ background:'#fff', border:'1px solid rgba(0,0,0,0.08)', borderRadius:18, padding:16 }}>
-      <h1 style={{fontSize:24, fontWeight:900, margin:'4px 0 8px'}}>
-        Genie Chat, {S.firstName || 'Friend'}
-      </h1>
+    <div style={{maxWidth:980, margin:'24px auto', padding:'0 14px'}}>
+      <div style={{display:'grid', gridTemplateColumns:'1fr', gap:14}}>
+        {/* Chat panel */}
+        <div style={{ background:'#fff', border:'1px solid rgba(0,0,0,0.08)', borderRadius:18, padding:16 }}>
+          <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:10}}>
+            <div style={{fontWeight:900, fontSize:18}}>Genie Chat</div>
+            <button onClick={()=>{ set({ thread: [] }); setS(get()); }} style={{border:'1px solid rgba(0,0,0,0.12)', borderRadius:8, padding:'6px 10px', background:'#fff', cursor:'pointer'}}>New wish</button>
+          </div>
 
-      <div style={{
-        minHeight:360, maxHeight:520, overflowY:'auto',
-        border:'1px solid rgba(0,0,0,0.08)', borderRadius:12, padding:12, background:'#fafafa'
-      }}>
-        {(S.thread || []).map(m => {
-          const isAI = m.role === 'assistant';
-          return (
-            <div key={m.id} style={{ display:'flex', gap:8, margin:'8px 0', flexDirection: isAI ? 'row' : 'row-reverse' }}>
-              <div style={{
-                width:30, height:30, borderRadius:'50%', background:'rgba(0,0,0,0.05)',
-                display:'flex', alignItems:'center', justifyContent:'center', fontSize:16
-              }}>{isAI ? '🔮' : '🙂'}</div>
+          <div ref={listRef} style={{minHeight:360, maxHeight:520, overflowY:'auto', border:'1px solid rgba(0,0,0,0.08)', borderRadius:12, padding:12, background:'#f8fafc'}}>
+            {(S.thread || []).map(m => {
+              const isAI = m.role !== 'user';
+              return (
+                <div key={m.id || newId()} style={{ marginBottom:12, display:'flex', flexDirection:'column', alignItems: isAI ? 'flex-start' : 'flex-end' }}>
+                  <div style={{fontSize:12, fontWeight:700, color:'#334155', marginBottom:6, textAlign: isAI ? 'left' : 'right'}}>
+                    {isAI ? 'Genie' : (m.author || S.firstName || 'You')}
+                  </div>
+                  <div
+                    style={{
+                      background: isAI ? 'rgba(0,0,0,0.04)' : 'rgba(255,214,0,0.15)',
+                      border:'1px solid rgba(0,0,0,0.08)',
+                      borderRadius:12, padding:'10px 12px',
+                      maxWidth:'78%', whiteSpace:'pre-wrap', lineHeight:1.4
+                    }}
+                    dangerouslySetInnerHTML={{ __html: nl2br(escapeHTML(m.content || '')) }}
+                  />
+                </div>
+              )
+            })}
+            {thinking && (
+              <div style={{opacity:.7, fontStyle:'italic'}}>Genie is thinking…</div>
+            )}
+          </div>
 
-              <div style={{maxWidth:'80%'}}>
-                <div style={{
-                  fontSize:12, opacity:.65, margin: isAI ? '0 0 4px 6px' : '0 6px 4px 0',
-                  textAlign: isAI ? 'left' : 'right'
-                }}>{isAI ? 'Genie' : (m.author || S.firstName || 'You')}</div>
+          <div style={{display:'flex', gap:10, marginTop:12}}>
+            <textarea
+              rows={2}
+              value={input}
+              onChange={e=>setInput(e.target.value)}
+              onKeyDown={onKey}
+              placeholder={`Speak to your Genie, ${S.firstName || 'Friend'}…`}
+              style={{flex:1, padding:'12px 14px', borderRadius:12, border:'1px solid rgba(0,0,0,0.15)'}}
+            />
+            <button onClick={send} style={{ padding:'12px 16px', borderRadius:14, border:0, background:'#ffd600', fontWeight:900 }}>
+              Send
+            </button>
+          </div>
+        </div>
 
-                <div
-                  style={{
-                    background: isAI ? 'rgba(0,0,0,0.04)' : 'rgba(255,214,0,0.15)',
-                    border:'1px solid rgba(0,0,0,0.08)', borderRadius:12,
-                    padding:'10px 12px'
-                  }}
-                  dangerouslySetInnerHTML={{ __html: m.content }}
-                />
-              </div>
-            </div>
-          );
-        })}
-        <div ref={endRef} />
-      </div>
-
-      <div style={{display:'flex', gap:10, marginTop:10}}>
-        <textarea
-          rows={2}
-          value={input}
-          onChange={e=>setInput(e.target.value)}
-          onKeyDown={onKey}
-          placeholder={`Speak to your Genie, ${S.firstName || 'Friend'}…`}
-          style={{flex:1, padding:'12px 14px', borderRadius:12, border:'1px solid rgba(0,0,0,0.15)'}}
-        />
-        <button onClick={send} style={{ padding:'12px 16px', borderRadius:14, border:0, background:'#ffd600', fontWeight:900 }}>
-          Send
-        </button>
+        {/* Proof strip below chat */}
+        <div>
+          <FomoFeed />
+        </div>
       </div>
     </div>
   );
