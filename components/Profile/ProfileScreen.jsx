@@ -1,117 +1,77 @@
 // components/Profile/ProfileScreen.jsx
 import { useEffect, useState } from "react";
-
-/**
- * SUPER SAFE PROFILE
- * - No external app imports
- * - Never reads localStorage during SSR render
- * - Guards *everything* so it cannot crash
- */
+import { get, set } from "../../src/flowState";
 
 const AGREEMENT_VERSION = "v1";
 const AGREED_KEY = `mg_agreed_${AGREEMENT_VERSION}`;
 
-function safeText(val) {
-  if (val == null) return "—";
-  const t = typeof val;
-  if (t === "string" || t === "number" || t === "boolean") return String(val);
-  if (t === "object") {
-    try {
-      if ("name" in val && (typeof val.name === "string" || typeof val.name === "number")) {
-        return String(val.name);
-      }
-      return JSON.stringify(val);
-    } catch {
-      return "—";
-    }
-  }
-  return "—";
-}
-
-function safeParseJSON(s, fallback) {
-  if (!s || typeof s !== "string") return fallback;
+async function hydrateName() {
   try {
-    return JSON.parse(s);
+    const m = await import("../../src/userName"); // { hydrateFirstNameFromSupabase }
+    if (m && typeof m.hydrateFirstNameFromSupabase === "function") {
+      await m.hydrateFirstNameFromSupabase();
+    }
   } catch {
-    return fallback;
+    // ignore — we'll show a friendly fallback
   }
-}
-
-function safeDateLabel(iso) {
-  if (!iso || typeof iso !== "string") return null;
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return null;
-  return d.toLocaleString();
 }
 
 export default function ProfileScreen() {
-  const [mounted, setMounted] = useState(false);
+  const [S, setS] = useState(get());
   const [loading, setLoading] = useState(true);
-  const [err, setErr] = useState("");
-  const [state, setState] = useState({
-    firstName: "Friend",
-    vibe: null,
-    currentWish: { wish: null, block: null, micro: null },
-    agreement: { acceptedAt: null, version: AGREEMENT_VERSION },
-  });
+  const [err, setErr] = useState(null);
 
-  useEffect(() => setMounted(true), []);
-  if (!mounted) return null; // never render on server
+  const [agreedAt, setAgreedAt] = useState(
+    typeof window !== "undefined" ? localStorage.getItem(AGREED_KEY) : null
+  );
 
-  // Hydrate only on client
+  // hydrate like Home/Chat
   useEffect(() => {
-    let done = false;
+    let alive = true;
     (async () => {
       try {
-        // Everything wrapped so a single bad key can't crash
-        const firstName =
-          (typeof window !== "undefined" && localStorage.getItem("mg_first_name")) ||
-          "Friend";
-
-        const vibe =
-          (typeof window !== "undefined" && localStorage.getItem("mg_vibe")) || null;
-
-        const currentWish =
-          (typeof window !== "undefined" &&
-            safeParseJSON(localStorage.getItem("mg_current_wish"), {
-              wish: null,
-              block: null,
-              micro: null,
-            })) || { wish: null, block: null, micro: null };
-
-        const agreedAt =
-          (typeof window !== "undefined" && localStorage.getItem(AGREED_KEY)) || null;
-
-        setState({
-          firstName,
-          vibe,
-          currentWish,
-          agreement: { acceptedAt: agreedAt, version: AGREEMENT_VERSION },
-        });
+        const cur = get();
+        if (!cur.firstName || cur.firstName === "Friend") {
+          await hydrateName();
+        }
+        if (alive) setS(get());
       } catch (e) {
-        console.error("Profile hydrate error:", e);
-        setErr("Could not load saved profile. Showing defaults.");
+        if (alive) setErr("Could not load your profile. Showing default view.");
       } finally {
-        if (!done) setLoading(false);
+        if (alive) setLoading(false);
       }
     })();
+
+    // keep in sync with other tabs/sections
+    const onStorage = (e) => {
+      if (e.key === "mg_first_name") setS(get());
+      if (e.key === AGREED_KEY) setAgreedAt(e.newValue);
+    };
+    if (typeof window !== "undefined") window.addEventListener("storage", onStorage);
     return () => {
-      done = true;
+      alive = false;
+      if (typeof window !== "undefined") window.removeEventListener("storage", onStorage);
     };
   }, []);
 
-  const firstName = safeText(state.firstName);
-  const vibeLabel = safeText(state.vibe);
-  const wish = safeText(state.currentWish?.wish);
-  const block = safeText(state.currentWish?.block);
-  const micro = safeText(state.currentWish?.micro);
+  const firstName = S.firstName || "Friend";
+  const vibe = S.vibe || "—";
+  const wish = S.currentWish?.wish || "—";
+  const block = S.currentWish?.block || "—";
+  const micro = S.currentWish?.micro || "—";
+  const storeAgreement = S.agreement || null;
+  const acceptedIso = agreedAt || storeAgreement?.acceptedAt || null;
 
-  const acceptedIso =
-    state.agreement?.acceptedAt ? String(state.agreement.acceptedAt) : null;
-  const acceptedLabel = safeDateLabel(acceptedIso);
+  const refreshFromSupabase = async () => {
+    setLoading(true);
+    await hydrateName();
+    setS(get());
+    setLoading(false);
+  };
 
   return (
     <main style={{ width: "min(900px, 94vw)", margin: "30px auto" }}>
+      {/* same header sizing as chat/home */}
       <h1 style={{ fontSize: 28, fontWeight: 900, margin: "0 0 12px" }}>
         Profile, {firstName}
       </h1>
@@ -120,6 +80,7 @@ export default function ProfileScreen() {
         {loading ? "Loading your profile…" : err ? err : ""}
       </p>
 
+      {/* outer console container (matches chat look) */}
       <section
         style={{
           border: "1px solid rgba(0,0,0,0.08)",
@@ -128,7 +89,7 @@ export default function ProfileScreen() {
           background: "#fafafa",
         }}
       >
-        {/* Your info */}
+        {/* Card: Identity */}
         <div
           style={{
             background: "white",
@@ -142,13 +103,29 @@ export default function ProfileScreen() {
             Your info
           </div>
           <div style={{ fontSize: 14, lineHeight: 1.6 }}>
-            <div>
-              <strong>Name:</strong> {firstName}
+            <div><strong>Name:</strong> {firstName}</div>
+            <div style={{ marginTop: 6, display: "flex", gap: 10, flexWrap: "wrap" }}>
+              <button
+                onClick={refreshFromSupabase}
+                style={{
+                  background: "white",
+                  border: "1px solid rgba(0,0,0,0.20)",
+                  borderRadius: 10,
+                  padding: "10px 16px",
+                  fontWeight: 700,
+                  minHeight: 44,
+                  minWidth: 44,
+                  cursor: "pointer",
+                }}
+                title="Re-sync name from Supabase"
+              >
+                Refresh from Supabase
+              </button>
             </div>
           </div>
         </div>
 
-        {/* Current vibe */}
+        {/* Card: Current Vibe */}
         <div
           style={{
             background: "white",
@@ -161,10 +138,10 @@ export default function ProfileScreen() {
           <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 6 }}>
             Current vibe
           </div>
-          <div style={{ fontSize: 14 }}>{vibeLabel}</div>
+          <div style={{ fontSize: 14 }}>{vibe}</div>
         </div>
 
-        {/* Current wish */}
+        {/* Card: Current Wish */}
         <div
           style={{
             background: "white",
@@ -177,18 +154,14 @@ export default function ProfileScreen() {
           <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 6 }}>
             Current wish
           </div>
-          <div>
-            <strong>Wish:</strong> {wish}
-          </div>
-          <div>
-            <strong>Block:</strong> {block}
-          </div>
-          <div>
-            <strong>Micro-step:</strong> {micro}
+          <div style={{ fontSize: 14, lineHeight: 1.6 }}>
+            <div><strong>Wish:</strong> {wish}</div>
+            <div><strong>Block:</strong> {block}</div>
+            <div><strong>Micro-step:</strong> {micro}</div>
           </div>
         </div>
 
-        {/* Agreement */}
+        {/* Card: Agreement */}
         <div
           style={{
             background: "white",
@@ -200,7 +173,7 @@ export default function ProfileScreen() {
           <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 6 }}>
             Ethical agreement
           </div>
-          {acceptedLabel ? (
+          {acceptedIso ? (
             <div
               style={{
                 fontSize: 12,
@@ -212,7 +185,7 @@ export default function ProfileScreen() {
                 display: "inline-block",
               }}
             >
-              Accepted {acceptedLabel} (version {AGREEMENT_VERSION})
+              Accepted {new Date(acceptedIso).toLocaleString()} (version {AGREEMENT_VERSION})
             </div>
           ) : (
             <div style={{ fontSize: 14 }}>Not accepted yet on this version.</div>
