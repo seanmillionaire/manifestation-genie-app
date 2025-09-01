@@ -1,4 +1,4 @@
-// /pages/_app.js — clean header + 3-button nav + sticky Buy bar
+// /pages/_app.js — clean logo header + 3-button nav (JS only) + sticky Buy bar
 import '../styles/globals.css'
 import '../styles/light-theme.css'
 import Head from 'next/head'
@@ -6,19 +6,19 @@ import Link from 'next/link'
 import { useRouter } from 'next/router'
 import { useEffect } from 'react'
 
-// (optional) if you use these, keep them; safe if missing
-try { require('../src/persist').loadAllIntoFlowState?.() } catch {}
-try { require('../src/userName').hydrateFirstNameFromSupabase?.() } catch {}
+// hydrate local state/name (safe if files are missing)
+function hydrate() {
+  try { require('../src/persist').loadAllIntoFlowState?.() } catch {}
+  try { require('../src/userName').hydrateFirstNameFromSupabase?.() } catch {}
+}
 
-// Your live order page (with UTM)
 const PAY_URL =
   'https://hypnoticmeditations.ai/order?link=SiQ1E&utm_source=genie&utm_medium=app&utm_campaign=v1_launch'
-
 const LOGO_SRC =
   'https://storage.googleapis.com/mixo-sites/images/file-a7eebac5-6af9-4253-bc71-34c0d455a852.png'
 
-// --- UI bits ---
-function NavButton({ href, label, active }: { href: string; label: string; active?: boolean }) {
+// --- UI bits (no TS types) ---
+function NavButton({ href, label, active }) {
   return (
     <Link
       href={href}
@@ -66,12 +66,9 @@ function Header() {
           <img src={LOGO_SRC} alt="Manifestation Genie" height={36} />
         </Link>
 
-        <nav
-          aria-label="Primary"
-          style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}
-        >
+        <nav aria-label="Primary" style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
           <NavButton href="/home" label="Home" active={path.startsWith('/home')} />
-          {/* “Start” begins at the vibe step; switch to '/flow' if you prefer */}
+          {/* “Start” at vibe step (change to '/flow' if you prefer) */}
           <NavButton href="/vibe" label="Start" active={path.startsWith('/vibe')} />
           <NavButton href="/profile" label="Profile" active={path.startsWith('/profile')} />
         </nav>
@@ -125,19 +122,15 @@ function StickyPayBar() {
 }
 
 export default function App({ Component, pageProps }) {
+  useEffect(() => { hydrate() }, [])
   return (
     <>
       <Head>
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <title>Manifestation Genie</title>
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
-        <link
-          href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap"
-          rel="stylesheet"
-        />
         <style>{`
           :root{ --border:#e5e7eb; }
-          html,body{ margin:0; padding:0; background:#fff; color:#111; font-family:Poppins,system-ui,Arial; }
+          html,body{ margin:0; padding:0; background:#fff; color:#111; font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial; }
           *{ box-sizing:border-box }
           .pageWrap{ min-height:100vh; display:flex; flex-direction:column; }
           main{ flex:1; }
