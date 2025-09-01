@@ -95,20 +95,26 @@ export default function App({ Component, pageProps }) {
   const router = useRouter()
 
   // 🔑 Load saved data from Supabase → flowState (client-side only)
-  useEffect(() => {
-    // Pull everything (firstName, vibe, wish, agreement) into the shared store
-    loadAllIntoFlowState().then(() => {
-      // Safety net: if name is still missing, try the name hydrator Chat uses
-      try {
-        const cached = localStorage.getItem('mg_first_name')
-        if (!cached || cached === 'Friend') {
-          hydrateFirstNameFromSupabase?.()
-        }
-      } catch {
-        hydrateFirstNameFromSupabase?.()
+useEffect(() => {
+  // Pull everything (firstName, vibe, wish, agreement) into the shared store
+  loadAllIntoFlowState().then(() => {
+    try {
+      const cached = localStorage.getItem('mg_first_name');
+
+      // ✅ If we have a real cached name, push it into the global flow state
+      if (cached && cached.trim() && cached !== 'Friend') {
+        setFirstName(cached);
+      } else {
+        // Otherwise, try Supabase to hydrate it
+        hydrateFirstNameFromSupabase?.();
       }
-    })
-  }, [])
+    } catch {
+      // If localStorage is blocked, still try server
+      hydrateFirstNameFromSupabase?.();
+    }
+  });
+}, []);
+
 
   return (
     <>
