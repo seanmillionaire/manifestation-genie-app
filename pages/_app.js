@@ -5,6 +5,7 @@ import Head from 'next/head'
 import Link from 'next/link'
 import { useRouter } from 'next/router'
 import { useEffect } from 'react'
+import { setFirstName } from '../src/flowState';
 
 // If you DID set up the "@" alias, keep this line.
 // If not, change to:  import { loadAllIntoFlowState } from '../src/persist'
