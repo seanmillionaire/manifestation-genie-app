@@ -1,4 +1,4 @@
-// /pages/chat.js — debug first-name sources, no console
+// /pages/chat.js — clean (no debug), hydrated name, no frozen author
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
 import { get, set, newId, pushThread, toPlainMessages } from '../src/flowState';
@@ -8,15 +8,15 @@ import FomoFeed from '../components/FomoFeed';
 function escapeHTML(s=''){ return s.replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'" :'&#39;'}[m])); }
 function nl2br(s=''){ return s.replace(/\n/g, '<br/>'); }
 
-// choose the best available first name from many fields
+// pick the best available first name from any source
 function pickFirstName(src){
-  const tryFirst = (v)=> v ? String(v).trim().split(/\s+/)[0] : '';
+  const first = (v)=> v ? String(v).trim().split(/\s+/)[0] : '';
   const cands = [
-    src?.first_name, src?.firstName, // snake & camel
+    src?.first_name, src?.firstName,
     src?.display_name, src?.displayName,
     src?.name,
     src?.full_name, src?.fullName
-  ].map(tryFirst).filter(Boolean);
+  ].map(first).filter(Boolean);
   for (const c of cands){
     const t = c.trim();
     if (!t) continue;
@@ -55,18 +55,7 @@ export default function ChatPage(){
   const [thinking, setThinking] = useState(false);
   const listRef = useRef(null);
 
-  // DEBUG state: show all places we’re pulling name from
-  const [D, setD] = useState({
-    snapFirst: get().firstName,
-    stateFirst: S.firstName,
-    lsFirst: '(n/a)',
-    profFirst: '(loading)',
-    profFull: '(loading)',
-    upFirst: '(loading)',
-    authEmail: '(loading)'
-  });
-
-  // hydrate name BEFORE creating first assistant line; also fill debug fields
+  // hydrate name BEFORE creating the first assistant line (no debug)
   useEffect(() => {
     const cur = get();
 
@@ -83,19 +72,12 @@ export default function ChatPage(){
       }
     } catch {}
 
-    // 2) Supabase profile rows
+    // 2) Supabase rows
     (async () => {
-      let authEmail = '';
-      let profFirst = '';
-      let profFull = '';
-      let upFirst = '';
-
       try {
         const { data: { session } } = await supabase.auth.getSession();
         const user = session?.user;
         if (user) {
-          authEmail = user.email || '';
-
           // profiles
           const { data: p } = await supabase
             .from('profiles')
@@ -103,22 +85,17 @@ export default function ChatPage(){
             .eq('id', user.id)
             .maybeSingle();
 
-          profFirst = p?.first_name || '';
-          profFull  = p?.full_name || '';
-
-          // user_profile (if exists)
+          // user_profile (optional)
           const { data: up } = await supabase
             .from('user_profile')
             .select('first_name, full_name')
             .eq('user_id', user.id)
             .maybeSingle();
 
-          upFirst = up?.first_name || '';
-
           // decide best name and push to store/cache
           const best = pickFirstName({
-            first_name: profFirst || upFirst,
-            full_name: profFull || up?.full_name,
+            first_name: p?.first_name || up?.first_name,
+            full_name: p?.full_name || up?.full_name,
             name: user.user_metadata?.name,
             display_name: user.user_metadata?.full_name
           }) || lsName;
@@ -130,7 +107,7 @@ export default function ChatPage(){
         }
       } catch {}
 
-      // create first line if empty (after we tried to know the name)
+      // 3) create first line if empty (after we tried to know the name)
       const after = get();
       if (!after.thread || after.thread.length === 0){
         pushThread({
@@ -147,20 +124,9 @@ export default function ChatPage(){
         }
       }
 
-      // reflect latest store + debug
-      const snap = get();
-      setS(snap);
-      setD({
-        snapFirst: snap.firstName,
-        stateFirst: snap.firstName,     // now same as S after setS(snap)
-        lsFirst: lsName || (typeof window !== 'undefined' ? (localStorage.getItem('mg_first_name') || '(empty)') : '(server)'),
-        profFirst: profFirst || '(null)',
-        profFull: profFull || '(null)',
-        upFirst: upFirst || '(null)',
-        authEmail: authEmail || '(null)'
-      });
+      // reflect latest store in this component
+      setS(get());
     })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router]);
 
   // keep list scrolled
@@ -175,6 +141,7 @@ export default function ChatPage(){
     setInput('');
     setThinking(true);
 
+    // don't freeze author; derive label at render
     pushThread({ role:'user', content: text });
     setS(get());
 
@@ -198,17 +165,6 @@ export default function ChatPage(){
 
   return (
     <div style={{maxWidth:980, margin:'24px auto', padding:'0 14px'}}>
-      {/* DEBUG PANEL — which name is actually filled? */}
-      <div style={{padding:12, background:'#ffe5e5', border:'1px solid #ffb3b3', borderRadius:8, margin:'10px 0', fontFamily:'monospace'}}>
-        <div>flowState.get().firstName: <b>{D.snapFirst || '(empty)'}</b></div>
-        <div>Component state S.firstName: <b>{D.stateFirst || '(empty)'}</b></div>
-        <div>localStorage.mg_first_name: <b>{D.lsFirst || '(empty)'}</b></div>
-        <div>profiles.first_name: <b>{D.profFirst}</b></div>
-        <div>profiles.full_name: <b>{D.profFull}</b></div>
-        <div>user_profile.first_name: <b>{D.upFirst}</b></div>
-        <div>auth.users.email: <b>{D.authEmail}</b></div>
-      </div>
-
       <div style={{display:'grid', gridTemplateColumns:'1fr', gap:14}}>
         <div style={{ background:'#fff', border:'1px solid rgba(0,0,0,0.08)', borderRadius:18, padding:16 }}>
           <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:10}}>
@@ -222,7 +178,7 @@ export default function ChatPage(){
               return (
                 <div key={m.id || newId()} style={{ marginBottom:12, display:'flex', flexDirection:'column', alignItems: isAI ? 'flex-start' : 'flex-end' }}>
                   <div style={{fontSize:12, fontWeight:700, color:'#334155', marginBottom:6, textAlign: isAI ? 'left' : 'right'}}>
-                     {isAI ? 'Genie' : (S.firstName || 'You')}
+                    {isAI ? 'Genie' : (S.firstName || 'You')}
                   </div>
                   <div
                     style={{
