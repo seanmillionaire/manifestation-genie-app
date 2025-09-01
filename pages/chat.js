@@ -175,7 +175,7 @@ export default function ChatPage(){
     setInput('');
     setThinking(true);
 
-    pushThread({ role:'user', author: (get().firstName || 'You'), content: text });
+    pushThread({ role:'user', content: text });
     setS(get());
 
     try {
@@ -222,7 +222,7 @@ export default function ChatPage(){
               return (
                 <div key={m.id || newId()} style={{ marginBottom:12, display:'flex', flexDirection:'column', alignItems: isAI ? 'flex-start' : 'flex-end' }}>
                   <div style={{fontSize:12, fontWeight:700, color:'#334155', marginBottom:6, textAlign: isAI ? 'left' : 'right'}}>
-                    {isAI ? 'Genie' : (m.author || S.firstName || 'You')}
+                     {isAI ? 'Genie' : (S.firstName || 'You')}
                   </div>
                   <div
                     style={{
