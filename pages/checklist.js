@@ -31,7 +31,7 @@ export default function ChecklistPage() {
   return (
     <main style={{ width: 'min(900px, 94vw)', margin: '30px auto' }}>
       <h1 style={{ fontSize: 28, fontWeight: 900, margin: '0 0 12px' }}>
-        Take a second to get yourself ready for this magical journey!
+        Take a second to get yourself ready
       </h1>
 
       <p className="text-sm text-black/60 h-5" aria-live="polite">
