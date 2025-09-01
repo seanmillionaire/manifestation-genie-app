@@ -1,15 +1,11 @@
-// pages/index.js
+// pages/index.js — redirect root to /home for public landing
 import { useEffect } from 'react'
 import { useRouter } from 'next/router'
-import { supabase } from '../src/supabaseClient'
 
-export default function Home() {
+export default function Index() {
   const router = useRouter()
   useEffect(() => {
-    (async () => {
-      const { data: { session } } = await supabase.auth.getSession()
-      router.replace(session ? '/chat' : '/login')
-    })()
+    router.replace('/home')
   }, [router])
   return null
 }
