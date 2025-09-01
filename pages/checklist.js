@@ -1,4 +1,4 @@
-// /pages/checklist.js — Manifestor primer (clear + actionable)
+// /pages/checklist.js — Manifestor primer (concise) — no Edit Plan button
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import { get, set } from '../src/flowState';
@@ -9,6 +9,7 @@ export default function ChecklistPage() {
 
   useEffect(() => { setS(get()); }, []);
 
+  // resolve name at render (don’t freeze)
   function firstName() {
     const n = (S.firstName || '').trim();
     if (n && n !== 'Friend') return n;
@@ -25,10 +26,6 @@ export default function ChecklistPage() {
   function goChat() {
     set({ phase: 'chat' });
     router.push('/chat');
-  }
-
-  function editPlan() {
-    router.push('/flow');
   }
 
   return (
@@ -57,7 +54,7 @@ export default function ChecklistPage() {
             padding: '14px 16px'
           }}
         >
-          {/* Clear, manifestor-style primer */}
+          {/* ultra-clear, manifestor-style primer */}
           <div
             style={{
               padding: 12,
@@ -67,49 +64,34 @@ export default function ChecklistPage() {
               marginBottom: 12
             }}
           >
-            <ol style={{ margin: 0, paddingLeft: 18, lineHeight: 1.5 }}>
+            <ol style={{ margin: 0, paddingLeft: 18, lineHeight: 1.6 }}>
               <li>
-                <b>Set the field (2 min).</b> Turn on Do Not Disturb, close other tabs, clear your space.
+                <b>Prepare.</b> Turn on Do Not Disturb, close other tabs, clear your space.
               </li>
               <li style={{ marginTop: 8 }}>
-                <b>Move the energy (15 min).</b> Start a 15-minute timer and do: “{microText}”.
+                <b>Focus.</b> Start a 15-minute timer and do: “{microText}”.
               </li>
               <li style={{ marginTop: 8 }}>
-                <b>Anchor it (today).</b> Say or post one sentence about “{wishText}” to one person/platform.
+                <b>Manifest.</b> Say or post one sentence about “{wishText}” to one person/platform.
               </li>
             </ol>
           </div>
 
-          {/* Primary actions */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 10 }}>
-            <button
-              onClick={goChat}
-              style={{
-                padding: '12px 16px',
-                borderRadius: 14,
-                border: 0,
-                background: '#ffd600',
-                fontWeight: 900,
-                cursor: 'pointer'
-              }}
-            >
-              ✨ I’m ready → Enter chat
-            </button>
-
-            <button
-              onClick={editPlan}
-              style={{
-                padding: '12px 16px',
-                borderRadius: 14,
-                border: '1px solid rgba(0,0,0,0.2)',
-                background: 'transparent',
-                fontWeight: 820,
-                cursor: 'pointer'
-              }}
-            >
-              Edit plan
-            </button>
-          </div>
+          {/* single primary CTA */}
+          <button
+            onClick={goChat}
+            style={{
+              width: '100%',
+              padding: '12px 16px',
+              borderRadius: 14,
+              border: 0,
+              background: '#ffd600',
+              fontWeight: 900,
+              cursor: 'pointer'
+            }}
+          >
+            ✨ I’m ready → Enter chat
+          </button>
         </div>
       </section>
     </main>
