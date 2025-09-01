@@ -5,73 +5,99 @@ import { get, set } from "../../src/flowState";
 const AGREEMENT_VERSION = "v1";
 const AGREED_KEY = `mg_agreed_${AGREEMENT_VERSION}`;
 
-async function hydrateName() {
+async function hydrateNameFromSupabaseSafe() {
   try {
-    const m = await import("../../src/userName"); // { hydrateFirstNameFromSupabase }
+    const m = await import("../../src/userName");
     if (m && typeof m.hydrateFirstNameFromSupabase === "function") {
       await m.hydrateFirstNameFromSupabase();
     }
   } catch {
-    // ignore — we'll show a friendly fallback
+    // ignore
   }
 }
 
+function safeDateLabel(iso) {
+  if (!iso || typeof iso !== "string") return null;
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return null;
+  return d.toLocaleString();
+}
+
 export default function ProfileScreen() {
+  // 1) render nothing until we're mounted on the client
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  if (!mounted) return null;
+
+  // 2) local state snapshot (don’t read localStorage in render)
   const [S, setS] = useState(get());
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState(null);
+  const [agreedAt, setAgreedAt] = useState(null);
 
-  const [agreedAt, setAgreedAt] = useState(
-    typeof window !== "undefined" ? localStorage.getItem(AGREED_KEY) : null
-  );
-
-  // hydrate like Home/Chat
+  // 3) hydrate from store/localStorage/supabase on mount
   useEffect(() => {
     let alive = true;
+
     (async () => {
       try {
-        const cur = get();
+        // localStorage: agreement time
+        try {
+          const val = localStorage.getItem(AGREED_KEY);
+          if (val) setAgreedAt(val);
+        } catch {}
+
+        // name: prefer store; if missing, try localStorage then supabase
+        let cur = get();
         if (!cur.firstName || cur.firstName === "Friend") {
-          await hydrateName();
+          try {
+            const ls = (localStorage.getItem("mg_first_name") || "").trim();
+            if (ls && ls !== "Friend") set({ firstName: ls });
+          } catch {}
+          cur = get();
+          if (!cur.firstName || cur.firstName === "Friend") {
+            await hydrateNameFromSupabaseSafe();
+          }
         }
+
         if (alive) setS(get());
-      } catch (e) {
+      } catch {
         if (alive) setErr("Could not load your profile. Showing default view.");
       } finally {
         if (alive) setLoading(false);
       }
     })();
 
-    // keep in sync with other tabs/sections
-    const onStorage = (e) => {
+    // keep in sync with other tabs
+    function onStorage(e) {
       if (e.key === "mg_first_name") setS(get());
       if (e.key === AGREED_KEY) setAgreedAt(e.newValue);
-    };
-    if (typeof window !== "undefined") window.addEventListener("storage", onStorage);
+    }
+    window.addEventListener("storage", onStorage);
     return () => {
       alive = false;
-      if (typeof window !== "undefined") window.removeEventListener("storage", onStorage);
+      window.removeEventListener("storage", onStorage);
     };
   }, []);
 
-  const firstName = S.firstName || "Friend";
-  const vibe = S.vibe || "—";
-  const wish = S.currentWish?.wish || "—";
-  const block = S.currentWish?.block || "—";
-  const micro = S.currentWish?.micro || "—";
-  const storeAgreement = S.agreement || null;
-  const acceptedIso = agreedAt || storeAgreement?.acceptedAt || null;
+  const firstName = (S.firstName && S.firstName !== "Friend") ? S.firstName : "Friend";
+  const vibe  = S?.vibe?.name || S?.vibe || "—";
+  const wish  = S?.currentWish?.wish  || "—";
+  const block = S?.currentWish?.block || "—";
+  const micro = S?.currentWish?.micro || "—";
 
-  const refreshFromSupabase = async () => {
+  const acceptedIso = agreedAt || S?.agreement?.acceptedAt || null;
+  const acceptedLabel = safeDateLabel(acceptedIso);
+
+  async function refreshFromSupabase() {
     setLoading(true);
-    await hydrateName();
+    await hydrateNameFromSupabaseSafe();
     setS(get());
     setLoading(false);
-  };
+  }
 
   return (
     <main style={{ width: "min(900px, 94vw)", margin: "30px auto" }}>
-      {/* same header sizing as chat/home */}
       <h1 style={{ fontSize: 28, fontWeight: 900, margin: "0 0 12px" }}>
         Profile, {firstName}
       </h1>
@@ -80,7 +106,6 @@ export default function ProfileScreen() {
         {loading ? "Loading your profile…" : err ? err : ""}
       </p>
 
-      {/* outer console container (matches chat look) */}
       <section
         style={{
           border: "1px solid rgba(0,0,0,0.08)",
@@ -89,7 +114,7 @@ export default function ProfileScreen() {
           background: "#fafafa",
         }}
       >
-        {/* Card: Identity */}
+        {/* Your info */}
         <div
           style={{
             background: "white",
@@ -125,7 +150,7 @@ export default function ProfileScreen() {
           </div>
         </div>
 
-        {/* Card: Current Vibe */}
+        {/* Current vibe */}
         <div
           style={{
             background: "white",
@@ -141,7 +166,7 @@ export default function ProfileScreen() {
           <div style={{ fontSize: 14 }}>{vibe}</div>
         </div>
 
-        {/* Card: Current Wish */}
+        {/* Current wish */}
         <div
           style={{
             background: "white",
@@ -161,7 +186,7 @@ export default function ProfileScreen() {
           </div>
         </div>
 
-        {/* Card: Agreement */}
+        {/* Agreement */}
         <div
           style={{
             background: "white",
@@ -173,7 +198,7 @@ export default function ProfileScreen() {
           <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 6 }}>
             Ethical agreement
           </div>
-          {acceptedIso ? (
+          {acceptedLabel ? (
             <div
               style={{
                 fontSize: 12,
@@ -185,7 +210,7 @@ export default function ProfileScreen() {
                 display: "inline-block",
               }}
             >
-              Accepted {new Date(acceptedIso).toLocaleString()} (version {AGREEMENT_VERSION})
+              Accepted {acceptedLabel} (version {AGREEMENT_VERSION})
             </div>
           ) : (
             <div style={{ fontSize: 14 }}>Not accepted yet on this version.</div>
