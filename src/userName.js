@@ -1,59 +1,46 @@
 // /src/userName.js
 import { supabase } from './supabaseClient'
-import { set } from './flowState'
+import { set, setFirstName, get } from './flowState'
 
+// Tries both user_profile (current) and profiles (legacy) tables.
+// Writes to flowState AND localStorage when it finds a real first name.
+// Never overwrites with "Friend".
 export async function hydrateFirstNameFromSupabase() {
   const { data: { session } } = await supabase.auth.getSession()
   const user = session?.user
   if (!user) return null
 
-  // Read profile
-  let row = null
-  try {
-    const { data } = await supabase
-      .from('profiles')
-      .select('first_name, full_name, display_name')
-      .eq('id', user.id)
-      .maybeSingle()
-    row = data || null
-  } catch {}
-
-  // Pick a real first name (ignore handles)
-  const first = pickFirstName(row, user) || 'Friend'
-
-  // Update app state
-  set({ firstName: first })
-if (first && first !== 'Friend') {
-  set({ firstName: first });
-  try { localStorage.setItem('mg_first_name', first); } catch {}
-}
-// if we didn't find a name, do nothing: keep whatever we already had
-
-  // Only cache if it’s a real name (never persist "Friend")
-  try {
-    if (first && first !== 'Friend') localStorage.setItem('mg_first_name', first)
-  } catch {}
-
-  return first
-}
-
-export function pickFirstName(row, user) {
-  const m = user?.user_metadata || {}
-  const cands = [
-    row?.first_name,
-    firstFrom(row?.full_name),
-    firstFrom(row?.display_name),
-    m.given_name,
-    firstFrom(m.full_name),
-    firstFrom(m.name),
-  ].filter(Boolean)
-
-  let first = cands.find(isLikelyFirstName) || null
-  if (!first) {
-    const prefix = (user?.email || '').split('@')[0]
-    if (isLikelyFirstName(prefix)) first = prefix
+  async function trySelect(table, idCol) {
+    try {
+      const { data } = await supabase
+        .from(table)
+        .select('first_name, full_name, display_name, name')
+        .eq(idCol, user.id)
+        .maybeSingle()
+      return data || null
+    } catch {
+      return null
+    }
   }
-  return first ? titleCase(first) : null
+
+  // 1) preferred: user_profile.user_id
+  let row = await trySelect('user_profile', 'user_id')
+
+  // 2) fallback (older builds): profiles.id
+  if (!row) row = await trySelect('profiles', 'id')
+
+  const candidate =
+    firstFrom(row?.first_name) ||
+    firstFrom(row?.display_name) ||
+    firstFrom(row?.name) ||
+    firstFrom(row?.full_name)
+
+  const first = isLikelyFirstName(candidate) ? titleCase(candidate) : null
+  if (first && first !== 'Friend') {
+    setFirstName(first)   // updates flowState + localStorage
+    return first
+  }
+  return null
 }
 
 function firstFrom(s){ if(!s) return null; return String(s).trim().split(/\s+/)[0] || null }
@@ -61,8 +48,8 @@ function isLikelyFirstName(s){
   if(!s) return false
   const t = String(s).trim()
   if (t.length < 2) return false
-  if (/[0-9_]/.test(t)) return false
+  if (/[^A-Za-z\-'\s]/.test(t)) return false
   if (t.includes('@')) return false
   return true
 }
-function titleCase(s){ return String(s).replace(/\b\w/g, c => c.toUpperCase()) }
+function titleCase(s){ return String(s).toLowerCase().replace(/\b\w/g, c => c.toUpperCase()) }
