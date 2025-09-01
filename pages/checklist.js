@@ -25,7 +25,7 @@ export default function ChecklistPage() {
 
   function goChat() {
     set({ phase: 'chat' });
-    router.push('/chat');
+    router.push('/chat-genie');
   }
 
   return (
