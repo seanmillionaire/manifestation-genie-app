@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import PrescriptionCard from "./PrescriptionCard";
-import { detectBeliefFrom, recommendProduct } from "@/src/engine/recommendProduct";
+import { detectBeliefFrom, recommendProduct } from "../../src/engine/recommendProduct";
+
 
 export default function ChatGenieScreen() {
   const [messages, setMessages] = useState<{ role: "user" | "assistant"; text: string }[]>([
