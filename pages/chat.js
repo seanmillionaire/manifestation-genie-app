@@ -51,11 +51,11 @@ async function callGenie({ text, state }) {
 }
 
 export default function ChatPage(){
-  const [uiOffer, setUiOffer] = useState(null);
   const router = useRouter();
   const [S, setS] = useState(get());
   const [input, setInput] = useState('');
   const [thinking, setThinking] = useState(false);
+  const [uiOffer, setUiOffer] = useState(null);
   const listRef = useRef(null);
 
   // hydrate name BEFORE creating the first assistant line (no debug)
@@ -138,7 +138,7 @@ One tiny move today beats a thousand tomorrows. What belief or snag should we cl
   useEffect(() => {
     const el = listRef.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [S.thread]);
+  }, [S.thread, uiOffer]);
 
   async function send(){
     const text = input.trim();
@@ -150,26 +150,39 @@ One tiny move today beats a thousand tomorrows. What belief or snag should we cl
     pushThread({ role:'user', content: text });
     setS(get());
 
-try {
-  const { goal, belief } = detectBeliefFrom(text);
-  const rec = recommendProduct({ goal, belief });
+    // 1) belief detection + recommend
+    try {
+      const { goal, belief } = detectBeliefFrom(text);
+      const rec = recommendProduct({ goal, belief });
 
-  if (rec) {
-    const why = belief
-      ? `Limiting belief detected: “${belief}.” Tonight’s session dissolves that pattern so your next action feels natural.`
-      : `Based on your goal, this short trance helps you move without overthinking.`;
+      if (rec) {
+        const why = belief
+          ? `Limiting belief detected: “${belief}.” Tonight’s session dissolves that pattern so your next action feels natural.`
+          : `Based on your goal, this short trance helps you move without overthinking.`;
 
-    setUiOffer({
-      title: `Tonight’s prescription: ${rec.title}`,
-      why,
-      priceCents: rec.price,
-      previewUrl: rec.preview,
-      sku: rec.sku,
-      stripe_price_id: rec.stripe_price_id,
-    });
+        setUiOffer({
+          title: `Tonight’s prescription: ${rec.title}`,
+          why,
+          priceCents: rec.price,
+          previewUrl: rec.preview,
+          sku: rec.sku,
+          stripe_price_id: rec.stripe_price_id,
+        });
+      }
+    } catch {}
+
+    // 2) call Genie
+    try {
+      const reply = await callGenie({ text, state: get() });
+      pushThread({ role:'assistant', content: reply });
+      setS(get());
+    } catch (err) {
+      pushThread({ role:'assistant', content: 'The lamp flickered. Try again in a moment.' });
+      setS(get());
+    } finally {
+      setThinking(false);
+    }
   }
-} catch {}
-
 
   function onKey(e){
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -183,7 +196,9 @@ try {
         <div style={{ background:'#fff', border:'1px solid rgba(0,0,0,0.08)', borderRadius:18, padding:16 }}>
           <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:10}}>
             <div style={{fontWeight:900, fontSize:18}}>Genie Chat</div>
-            <button onClick={()=>{ set({ thread: [] }); setS(get()); }} style={{border:'1px solid rgba(0,0,0,0.12)', borderRadius:8, padding:'6px 10px', background:'#fff', cursor:'pointer'}}>New wish</button>
+            <button onClick={()=>{ set({ thread: [] }); setS(get()); }} style={{border:'1px solid rgba(0,0,0,0.12)', borderRadius:8, padding:'6px 10px', background:'#fff', cursor:'pointer'}}>
+              New belief to clear
+            </button>
           </div>
 
           <div ref={listRef} style={{minHeight:360, maxHeight:520, overflowY:'auto', border:'1px solid rgba(0,0,0,0.08)', borderRadius:12, padding:12, background:'#f8fafc'}}>
@@ -204,34 +219,36 @@ try {
                     dangerouslySetInnerHTML={{ __html: nl2br(escapeHTML(m.content || '')) }}
                   />
                 </div>
-  {uiOffer ? (
-  <div style={{ marginTop: 12 }}>
-    <PrescriptionCard
-      title={uiOffer.title}
-      why={uiOffer.why}
-      priceCents={uiOffer.priceCents}
-      previewUrl={uiOffer.previewUrl}
-      onUnlock={async () => {
-        const used = localStorage.getItem("mg_free_session_used");
-        if (!used) {
-          localStorage.setItem("mg_free_session_used", "1");
-          alert("Enjoy a free listen! (Payments coming soon)");
-          return;
-        }
-        const res = await fetch("/api/checkout", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ sku: uiOffer.sku }),
-        });
-        const data = await res.json();
-        if (data?.url) window.location.href = data.url;
-      }}
-    />
-  </div>
-) : null}
-
               )
             })}
+
+            {/* Offer card goes OUTSIDE the .map, after the messages */}
+            {uiOffer ? (
+              <div style={{ marginTop: 12 }}>
+                <PrescriptionCard
+                  title={uiOffer.title}
+                  why={uiOffer.why}
+                  priceCents={uiOffer.priceCents}
+                  previewUrl={uiOffer.previewUrl}
+                  onUnlock={async () => {
+                    const used = localStorage.getItem("mg_free_session_used");
+                    if (!used) {
+                      localStorage.setItem("mg_free_session_used", "1");
+                      alert("Enjoy a free listen! (Payments coming soon)");
+                      return;
+                    }
+                    const res = await fetch("/api/checkout", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ sku: uiOffer.sku }),
+                    });
+                    const data = await res.json();
+                    if (data?.url) window.location.href = data.url;
+                  }}
+                />
+              </div>
+            ) : null}
+
             {thinking && (
               <div style={{opacity:.7, fontStyle:'italic'}}>Genie is thinking…</div>
             )}
