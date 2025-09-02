@@ -110,24 +110,28 @@ export default function ChatPage(){
         }
       } catch {}
 
-      // 3) create first line if empty (after we tried to know the name)
-      const after = get();
-      if (!after.thread || after.thread.length === 0){
-        pushThread({
-          role:'assistant',
-          content: `🌟 The lamp glows… I’m here, ${after.firstName || 'Friend'}.
+// 3) ensure first assistant line uses belief-breaker intro
+const after = get();
+const intro = `🌟 The lamp glows… I’m here, ${after.firstName || 'Friend'}.
 If you’ve felt stuck—working hard, juggling stress, or doubting yourself—we’ll flip the limiting belief behind it.
-One tiny move today beats a thousand tomorrows. What belief or snag should we clear right now?`
-        });
-      } else {
-        // patch "Friend" to real name if needed
-        const hasReal = after.firstName && after.firstName !== 'Friend';
-        const t0 = after.thread?.[0];
-        if (hasReal && t0?.role === 'assistant' && /I’m here,\s*Friend\b/.test(t0.content || '')) {
-          const fixed = { ...t0, content: t0.content.replace(/I’m here,\s*Friend\b/, `I’m here, ${after.firstName}`) };
-          set({ thread: [fixed, ...after.thread.slice(1)] });
-        }
-      }
+One tiny move today beats a thousand tomorrows. What belief or snag should we clear right now?`;
+
+if (!after.thread || after.thread.length === 0) {
+  // no messages yet → set our intro
+  pushThread({ role: 'assistant', content: intro });
+} else {
+  // already has a first message → replace old generic prompts with our intro
+  const t0 = after.thread[0];
+  const looksOld =
+    t0?.role === 'assistant' &&
+    /what do you want to manifest|how do you feel about that|\bwhat'?s the snag\b/i.test(t0.content || '');
+
+  if (looksOld) {
+    const updated = [{ ...t0, content: intro }, ...after.thread.slice(1)];
+    set({ thread: updated });
+  }
+}
+
 
       // reflect latest store in this component
       setS(get());
