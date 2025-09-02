@@ -4,6 +4,8 @@ import { useRouter } from 'next/router';
 import { get, set, newId, pushThread, toPlainMessages } from '../src/flowState';
 import { supabase } from '../src/supabaseClient';
 import FomoFeed from '../components/FomoFeed';
+import PrescriptionCard from "../components/ChatGenie/PrescriptionCard";
+import { detectBeliefFrom, recommendProduct } from "../src/engine/recommendProduct";
 
 function escapeHTML(s=''){ return s.replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'" :'&#39;'}[m])); }
 function nl2br(s=''){ return s.replace(/\n/g, '<br/>'); }
@@ -49,6 +51,7 @@ async function callGenie({ text, state }) {
 }
 
 export default function ChatPage(){
+  const [uiOffer, setUiOffer] = useState(null);
   const router = useRouter();
   const [S, setS] = useState(get());
   const [input, setInput] = useState('');
@@ -112,7 +115,9 @@ export default function ChatPage(){
       if (!after.thread || after.thread.length === 0){
         pushThread({
           role:'assistant',
-          content: `The lamp glows… I’m here, ${after.firstName || 'Friend'}.\nOne tiny move today beats a thousand tomorrows. What’s the snag we’ll clear right now?`
+          content: `🌟 The lamp glows… I’m here, ${after.firstName || 'Friend'}.
+If you’ve felt stuck—working hard, juggling stress, or doubting yourself—we’ll flip the limiting belief behind it.
+One tiny move today beats a thousand tomorrows. What belief or snag should we clear right now?`
         });
       } else {
         // patch "Friend" to real name if needed
@@ -145,17 +150,26 @@ export default function ChatPage(){
     pushThread({ role:'user', content: text });
     setS(get());
 
-    try {
-      const reply = await callGenie({ text, state: get() });
-      pushThread({ role:'assistant', content: reply });
-      setS(get());
-    } catch (err) {
-      pushThread({ role:'assistant', content: 'The lamp flickered. Try again in a moment.' });
-      setS(get());
-    } finally {
-      setThinking(false);
-    }
+try {
+  const { goal, belief } = detectBeliefFrom(text);
+  const rec = recommendProduct({ goal, belief });
+
+  if (rec) {
+    const why = belief
+      ? `Limiting belief detected: “${belief}.” Tonight’s session dissolves that pattern so your next action feels natural.`
+      : `Based on your goal, this short trance helps you move without overthinking.`;
+
+    setUiOffer({
+      title: `Tonight’s prescription: ${rec.title}`,
+      why,
+      priceCents: rec.price,
+      previewUrl: rec.preview,
+      sku: rec.sku,
+      stripe_price_id: rec.stripe_price_id,
+    });
   }
+} catch {}
+
 
   function onKey(e){
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -190,6 +204,32 @@ export default function ChatPage(){
                     dangerouslySetInnerHTML={{ __html: nl2br(escapeHTML(m.content || '')) }}
                   />
                 </div>
+  {uiOffer ? (
+  <div style={{ marginTop: 12 }}>
+    <PrescriptionCard
+      title={uiOffer.title}
+      why={uiOffer.why}
+      priceCents={uiOffer.priceCents}
+      previewUrl={uiOffer.previewUrl}
+      onUnlock={async () => {
+        const used = localStorage.getItem("mg_free_session_used");
+        if (!used) {
+          localStorage.setItem("mg_free_session_used", "1");
+          alert("Enjoy a free listen! (Payments coming soon)");
+          return;
+        }
+        const res = await fetch("/api/checkout", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sku: uiOffer.sku }),
+        });
+        const data = await res.json();
+        if (data?.url) window.location.href = data.url;
+      }}
+    />
+  </div>
+) : null}
+
               )
             })}
             {thinking && (
