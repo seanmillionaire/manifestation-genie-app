@@ -1,10 +1,10 @@
 // /pages/api/chat.js
 import OpenAI from "openai";
+import { buildSystemPrompt as buildCosmicPrompt, modelConfig } from "../../src/genieBrain";
 
-/* === Belief-Breaker System Prompt === */
+/* === Belief-Breaker Rails (behavioral guardrails) === */
 const BELIEF_BREAKER_SYSTEM = `
 You are Manifestation Genie — a limiting-belief breaker and action coach.
-Style: short, warm, practical. No therapy loops. Coach + prescriber.
 Each turn:
 1) Mirror the belief in one short line. (e.g., "Hesitation to pitch is the belief.")
 2) Prescribe ONE tiny action the user can do in ≤5 minutes. Start with a verb. (e.g., "Send one 3-line offer to a warm lead.")
@@ -27,7 +27,7 @@ function sanitizeReply(txt = "") {
 }
 
 /* === Utils === */
-const MODEL = process.env.OPENAI_MODEL || "gpt-4o-mini";
+const MODEL = modelConfig?.model || process.env.OPENAI_MODEL || "gpt-4o-mini";
 
 function oneLine(s = "") {
   return String(s).replace(/\s+/g, " ").replace(/\s*[\r\n]+\s*/g, " ").trim();
@@ -49,6 +49,16 @@ export default async function handler(req, res) {
       text = ""        // latest user input
     } = req.body || {};
 
+    // --- Compose dual persona: Belief-Breaker behavior + Cosmic Scientist style
+    const cosmic = buildCosmicPrompt({ user: { firstName: userName || "" } });
+    const SYSTEM = [
+      BELIEF_BREAKER_SYSTEM,
+      "",
+      "—— STYLE OVERLAY ——",
+      "Follow the style and analogies below while staying within the belief-breaker steps:",
+      cosmic
+    ].join("\n");
+
     // Light context facts (not instructions)
     const ctxBits = [];
     if (userName) ctxBits.push(`User: ${userName}.`);
@@ -58,7 +68,7 @@ export default async function handler(req, res) {
     if (context?.micro) ctxBits.push(`Last micro: ${context.micro}.`);
 
     const primed = [
-      { role: "system", content: BELIEF_BREAKER_SYSTEM },
+      { role: "system", content: SYSTEM },
       ctxBits.length ? { role: "system", content: oneLine(ctxBits.join(" ")) } : null,
       ...messages,
       text ? { role: "user", content: text } : null,
@@ -67,8 +77,11 @@ export default async function handler(req, res) {
     const completion = await openai.chat.completions.create({
       model: MODEL,
       messages: primed,
-      temperature: 0.5,
-      max_tokens: 140,
+      temperature: modelConfig?.temperature ?? 0.5,
+      top_p: modelConfig?.top_p ?? 1,
+      presence_penalty: modelConfig?.presence_penalty ?? 0.3,
+      frequency_penalty: modelConfig?.frequency_penalty ?? 0.2,
+      max_tokens: modelConfig?.max_output_tokens ?? 180
     });
 
     const raw = completion?.choices?.[0]?.message?.content || "Let’s flip the belief with one tiny move now.";
