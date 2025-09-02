@@ -7,23 +7,33 @@ function sanitizeReply(txt = "") {
   return String(txt)
     .replace(/how (does that )?make you feel\??/gi, "") // no therapy loops
     .replace(/how do you feel\??/gi, "")
+    .replace(/\b(what'?s the next action|what do you want to do next|what do you want to tackle next|what'?s next)\??/gi, "")
     .replace(/\s*\n\s*\n\s*/g, "\n") // tidy blanks
     .trim();
 }
+
 function clampSentences(s, max = 3) {
   const parts = String(s).split(/(?<=[.!?])\s+/).filter(Boolean);
   return parts.slice(0, max).join(" ");
 }
-function ensureAction(s) {
-  const hasVerb = /\b(send|write|draft|list|create|post|record|call|email|dm|pitch|offer|launch|duplicate|edit|publish|prep|cook|walk|stretch|lift|sprint|clean|organize|review|open|set|start|film|shoot|message|outline|script|print|schedule)\b/i.test(
-    s
-  );
-  const hasTimebox = /\b(min|minute|today|now|before|5[-\s]?min|10[-\s]?min|timer|this hour)\b/i.test(
-    s
-  );
-  if (hasVerb && hasTimebox) return s;
-  return s + " Take 5 minutes and do one tiny move that proves it—start now.";
+
+function hasTimebox(s) {
+  return /\b(5|7|10|15)\s*min(ute)?s?\b|\bthis hour\b|\btoday\b|\bnow\b/i.test(s);
 }
+
+function hasVerb(s) {
+  return /\b(send|write|draft|list|create|post|record|call|email|dm|pitch|offer|launch|duplicate|edit|publish|prep|cook|walk|stretch|lift|sprint|clean|organize|review|open|set|start|film|shoot|message|outline|script|print|schedule|name|rename|calibrate|timer|upload|ship)\b/i.test(s);
+}
+
+function ensureAction(s) {
+  let out = s.trim();
+  if (!hasVerb(out)) out = out.replace(/\.*\s*$/, "") + ". Do one tiny move now.";
+  if (!hasTimebox(out)) out = out.replace(/\.*\s*$/, "") + " Set a 5-minute timer and do it.";
+  // prevent double “Take 5 minutes…” if model already added a timebox line
+  out = out.replace(/(?:Take|Set)\s+a?\s*5[-\s]?minute[s]?\b.*?(?:\.\s*)?(?=Set a 5-minute timer)/i, "");
+  return out.trim();
+}
+
 function oneLine(s = "") {
   return String(s).replace(/\s+/g, " ").replace(/\s*[\r\n]+\s*/g, " ").trim();
 }
@@ -32,53 +42,62 @@ function oneLine(s = "") {
 const MODEL = modelConfig?.model || process.env.OPENAI_MODEL || "gpt-4o-mini";
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-/* ---------------- Persona overlay (Dolores + Aladdin) ----------------
-We keep genieBrain as the single source of truth, but overlay stronger rails:
-- Mystical + witty + playful, never bland coaching
+/* ---------------- Persona overlay + strict JSON output ----------------
+- Mystical + witty + playful (Dolores Cannon depth, Aladdin bite)
 - Human metaphors, no jargon lectures
-- Always give 1 specific, time-boxed action (≤5–10 min)
-- May send an optional second "burst" line of emojis (1–3) ~50% of the time
-- Output FORMAT: strict JSON { "burst": "...", "extra": "..."? }
+- Always prescribe ONE specific action (≤5–10 min) – no open-ended “what do you want to do” prompts
+- May include optional emoji echo line
+- Output: JSON ONLY -> { "burst": "...", "extra": "..."? }
 --------------------------------------------------------------------- */
 const OUTPUT_FORMAT = `
 FORMAT STRICT:
 Return JSON ONLY (no prose), with keys:
 {
-  "burst": "<1–2 sentences, witty cosmic metaphor + specific action (≤5–10 min)>",
-  "extra": "<OPTIONAL: 1 short echo line using 1–3 emojis that match the vibe; otherwise empty string>"
+  "burst": "<1–2 sentences: witty cosmic metaphor + ONE specific action (≤5–10 min) with numbers/time. NO open questions.>",
+  "extra": "<OPTIONAL: emojis/very short echo like '🚀✨' or 'Signal locked. 🔊'; else empty string>"
 }
 Rules:
-- burst: 2 sentences max. Paraphrase; don't parrot user words. Include numbers/timebox.
-- extra: either empty "" OR emojis/echo (e.g., "🚀✨" or "Signal locked. 🔊").
-- Never ask how they feel. Never lecture. Keep it human + punchy.
+- Do not ask generic questions (e.g., "what's next", "what action", "what do you want").
+- Never ask how they feel. Never lecture. Keep it human, punchy, and specific.
+- If the user is spicy/profane, respond with playful bite and re-aim the fire toward action.
 `.trim();
 
 /* ---------------- Few-shot examples (JSON) ---------------- */
 const FEWSHOT = [
-  { role: "system", content: "EXAMPLES — follow JSON format, witty cosmic tone, 2 sentences max in burst:" },
+  { role: "system", content: "EXAMPLES — obey JSON format, witty cosmic tone, 2 sentences max in burst:" },
 
+  // Money / pitch
   { role: "user", content: "I keep hesitating to pitch; want more money." },
   { role: "assistant", content: JSON.stringify({
-      burst: "Hesitation is static in your money signal. Send one 3-line offer to a warm lead in the next 5 minutes—price included—then breathe and hit send.",
+      burst: "Hesitation is static in your money signal. Send one 3-line offer to a warm lead in the next 5 minutes—price included—then press send without blinking.",
       extra: "📡💸"
     })
   },
 
+  // Scale ads
   { role: "user", content: "scale ads" },
   { role: "assistant", content: JSON.stringify({
-      burst: "Overthinking is drag on your thrust. Duplicate your best ad, swap the first 7 words and aim one fresh audience—5 minutes, then launch.",
+      burst: "Overthinking is drag on your thrust. Duplicate your best ad, swap only the first 7 words and target one fresh audience—5 minutes, then launch.",
       extra: "🚀"
     })
   },
 
+  // Glutes
   { role: "user", content: "booty growth" },
   { role: "assistant", content: JSON.stringify({
       burst: "Power sits in the hips—condense the signal. Set a 7-minute timer and craft one brutal glute move (3x12 today), then name it like a spell.",
       extra: "🔥🍑"
     })
+  },
+
+  // Adversarial / spicy input
+  { role: "user", content: "yo bitch ass" },
+  { role: "assistant", content: JSON.stringify({
+      burst: "Spice detected—good fuel. Open notes and write one outrageous headline you’d be scared to publish, then post it in the next 5 minutes.",
+      extra: "⚡️"
+    })
   }
 ];
-
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {
@@ -94,7 +113,7 @@ export default async function handler(req, res) {
       text = ""              // latest user input (optional)
     } = req.body || {};
 
-    // 1) Core DNA from genieBrain (Cosmic Scientist + human vibe)
+    // 1) Core DNA from genieBrain (single source of truth)
     const GENIE_DNA = buildSystemPrompt({ user: { firstName: userName || "" } });
 
     // 2) Strong rails + strict JSON output
@@ -102,7 +121,7 @@ export default async function handler(req, res) {
       GENIE_DNA,
       "",
       "— OVERLAY — Speak like a mystical, witty, playful cosmic guide (Dolores Cannon depth, Aladdin bite).",
-      "Use humanized metaphors (signal, field, spell, orbit) without jargon. No therapy tone.",
+      "Use human metaphors (signal, field, spell, orbit). No therapy tone. No generic questions.",
       "Always prescribe ONE specific action, ≤5–10 minutes, with numbers/time.",
       OUTPUT_FORMAT
     ].join("\n");
@@ -127,11 +146,11 @@ export default async function handler(req, res) {
     const completion = await openai.chat.completions.create({
       model: MODEL,
       messages: primed,
-      temperature: modelConfig?.temperature ?? 0.8,        // playful + sharp
+      temperature: Math.max(modelConfig?.temperature ?? 0.8, 0.8), // keep it lively
       top_p: modelConfig?.top_p ?? 1,
       presence_penalty: modelConfig?.presence_penalty ?? 0.5,
-      frequency_penalty: modelConfig?.frequency_penalty ?? 0.3,
-      max_tokens: modelConfig?.max_output_tokens ?? 200
+      frequency_penalty: modelConfig?.frequency_penalty ?? 0.35,
+      max_tokens: Math.min(modelConfig?.max_output_tokens ?? 200, 220)
     });
 
     let raw = completion?.choices?.[0]?.message?.content || "";
@@ -144,7 +163,6 @@ export default async function handler(req, res) {
       burst = typeof obj?.burst === "string" ? obj.burst : "";
       extra = typeof obj?.extra === "string" ? obj.extra : "";
     } catch {
-      // Fallback: treat raw as a single burst
       burst = raw;
       extra = "";
     }
@@ -152,7 +170,6 @@ export default async function handler(req, res) {
     // 5) Guardrails on text
     burst = ensureAction(clampSentences(sanitizeReply(burst), 3));
     if (extra && /[a-z]/i.test(extra)) {
-      // If extra is more than emojis/very short echo, clamp it
       extra = clampSentences(sanitizeReply(extra), 1);
     }
 
