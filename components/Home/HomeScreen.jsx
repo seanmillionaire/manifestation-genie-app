@@ -98,9 +98,16 @@ export default function HomeScreen() {
 
   return (
     <main style={{ width: "min(900px, 94vw)", margin: "30px auto" }}>
-      <h1 style={{ fontSize: 28, fontWeight: 900, margin: "0 0 12px" }}>
-        Welcome to the portal, {firstName} 🔮
-      </h1>
+<h1 style={{ fontSize: 28, fontWeight: 900, margin: "0 0 12px" }}>
+  {firstName}, your breakthrough portal is open 🌟
+</h1>
+<p
+  style={{ marginTop: -6, marginBottom: 14, color: "rgba(0,0,0,.75)", lineHeight: 1.5 }}
+>
+  Even if you’ve felt stuck before—working hard, juggling stress, or doubting yourself—
+  Genie helps turn those <strong>old beliefs into breakthroughs</strong>, one day at a time.
+</p>
+
 
       <p className="text-sm text-black/60 h-5" aria-live="polite">
         {loading ? "Loading your profile…" : err ? err : ""}
