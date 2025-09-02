@@ -99,7 +99,7 @@ export default function HomeScreen() {
   return (
     <main style={{ width: "min(900px, 94vw)", margin: "30px auto" }}>
 <h1 style={{ fontSize: 28, fontWeight: 900, margin: "0 0 12px" }}>
-  {firstName}, your breakthrough portal is open 🌟
+  {firstName}, your portal is open 🌟
 </h1>
 <p
   style={{ marginTop: -6, marginBottom: 14, color: "rgba(0,0,0,.75)", lineHeight: 1.5 }}
