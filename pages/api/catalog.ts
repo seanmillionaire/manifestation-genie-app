@@ -1,6 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 // fallback
-import products from "../../../src/engine/hm_products.json";
+import products from "../../src/engine/hm_products.json";
 
 
 export default function handler(req: NextApiRequest, res: NextApiResponse) {
