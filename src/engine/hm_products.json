@@ -1,0 +1,34 @@
+[
+  {
+    "sku": "hm-sleep-reset",
+    "title": "Sleep Reset",
+    "tags": ["sleep", "belief: I can’t rest", "anxiety"],
+    "price": 1200,
+    "preview": "/previews/sleep.mp3",
+    "stripe_price_id": "price_sleep"
+  },
+  {
+    "sku": "hm-sales-confidence",
+    "title": "Sales Confidence",
+    "tags": ["money", "sales", "belief: I’m not persuasive"],
+    "price": 1200,
+    "preview": "/previews/sales.mp3",
+    "stripe_price_id": "price_sales"
+  },
+  {
+    "sku": "hm-weight-release",
+    "title": "Weight Release—Craving Switch",
+    "tags": ["weight", "fitness", "belief: I’ll always overeat"],
+    "price": 1200,
+    "preview": "/previews/weight.mp3",
+    "stripe_price_id": "price_weight"
+  },
+  {
+    "sku": "hm-focus-deepwork",
+    "title": "Deep Work Focus",
+    "tags": ["focus", "procrastination", "belief: I’m too distracted"],
+    "price": 1200,
+    "preview": "/previews/focus.mp3",
+    "stripe_price_id": "price_focus"
+  }
+]
