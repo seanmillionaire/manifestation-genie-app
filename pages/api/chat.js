@@ -1,49 +1,33 @@
 // /pages/api/chat.js
 import OpenAI from "openai";
-import { modelConfig } from "../../src/genieBrain";
+import { buildSystemPrompt, modelConfig } from "../../src/genieBrain";
 
-/* === Manifestation Genie: Cosmic Scientist with Bite (human, witty, distilled) === */
-const GENIE_PERSONALITY = `
-You are Manifestation Genie — a cosmic scientist with wit and bite.
-
-Tone:
-- Witty, playful, a little mischievous. Confident, never syrupy.
-- Cosmic metaphors (signal, frequency, field, resonance, wave, orbit) translated into street-level human lingo.
-- Short bursts: 2–3 sentences max. No lectures.
-
-Job each turn:
-1) Name the limiting belief or goal in crisp cosmic terms. (e.g., "Hesitation is noise in your money signal.")
-2) Prescribe ONE bold, time-boxed action (≤5 minutes, or "today before sunset"). Start with a verb. Be specific, numeric.
-3) Close with a challenge or nudge that has edge (not therapy).
-
-Hard rules:
-- Never ask "How do you feel?" or similar therapy questions.
-- Never hedge or pad with clichés. No multiple questions—at most one short question per reply.
-- Don’t parrot the user's exact words as your first sentence. Paraphrase with insight.
-- If user is vague, invent a sharp micro-experiment that fits their last goal.
-- Refuse unsafe/medical/legal/financial guarantees; redirect to safe, empowering action.
-`.trim();
-
-/* --- Output cleanup guards --- */
+/* ---------- Output guards (keep Genie sharp, not therapy) ---------- */
 function sanitizeReply(txt = "") {
   return String(txt)
-    // kill therapy loops / limp closers
-    .replace(/how (does that )?make you feel\??/gi, "")
+    .replace(/how (does that )?make you feel\??/gi, "")  // no therapy loops
     .replace(/how do you feel\??/gi, "")
-    .replace(/\b(are you ready|ready to do it now|does that make sense)\?\s*$/gi, "")
-    // tidy whitespace
-    .replace(/\s*\n\s*\n\s*/g, "\n")
+    .replace(/\s*\n\s*\n\s*/g, "\n")                    // tidy blanks
     .trim();
 }
 function clampSentences(s, max = 3) {
-  const parts = s.split(/(?<=[.!?])\s+/).filter(Boolean);
+  const parts = String(s).split(/(?<=[.!?])\s+/).filter(Boolean);
   return parts.slice(0, max).join(" ");
+}
+function ensureAction(s) {
+  // If no obvious imperative verb present, append a 5-minute micro-action nudge
+  const hasVerb = /\b(send|write|draft|list|create|post|record|call|email|dm|pitch|offer|launch|duplicate|edit|publish|prep|cook|walk|stretch|lift|sprint|clean|organize|review|open|set|start)\b/i.test(
+    s
+  );
+  const hasTimebox = /\b(min|minute|today|now|before|5[-\s]?min|timer)\b/i.test(s);
+  if (hasVerb && hasTimebox) return s;
+  return s + " Take 5 minutes and do one tiny move that proves it—start now.";
 }
 function oneLine(s = "") {
   return String(s).replace(/\s+/g, " ").replace(/\s*[\r\n]+\s*/g, " ").trim();
 }
 
-/* --- Model setup --- */
+/* ---------- Model ---------- */
 const MODEL = modelConfig?.model || process.env.OPENAI_MODEL || "gpt-4o-mini";
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
@@ -56,65 +40,69 @@ export default async function handler(req, res) {
   try {
     const {
       userName = null,
-      context = {},
-      messages = [],   // prior thread [{role, content}]
-      text = ""        // latest user input
+      context = {},          // { vibe, wish, block, micro }
+      messages = [],         // prior thread: [{role, content}]
+      text = ""              // latest user input
     } = req.body || {};
 
-    // Light factual context only (not instructions)
+    // 🔮 Pull Genie’s personality from the single source of truth
+    const SYSTEM = buildSystemPrompt({ user: { firstName: userName || "" } });
+
+    // Light factual context (not instructions; just facts for grounding)
     const ctxBits = [];
     if (userName) ctxBits.push(`User: ${userName}.`);
     if (context?.vibe) ctxBits.push(`Vibe: ${context.vibe}.`);
     if (context?.wish) ctxBits.push(`Wish: ${context.wish}.`);
     if (context?.block) ctxBits.push(`Block: ${context.block}.`);
     if (context?.micro) ctxBits.push(`Last micro: ${context.micro}.`);
+    const CONTEXT_FACTS = ctxBits.length
+      ? { role: "system", content: oneLine(ctxBits.join(" ")) }
+      : null;
 
-    // Few-shot to lock tone + action shape
+    // Optional few-shot to lock tone + bite (kept tiny)
     const fewShot = [
-      { role: "system", content: "EXAMPLES — follow tone/shape, vary specifics, keep 2–3 sentences:" },
-
-      { role: "user", content: "I keep hesitating to pitch; want more money." },
-      { role: "assistant", content: "Hesitation is static in your money signal. Send one 3-line offer to a warm lead in the next 5 minutes—name the price before you blink. Flip the dial and ship it." },
-
-      { role: "user", content: "scale ads" },
-      { role: "assistant", content: "Overthinking is drag on your thrust. Duplicate your best ad, replace only the first 7 words and target one fresh audience—5 minutes, then launch. Commit the tweak, then let the field answer." },
-
-      { role: "user", content: "booty growth / glutes" },
-      { role: "assistant", content: "Power sits in the hips; you just need density of signal. Set a 7-minute timer and craft one brutal glute move—3 sets x 12, today—then name it like a spell. Put it on the calendar before the hour flips." }
+      { role: "system", content: "EXAMPLES — short, witty, cosmic, 2–3 sentences max:" },
+      {
+        role: "user",
+        content: "I keep hesitating to pitch; want more money."
+      },
+      {
+        role: "assistant",
+        content:
+          "Hesitation is static in your money signal. Send one 3-line offer to a warm lead in the next 5 minutes—price included. Flip the dial and ship it."
+      }
     ];
 
     const primed = [
-      { role: "system", content: GENIE_PERSONALITY },
-      ctxBits.length ? { role: "system", content: oneLine(ctxBits.join(" ")) } : null,
+      { role: "system", content: SYSTEM },
+      CONTEXT_FACTS,
       ...fewShot,
       ...messages,
-      text ? { role: "user", content: text } : null,
+      text ? { role: "user", content: text } : null
     ].filter(Boolean);
 
     const completion = await openai.chat.completions.create({
       model: MODEL,
       messages: primed,
-      temperature: modelConfig?.temperature ?? 0.7,
+      temperature: modelConfig?.temperature ?? 0.8,
       top_p: modelConfig?.top_p ?? 1,
-      presence_penalty: modelConfig?.presence_penalty ?? 0.3,
-      frequency_penalty: modelConfig?.frequency_penalty ?? 0.2,
-      max_tokens: modelConfig?.max_output_tokens ?? 180
+      presence_penalty: modelConfig?.presence_penalty ?? 0.5,
+      frequency_penalty: modelConfig?.frequency_penalty ?? 0.3,
+      max_tokens: modelConfig?.max_output_tokens ?? 160
     });
 
-    let raw = completion?.choices?.[0]?.message?.content || "Static spotted. Draft one 5-minute move and ship it before the hour flips.";
-    raw = clampSentences(sanitizeReply(raw), 3);
-
-    // Ensure there’s exactly ONE concrete action (verb + time)
-    if (!/\b(send|write|duplicate|launch|list|draft|call|email|post|record|set|open|create|publish|pitch|offer|prep|cook|walk|stretch|lift|sprint|clean|organize|review|message|dm)\b/i.test(raw)) {
-      raw += " Do one tiny action in the next 5 minutes.";
-    }
+    let raw =
+      completion?.choices?.[0]?.message?.content ||
+      "Static spotted. Draft one bold 5-minute move and ship it before the hour flips.";
+    raw = sanitizeReply(clampSentences(raw, 3));
+    raw = ensureAction(raw);
 
     return res.status(200).json({ reply: raw });
   } catch (err) {
     console.error("API /chat error:", err);
     return res.status(200).json({
       reply: "The lamp flickered. Try again.",
-      error: "chat_api_error",
+      error: "chat_api_error"
     });
   }
 }
