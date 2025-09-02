@@ -73,11 +73,12 @@ const FEWSHOT = [
 
   { role: "user", content: "booty growth" },
   { role: "assistant", content: JSON.stringify({
-      burst: "Power sits in the hips—condense the signal. Set a 7-minute timer and craft one brutal glute move (3×12 today), then name it like a spell.",
+      burst: "Power sits in the hips—condense the signal. Set a 7-minute timer and craft one brutal glute move (3x12 today), then name it like a spell.",
       extra: "🔥🍑"
     })
-  })
+  }
 ];
+
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {
