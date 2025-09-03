@@ -53,12 +53,46 @@ function makePromptFrom(answers = {}) {
   }
   return `Use these to guide my ritual. Be concrete, short, and motivational.\n${parts.join("\n")}`;
 }
+// --- Pull normalized answers from flowState or localStorage
+function readQuestionnaireAnswers() {
+  try {
+    // 1) from flowState if present
+    const st = require("../../src/flowState");
+    const cur = (st?.get && st.get()) || {};
+    if (cur?.questionnaire?.answers) return cur.questionnaire.answers;
+  } catch {}
+
+  // 2) fallback: localStorage
+  if (typeof window !== "undefined") {
+    try {
+      const raw = localStorage.getItem("questionnaire_answers");
+      if (raw) return JSON.parse(raw);
+    } catch {}
+  }
+  return null;
+}
+
+// --- Build a concise prompt string for chat
+function makePromptFrom(answers) {
+  if (!answers) return "";
+  const { goal, blocker, timeframe, constraint, proof_line } = answers;
+  return [
+    goal ? `Goal: ${goal}` : null,
+    blocker ? `Blocker: ${blocker}` : null,
+    timeframe ? `Timeframe: ${timeframe}` : null,
+    constraint ? `Constraint: ${constraint}` : null,
+    proof_line ? `Proof target: ${proof_line}` : null,
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
 
 export default function HomeScreen() {
   const router = useRouter();
   const [S, setS] = useState(get());
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState(null);
+const [hasAnswers, setHasAnswers] = useState(() => !!readQuestionnaireAnswers());
 
   const [checked, setChecked] = useState(false);
   const [agreedAt, setAgreedAt] = useState(
@@ -87,20 +121,18 @@ export default function HomeScreen() {
       }
     })();
 
-    const onStorage = (e) => {
-      if (e.key === "mg_first_name") {
-        const val = (e.newValue || "").trim();
-        if (val) set({ firstName: val });
-        setS(get());
-      }
-      if (e.key === AGREED_KEY) setAgreedAt(e.newValue);
-    };
-    if (typeof window !== "undefined") window.addEventListener("storage", onStorage);
-    return () => {
-      alive = false;
-      if (typeof window !== "undefined") window.removeEventListener("storage", onStorage);
-    };
-  }, []);
+const onStorage = (e) => {
+  if (e.key === "mg_first_name") {
+    const val = (e.newValue || "").trim();
+    if (val) set({ firstName: val });
+    setS(get());
+  }
+  if (e.key === AGREED_KEY) setAgreedAt(e.newValue);
+  if (e.key === "questionnaire_answers") {
+    setHasAnswers(!!e.newValue);
+  }
+};
+
 
   const resolveFirstName = () => {
     const stateName = (S.firstName || "").trim();
@@ -128,29 +160,32 @@ export default function HomeScreen() {
     year: "numeric",
   });
 
-  const startManifesting = () => {
-    // Auto-prompt: gather + compose + stash
-    const answers = readExistingAnswers();
-    const prompt = makePromptFrom(answers);
-
+const startManifesting = () => {
+  // 1) If we have answers, turn them into a prompt_spec right now
+  const answers = readQuestionnaireAnswers();
+  if (answers) {
     try {
+      const prompt = makePromptFrom(answers);
       const cur = get() || {};
       set({
         ...cur,
         prompt_spec: {
-          ...(answers || {}),
+          ...answers,
           prompt,
           savedAt: new Date().toISOString(),
         },
       });
     } catch (e) {
-      console.warn("Could not persist prompt_spec:", e);
+      console.warn("Could not persist prompt_spec from answers:", e);
     }
+  }
 
-    const cur = get();
-    const hasVibe = !!(cur?.vibe && (cur.vibe.name || cur.vibe.id));
-    router.push(hasVibe ? "/chat" : "/vibe");
-  };
+  // 2) Continue your normal flow
+  const cur = get();
+  const hasVibe = !!(cur?.vibe && (cur.vibe.name || cur.vibe.id));
+  router.push(hasVibe ? "/chat" : "/vibe");
+};
+
 
   return (
     <main style={{ width: "min(900px, 94vw)", margin: "30px auto" }}>
@@ -319,6 +354,20 @@ export default function HomeScreen() {
                 Please accept the agreement first ✨
               </p>
             )}
+            {agreedAt && !hasAnswers && (
+  <p
+    style={{
+      marginTop: 8,
+      fontSize: 13,
+      color: "#b91c1c",
+      textAlign: "center",
+    }}
+    aria-live="polite"
+  >
+    Pro tip: set your intention in the quick questionnaire for a sharper ritual. You can still start now ✨
+  </p>
+)}
+
           </div>
         </div>
       </section>
