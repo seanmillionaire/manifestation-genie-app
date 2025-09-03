@@ -182,7 +182,7 @@ const startManifesting = () => {
   return (
     <main style={{ width: "min(900px, 94vw)", margin: "30px auto" }}>
       <h1 style={{ fontSize: 28, fontWeight: 900, margin: "0 0 12px" }}>
-        {firstName}, your portal is open 🌟
+        Welcome to the portal, {firstName}👋
       </h1>
       <p
         style={{
