@@ -90,31 +90,16 @@ export default function ChatGenieScreen() {
           </div>
         ))}
 
-        {uiOffer ? (
-          <PrescriptionCard
-            title={uiOffer.title}
-            why={uiOffer.why}
-            priceCents={uiOffer.priceCents}
-            previewUrl={uiOffer.previewUrl}
-            onUnlock={async () => {
-              // One free session (simple localStorage guard)
-              const used = localStorage.getItem("mg_free_session_used");
-              if (!used) {
-                localStorage.setItem("mg_free_session_used", "1");
-                alert("Enjoy a free listen! (Payments coming soon)");
-                return;
-              }
-              // Checkout stub
-              const res = await fetch("/api/checkout", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ sku: uiOffer.sku }),
-              });
-              const data = await res.json();
-              if (data?.url) window.location.href = data.url;
-            }}
-          />
-        ) : null}
+{uiOffer ? (
+  <PrescriptionCard
+    title={uiOffer.title}
+    why={uiOffer.why}
+    priceCents={uiOffer.priceCents}
+    buyUrl="https://hypnoticmeditations.ai/b/l0kmb" // open in new tab
+    onClose={() => setUiOffer(null)}               // hide card after click
+  />
+) : null}
+
 
         <div style={{ display: "flex", marginTop: 14 }}>
           <input
