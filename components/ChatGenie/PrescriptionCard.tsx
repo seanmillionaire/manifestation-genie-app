@@ -10,14 +10,14 @@ type Props = {
   buyUrl?: string;
 
   /** LEGACY (kept for compatibility): passed by ChatGenieScreen.tsx */
-  previewUrl?: string;             // we ignore for now (we use a fixed dummy audio)
-  onUnlock?: () => void;           // fallback if no buyUrl is provided
+  previewUrl?: string;   // ignored for now (we use a fixed dummy audio)
+  onUnlock?: () => void; // fallback if no buyUrl is provided
 };
 
 /**
  * PrescriptionCard
  * - Always shows the same FLAC audio preview (dummy)
- * - On Unlock:
+ * - On CTA:
  *    1) If buyUrl exists → redirect there
  *    2) Else if onUnlock exists → call it (legacy flow)
  *    3) Else → alert
@@ -27,15 +27,13 @@ export default function PrescriptionCard({
   why,
   priceCents = 1200,
   buyUrl = "https://hypnoticmeditations.ai/b/l0kmb",
-  // legacy props (unused but kept to avoid TS errors from older callers)
+  // legacy props (kept to avoid TS errors from older callers)
   previewUrl,
   onUnlock,
 }: Props) {
   // 🔊 Fixed dummy audio preview (always the same for now)
   const DUMMY_AUDIO =
     "https://cdnstreaming.myclickfunnels.com/audiofile/25873/file/original-3b1398f834c94cd9eeba088f4bcdba73/audiofile/25873/file/original-3b1398f834c94cd9eeba088f4bcdba73.flac";
-
-  const priceLabel = `$${(priceCents / 100).toFixed(0)}`;
 
   async function handleUnlock() {
     try {
@@ -44,7 +42,7 @@ export default function PrescriptionCard({
         return;
       }
       if (onUnlock) {
-        await onUnlock();             // Legacy fallback (free preview / Stripe, etc.)
+        await onUnlock(); // Legacy fallback
         return;
       }
       alert("No checkout link configured.");
@@ -101,9 +99,9 @@ export default function PrescriptionCard({
           minWidth: 44,
           boxShadow: "0 2px 0 rgba(0,0,0,0.06)",
         }}
-     aria-label="Listen To This"
-
-  Listen To This »
+        aria-label="Listen To This"
+      >
+        Listen To This »
       </button>
     </div>
   );
