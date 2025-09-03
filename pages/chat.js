@@ -273,9 +273,7 @@ if (!after.thread || after.thread.length === 0) {
           </div>
         </div>
 
-        <div>
-          <FomoFeed />
-        </div>
+       
       </div>
     </div>
   );
