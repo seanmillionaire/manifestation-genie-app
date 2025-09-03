@@ -347,17 +347,7 @@ const startManifesting = () => {
               </p>
             )}
             {agreedAt && !hasAnswers && (
-  <p
-    style={{
-      marginTop: 8,
-      fontSize: 13,
-      color: "#b91c1c",
-      textAlign: "center",
-    }}
-    aria-live="polite"
-  >
-    Pro tip: set your intention in the quick questionnaire for a sharper ritual. You can still start now ✨
-  </p>
+
 )}
 
           </div>
