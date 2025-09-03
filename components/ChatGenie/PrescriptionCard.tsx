@@ -101,9 +101,9 @@ export default function PrescriptionCard({
           minWidth: 44,
           boxShadow: "0 2px 0 rgba(0,0,0,0.06)",
         }}
-        aria-label={`Unlock — ${priceLabel}`}
-      >
-        Unlock — {priceLabel}
+     aria-label="Listen To This"
+
+  Listen To This »
       </button>
     </div>
   );
