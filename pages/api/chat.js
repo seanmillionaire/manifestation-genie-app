@@ -38,6 +38,29 @@ Personalization:
 `.trim();
 }
 
+// NEW: build a tiny “intention primer” so the model actively uses questionnaire data
+function intentionPrimer(context = {}) {
+  const wish = context.wish || null;
+  const block = context.block || null;
+  const micro = context.micro || null;
+  const promptSpec = context.prompt_spec || null; // string built on Home/Flow
+
+  if (!wish && !block && !micro && !promptSpec) return null;
+
+  // Short, actionable guardrails the model can follow every turn
+  const lines = [
+    "Use the user's saved intention to keep the conversation on-track.",
+    promptSpec ? `Intention (from questionnaire/home): ${promptSpec}` : null,
+    wish ? `Wish/Goal: ${wish}` : null,
+    block ? `Main blocker: ${block}` : null,
+    micro ? `Today's micro-move: ${micro}` : null,
+    "When offering examples or questions, tie them to the wish and respect any blockers/constraints.",
+    "If the chat drifts, gently reconnect to the intention in 1 sentence."
+  ].filter(Boolean);
+
+  return lines.join("\n");
+}
+
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
@@ -51,12 +74,16 @@ export default async function handler(req, res) {
     }
 
     // 30% chance to encourage a tiny story this turn (server-side coin flip).
-    // If you ever want to control this from the client, pass a flag instead.
     const wantStoryFlag = Math.random() < 0.3;
+
+    // NEW: compute intention system message (if there’s any saved data)
+    const primer = intentionPrimer(context);
 
     // Build the conversation for the model
     const chat = [
       { role: "system", content: sysPrompt({ userName, vibe: context.vibe, wantStoryFlag }) },
+
+      // Keep your existing “optional context” blob (unchanged)
       {
         role: "system",
         content: "Optional context: " + JSON.stringify({
@@ -64,8 +91,14 @@ export default async function handler(req, res) {
           block: context.block || null,
           micro: context.micro || null,
           vibe: context.vibe || null,
+          // NEW: pass through for transparency/debug
+          prompt_spec: context.prompt_spec || null,
         }),
       },
+
+      // NEW: add a crisp instruction the model will actually follow
+      ...(primer ? [{ role: "system", content: primer }] : []),
+
       ...(Array.isArray(messages) ? messages : []).map(m => ({
         role: m.role === "user" ? "user" : "assistant",
         content: String(m.content || ""),
@@ -83,13 +116,13 @@ export default async function handler(req, res) {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "gpt-4o-mini",         // confirmed available
+        model: "gpt-4o-mini",
         messages: chat,
-        temperature: 0.95,            // a bit more playful to make stories feel natural
+        temperature: 0.95,
         top_p: 1,
         presence_penalty: 0.3,
         frequency_penalty: 0.2,
-        max_tokens: 350,              // short + conversational
+        max_tokens: 350,
       }),
     });
 
