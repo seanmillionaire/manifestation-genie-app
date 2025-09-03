@@ -19,12 +19,58 @@ const GenieLang = {
 
 const pick = (arr) => arr[Math.floor(Math.random() * arr.length)]
 
+// --- Save answers everywhere our Home/Chat can read ---
+async function saveAnswers({ goal, blocker, micro }) {
+  const answers = {
+    goal: goal || "",
+    blocker: blocker || "",
+    timeframe: "",        // not asked here (left blank)
+    constraint: "",       // not asked here (left blank)
+    proof_line: micro || "" // use their micro-move as a simple proof line
+  };
+
+  // 1) localStorage for HomeScreen reader
+  try {
+    localStorage.setItem("questionnaire_answers", JSON.stringify(answers));
+  } catch {}
+
+  // 2) flowState for instant availability (no reload required)
+  try {
+    const m = await import("../src/flowState"); // NOTE: path from /components
+    if (m && typeof m.set === "function") {
+      m.set({ questionnaire: { answers } });
+    }
+  } catch {}
+
+  return answers;
+}
+
 export default function Questionnaire({ initial, onComplete, vibe, firstName='Friend' }) {
   const [wish, setWish]   = useState(initial?.wish || "")
   const [block, setBlock] = useState(initial?.block || "")
   const [micro, setMicro] = useState(initial?.micro || "")
 
   const canSubmit = wish.trim() && micro.trim()
+
+  const handleLockIn = async () => {
+    if (!canSubmit) return;
+
+    // Normalize + persist
+    await saveAnswers({
+      goal: wish.trim(),
+      blocker: block.trim(),
+      micro: micro.trim(),
+    });
+
+    // Keep your existing onComplete payload (backwards compatible)
+    onComplete?.({
+      wish: wish.trim(),
+      block: block.trim(),
+      micro: micro.trim(),
+      vibe,
+      date: todayStr()
+    });
+  };
 
   return (
     <>
@@ -65,13 +111,7 @@ export default function Questionnaire({ initial, onComplete, vibe, firstName='Fr
         <button
           style={{...styles.btn, marginTop:16, opacity: canSubmit ? 1 : 0.6, cursor: canSubmit ? 'pointer' : 'not-allowed'}}
           disabled={!canSubmit}
-          onClick={() => onComplete({
-            wish: wish.trim(),
-            block: block.trim(),
-            micro: micro.trim(),
-            vibe,
-            date: todayStr()
-          })}
+          onClick={handleLockIn}
         >
           Lock it in →
         </button>
