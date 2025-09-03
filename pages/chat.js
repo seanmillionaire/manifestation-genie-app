@@ -1,4 +1,4 @@
-// /pages/chat.js — compact chat console + HM redirect for Unlock (restored + debug + 1x/day offer)
+// /pages/chat.js — compact chat console + HM redirect for Unlock (debug + daily/session offer gate)
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
 import { get, set, newId, pushThread, toPlainMessages } from '../src/flowState';
@@ -10,8 +10,6 @@ import { detectBeliefFrom, recommendProduct } from "../src/engine/recommendProdu
 function escapeHTML(s=''){ return s.replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'" :'&#39;'}[m])); }
 function nl2br(s=''){ return s.replace(/\n/g, '<br/>'); }
 function pretty(o){ try { return JSON.stringify(o, null, 2); } catch { return String(o); } }
-const todayStr = () => new Date().toISOString().slice(0,10);
-const LS_OFFER_KEY = () => `mg_offer_shown_${todayStr()}`;
 
 function pickFirstName(src){
   const first = (v)=> v ? String(v).trim().split(/\s+/)[0] : '';
@@ -31,6 +29,25 @@ function pickFirstName(src){
   return '';
 }
 
+// ---------- offer gating (once per day + once per session) ----------
+const HM_LINK = "https://hypnoticmeditations.ai/b/l0kmb";
+function todayKey(){ return new Date().toISOString().slice(0,10); } // YYYY-MM-DD
+function shouldShowOfferNow(){
+  try {
+    if (typeof window === 'undefined') return false;
+    const shownSession = sessionStorage.getItem('mg_offer_shown_session') === '1';
+    const shownDay = localStorage.getItem('mg_offer_day') === todayKey();
+    return !(shownSession || shownDay);
+  } catch { return true; }
+}
+function markOfferShown(){
+  try {
+    if (typeof window === 'undefined') return;
+    sessionStorage.setItem('mg_offer_shown_session', '1');
+    localStorage.setItem('mg_offer_day', todayKey());
+  } catch {}
+}
+
 export default function ChatPage(){
   const router = useRouter();
   const [S, setS] = useState(get());
@@ -39,8 +56,6 @@ export default function ChatPage(){
   const [uiOffer, setUiOffer] = useState(null);
   const [debugOn, setDebugOn] = useState(false);
   const [lastChatPayload, setLastChatPayload] = useState(null);
-  const [canShowOffer, setCanShowOffer] = useState(true); // daily gate
-  const offerShownThisSession = useRef(false);            // session gate
   const listRef = useRef(null);
 
   // auto-enable debug via ?debug=1
@@ -48,14 +63,6 @@ export default function ChatPage(){
     if (typeof window !== 'undefined') {
       const q = new URLSearchParams(window.location.search);
       if (q.get('debug') === '1') setDebugOn(true);
-    }
-  }, []);
-
-  // initialize daily offer flag
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const shown = localStorage.getItem(LS_OFFER_KEY());
-      setCanShowOffer(!shown);
     }
   }, []);
 
@@ -131,63 +138,69 @@ Sounds like you’ve been carrying a lot. I’d love to hear—what’s been on 
     if (el) el.scrollTop = el.scrollHeight;
   }, [S.thread, uiOffer]);
 
+  // ------- central API caller: sets lastChatPayload BEFORE calling /api/chat -------
+  async function callGenie({ text }) {
+    const stateNow = get(); // include just-pushed user msg
+    const payload = {
+      userName: stateNow.firstName || null,
+      context: {
+        wish: stateNow.currentWish?.wish || null,
+        block: stateNow.currentWish?.block || null,
+        micro: stateNow.currentWish?.micro || null,
+        vibe: stateNow.vibe || null,
+        prompt_spec: stateNow.prompt_spec?.prompt || null, // intention from questionnaire/home
+      },
+      messages: toPlainMessages(stateNow.thread || []),
+      text
+    };
+
+    // 🔥 update debug panel
+    setLastChatPayload(payload);
+
+    const resp = await fetch('/api/chat', {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json' },
+      body: JSON.stringify(payload)
+    });
+    if (!resp.ok) throw new Error('Genie API error');
+    const data = await resp.json();
+    return data?.reply || 'I’m here.';
+  }
+
   async function send(){
     const text = input.trim();
     if (!text || thinking) return;
     setInput('');
     setThinking(true);
 
+    // 1) push user message into flowState (so callGenie sees it)
     pushThread({ role:'user', content: text });
     setS(get());
 
-    // ---- Product recommendation (guarded: once/day + once/session) ----
+    // 2) product recommend (respect daily/session gate)
     try {
-      if (canShowOffer && !offerShownThisSession.current) {
-        const { goal, belief } = detectBeliefFrom(text);
-        const rec = recommendProduct({ goal, belief });
-        if (rec) {
-          const why = belief
+      const combined = S?.prompt_spec?.prompt
+        ? `${S.prompt_spec.prompt}\n\nUser: ${text}`
+        : text;
+      const { goal, belief } = detectBeliefFrom(combined);
+      const rec = recommendProduct({ goal, belief });
+
+      if (rec && shouldShowOfferNow()) {
+        setUiOffer({
+          title: rec.title,
+          why: belief
             ? `Limiting belief detected: “${belief}.” Tonight’s session dissolves that pattern so your next action feels natural.`
-            : `Based on your goal, this short trance helps you move without overthinking.`;
-          const HM_LINK = "https://hypnoticmeditations.ai/b/l0kmb";
-
-          setUiOffer({ title: rec.title, why, priceCents: rec.price, buyUrl: HM_LINK });
-
-          // flip both gates
-          offerShownThisSession.current = true;
-          try {
-            localStorage.setItem(LS_OFFER_KEY(), '1'); // today's date key
-            setCanShowOffer(false);
-          } catch {}
-        }
+            : `Based on your goal, this short trance helps you move without overthinking.`,
+          priceCents: rec.price,
+          buyUrl: HM_LINK
+        });
+        markOfferShown(); // prevent repeat this session/day
       }
     } catch {}
 
-    // ---- Real API call (unchanged) ----
+    // 3) call Genie API
     try {
-      const payload = {
-        userName: (get().firstName) || null,
-        context: {
-          wish: get().currentWish?.wish || null,
-          block: get().currentWish?.block || null,
-          micro: get().currentWish?.micro || null,
-          vibe: get().vibe || null,
-          // also pass intention created from questionnaire/home
-          prompt_spec: get().prompt_spec?.prompt || null,
-        },
-        messages: toPlainMessages(get().thread || []),
-        text
-      };
-
-      setLastChatPayload(payload); // visible in debug panel
-
-      const resp = await fetch('/api/chat', {
-        method:'POST',
-        headers:{ 'Content-Type':'application/json' },
-        body: JSON.stringify(payload)
-      });
-      const data = await resp.json();
-      const reply = data?.reply || 'I’m here.';
+      const reply = await callGenie({ text });
       pushThread({ role:'assistant', content: reply });
       setS(get());
     } catch {
@@ -347,7 +360,7 @@ Sounds like you’ve been carrying a lot. I’d love to hear—what’s been on 
                     title={uiOffer.title}
                     why={uiOffer.why}
                     priceCents={uiOffer.priceCents}
-                    buyUrl={uiOffer.buyUrl || "https://hypnoticmeditations.ai/b/l0kmb"}
+                    buyUrl={uiOffer.buyUrl || HM_LINK}
                     onClose={() => setUiOffer(null)}
                   />
                 </div>
