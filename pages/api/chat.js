@@ -1,4 +1,4 @@
-// /pages/api/chat.js
+// /pages/api/chat.js — RAW, brain-driven
 import OpenAI from "openai";
 import { buildSystemPrompt, modelConfig } from "../../src/genieBrain";
 
@@ -14,15 +14,15 @@ export default async function handler(req, res) {
   try {
     const {
       userName = null,
-      context = {},     // { vibe, wish, block, micro }
+      context = {},     // optional: { vibe, wish, block, micro }
       messages = [],    // prior thread: [{ role, content }]
       text = ""         // latest user input (optional)
     } = req.body || {};
 
-    // Single source of truth: YOUR genie brain (personality & style)
+    // 🔮 Single source of truth: your Genie personality
     const SYSTEM = buildSystemPrompt({ user: { firstName: userName || "" } });
 
-    // Optional: light factual context for grounding (not instructions)
+    // (Optional) plain facts to ground, not instructions
     const facts = [];
     if (userName) facts.push(`User: ${userName}`);
     if (context?.vibe)  facts.push(`Vibe: ${context.vibe}`);
@@ -31,7 +31,7 @@ export default async function handler(req, res) {
     if (context?.micro) facts.push(`Last micro: ${context.micro}`);
     const CONTEXT = facts.length ? { role: "system", content: facts.join(" | ") } : null;
 
-    // Build conversation (NO extra rails)
+    // 🚫 No sanitizers, no clamps, no hard-coded add-ons
     const convo = [
       { role: "system", content: SYSTEM },
       CONTEXT,
@@ -42,8 +42,7 @@ export default async function handler(req, res) {
     const completion = await openai.chat.completions.create({
       model: MODEL,
       messages: convo,
-      // pull generation knobs only from your brain config
-      temperature: modelConfig?.temperature ?? 0.85,
+      temperature: modelConfig?.temperature ?? 0.9,
       top_p: modelConfig?.top_p ?? 1,
       presence_penalty: modelConfig?.presence_penalty ?? 0.6,
       frequency_penalty: modelConfig?.frequency_penalty ?? 0.3,
@@ -51,14 +50,9 @@ export default async function handler(req, res) {
     });
 
     const reply = completion?.choices?.[0]?.message?.content ?? "";
-
-    // Keep existing contract: return a single reply string
     return res.status(200).json({ reply });
   } catch (err) {
     console.error("API /chat error:", err);
-    return res.status(200).json({
-      reply: "The lamp flickered. Try again.",
-      error: "chat_api_error"
-    });
+    return res.status(200).json({ reply: "The lamp flickered. Try again.", error: "chat_api_error" });
   }
 }
