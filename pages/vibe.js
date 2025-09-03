@@ -56,7 +56,7 @@ export default function Vibe() {
   // Choose a vibe; keep your existing nav to /onboard
   const pick = (v) => {
     set({ vibe: { id: v, name: v }, phase: 'resumeNew' });
-    router.push('/onboard');
+    router.push('/flow');
   };
 
   return (
