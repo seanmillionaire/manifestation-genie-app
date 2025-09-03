@@ -5,6 +5,7 @@ import { get, set, newId, pushThread, toPlainMessages } from '../src/flowState';
 import { supabase } from '../src/supabaseClient';
 import PrescriptionCard from "../components/ChatGenie/PrescriptionCard";
 import { detectBeliefFrom, recommendProduct } from "../src/engine/recommendProduct";
+import TweakChips from "../components/Confirm/TweakChips";
 
 // ✅ NEW: soft-confirm helpers
 import SoftConfirmBar from "../components/Confirm/SoftConfirmBar";
@@ -67,6 +68,7 @@ export default function ChatPage(){
   const [confirmVariant, setConfirmVariant] = useState(null); // "high" | "mid" | "low" | null
   const [parsed, setParsed] = useState({ outcome: null, block: null, state: null });
   const [firstRx, setFirstRx] = useState(null); // { family, protocol, firstMeditation } | null
+const [showTweaks, setShowTweaks] = useState(false);
 
   // auto-enable debug via ?debug=1
   useEffect(() => {
@@ -251,9 +253,19 @@ Sounds like you’ve been carrying a lot. I’d love to hear—what’s been on 
       if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
     }, 0);
   }
-  function onTweak() {
-    alert("Tweak editor coming next step 🚧");
-  }
+function onTweak() { setShowTweaks(true); }
+function onApplyTweaks(next){
+  // update the parsed values locally, do NOT force user back to a form
+  setParsed({
+    outcome: next.outcome || parsed.outcome,
+    block: next.block || parsed.block,
+    state: (next.state ?? parsed.state) || null
+  });
+  setShowTweaks(false);
+  // Re-run the “Looks right” to keep flow snappy
+  onLooksRight();
+}
+
 
   return (
     <>
@@ -340,6 +352,17 @@ Sounds like you’ve been carrying a lot. I’d love to hear—what’s been on 
             <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:6 }}>
               <div style={{ fontWeight:900, fontSize:18 }}>Genie Chat</div>
             </div>
+{showTweaks && !firstRx && (
+  <div style={{ marginBottom: 8 }}>
+    <TweakChips
+      outcome={parsed?.outcome || ""}
+      block={parsed?.block || ""}
+      stateGuess={parsed?.state || null}
+      onApply={onApplyTweaks}
+      onClose={()=>setShowTweaks(false)}
+    />
+  </div>
+)}
 
             {/* ✅ NEW: Soft Confirm bar (high-confidence only for now) */}
             {confirmVariant === "high" && !firstRx && (
