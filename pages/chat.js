@@ -301,7 +301,10 @@ function onApplyTweaks(next){
                     vibe: S.vibe || null,
                     currentWish: S.currentWish || null,
                     prompt_spec: S.prompt_spec || null,
-                    lastChatPayload
+                    <pre style={{ margin:0, fontSize:12, overflowX:'auto' }}>
+  {pretty(lastChatPayload ?? { info: "No chat call yet. Send a message to populate lastChatPayload." })}
+</pre>
+
                   };
                   navigator.clipboard?.writeText(JSON.stringify(snapshot, null, 2));
                 } catch {}
@@ -377,9 +380,8 @@ function onApplyTweaks(next){
 )}
 
             {/* ✅ NEW: Soft Confirm bar (high-confidence only for now) */}
-   {true && !firstRx && (
+{!firstRx && (
   <div style={{ marginBottom: 8 }}>
-    {console.log('SOFT-CONFIRM DEBUG →', { parsed, confirmVariant })}
     <SoftConfirmBar
       outcome={parsed?.outcome}
       block={parsed?.block}
@@ -389,6 +391,7 @@ function onApplyTweaks(next){
     />
   </div>
 )}
+
 
 
             {/* ✅ NEW: First prescription card after confirmation */}
