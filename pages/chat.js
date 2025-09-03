@@ -199,12 +199,7 @@ One tiny move today beats a thousand tomorrows. What belief or snag should we cl
         <div style={{ background:'#fff', border:'1px solid rgba(0,0,0,0.08)', borderRadius:16, padding:10 }}>
           <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:6 }}>
             <div style={{ fontWeight:900, fontSize:18 }}>Genie Chat</div>
-            <button
-              onClick={()=>{ set({ thread: [] }); setS(get()); }}
-              style={{ border:'1px solid rgba(0,0,0,0.12)', borderRadius:8, padding:'4px 8px', background:'#fff', cursor:'pointer' }}
-            >
-              New belief to clear
-            </button>
+        
           </div>
 
           {/* Compact message list: shorter min/max heights, tighter padding; font sizes unchanged */}
