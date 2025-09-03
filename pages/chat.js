@@ -6,6 +6,11 @@ import { supabase } from '../src/supabaseClient';
 import PrescriptionCard from "../components/ChatGenie/PrescriptionCard";
 import { detectBeliefFrom, recommendProduct } from "../src/engine/recommendProduct";
 
+// ✅ NEW: soft-confirm helpers
+import SoftConfirmBar from "../components/Confirm/SoftConfirmBar";
+import { parseAnswers, scoreConfidence, variantFromScore } from "../src/features/confirm/decision";
+import { prescribe } from "../src/engine/prescribe";
+
 // ---------- tiny helpers ----------
 function escapeHTML(s=''){return s.replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
 function nl2br(s=''){ return s.replace(/\n/g, '<br/>'); }
@@ -57,6 +62,11 @@ export default function ChatPage(){
   const [debugOn, setDebugOn] = useState(false);
   const [lastChatPayload, setLastChatPayload] = useState(null);
   const listRef = useRef(null);
+
+  // ✅ NEW: soft-confirm state
+  const [confirmVariant, setConfirmVariant] = useState(null); // "high" | "mid" | "low" | null
+  const [parsed, setParsed] = useState({ outcome: null, block: null, state: null });
+  const [firstRx, setFirstRx] = useState(null); // { family, protocol, firstMeditation } | null
 
   // auto-enable debug via ?debug=1
   useEffect(() => {
@@ -132,11 +142,25 @@ Sounds like you’ve been carrying a lot. I’d love to hear—what’s been on 
     })();
   }, [router]);
 
+  // ✅ NEW: parse outcome/block from your flowState and decide whether to show SoftConfirm
+  useEffect(() => {
+    try {
+      const a = {
+        goal: S?.currentWish?.wish || S?.prompt_spec?.prompt || null,
+        blocker: S?.currentWish?.block || null
+      };
+      const p = parseAnswers(a);
+      setParsed(p);
+      const score = scoreConfidence(p);
+      setConfirmVariant(variantFromScore(score));
+    } catch {}
+  }, [S?.currentWish, S?.prompt_spec]);
+
   // keep scroll pinned
   useEffect(() => {
     const el = listRef.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [S.thread, uiOffer]);
+  }, [S.thread, uiOffer, firstRx]);
 
   // ------- central API caller: sets lastChatPayload BEFORE calling /api/chat -------
   async function callGenie({ text }) {
@@ -215,6 +239,20 @@ Sounds like you’ve been carrying a lot. I’d love to hear—what’s been on 
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault(); send();
     }
+  }
+
+  // ✅ NEW: soft-confirm handlers
+  function onLooksRight() {
+    const plan = prescribe(parsed || {});
+    setFirstRx(plan);
+    // scroll to it
+    setTimeout(() => {
+      const el = document.getElementById("first-prescription");
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 0);
+  }
+  function onTweak() {
+    alert("Tweak editor coming next step 🚧");
   }
 
   return (
@@ -302,6 +340,30 @@ Sounds like you’ve been carrying a lot. I’d love to hear—what’s been on 
             <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:6 }}>
               <div style={{ fontWeight:900, fontSize:18 }}>Genie Chat</div>
             </div>
+
+            {/* ✅ NEW: Soft Confirm bar (high-confidence only for now) */}
+            {confirmVariant === "high" && !firstRx && (
+              <div style={{ marginBottom: 8 }}>
+                <SoftConfirmBar
+                  outcome={parsed?.outcome}
+                  block={parsed?.block}
+                  variant={confirmVariant}
+                  onLooksRight={onLooksRight}
+                  onTweak={onTweak}
+                />
+              </div>
+            )}
+
+            {/* ✅ NEW: First prescription card after confirmation */}
+            {firstRx && (
+              <div id="first-prescription" style={{ marginBottom: 8 }}>
+                <PrescriptionCard
+                  title={firstRx.firstMeditation} // e.g., "Clarity Prime: 7-min Reset"
+                  why={`Fastest unlock for your path (${firstRx.family} • ${firstRx.protocol}). Use once tonight. Return for next dose.`}
+                  onClose={() => setFirstRx(null)}
+                />
+              </div>
+            )}
 
             <div
               ref={listRef}
