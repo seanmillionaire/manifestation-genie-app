@@ -1,3 +1,4 @@
+// components/ChatGenie/ChatGenieScreen.tsx
 import { useState } from "react";
 import PrescriptionCard from "./PrescriptionCard";
 import { detectBeliefFrom, recommendProduct } from "../../src/engine/recommendProduct";
@@ -9,17 +10,14 @@ type PromptAnswers = {
   timeframe?: string;
   constraint?: string;
   proof_line?: string;
-  // allow extra keys without errors
   [k: string]: unknown;
 };
 
 function readQuestionnaireAnswers(): PromptAnswers | null {
-  // 1) from flowState
   try {
     const cur = (getFlow?.() as any) || {};
     if (cur?.questionnaire?.answers) return cur.questionnaire.answers as PromptAnswers;
   } catch {}
-  // 2) from localStorage
   if (typeof window !== "undefined") {
     try {
       const raw = localStorage.getItem("questionnaire_answers");
@@ -38,15 +36,44 @@ function makePromptFrom(answers: PromptAnswers | null): string {
     timeframe && `Timeframe: ${timeframe}`,
     constraint && `Constraint: ${constraint}`,
     proof_line && `Proof target: ${proof_line}`,
-  ]
-    .filter(Boolean)
-    .join("\n");
+  ].filter(Boolean).join("\n");
 }
 
 type Msg = { role: "user" | "assistant"; text: string };
 
+async function callGenieAPI({
+  text,
+  coachPrompt,
+}: {
+  text: string;
+  coachPrompt?: string;
+}): Promise<string> {
+  // build a small context payload using prompt_spec so API can use it
+  const state = (getFlow?.() as any) || {};
+  const context = {
+    prompt_spec: state?.prompt_spec || null,
+    vibe: state?.vibe || null,
+  };
+
+  const resp = await fetch("/api/chat", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      text,
+      context: {
+        ...context,
+        coachPrompt: coachPrompt || null,
+      },
+      messages: [], // you can also pass your thread here later if needed
+    }),
+  });
+  if (!resp.ok) throw new Error("Chat API failed");
+  const data = await resp.json();
+  return data?.reply || "✨ I’m here.";
+}
+
 export default function ChatGenieScreen() {
-  // ensure we have a prompt_spec even if user came straight to /chat
+  // ensure prompt_spec exists
   let ps: any = ((getFlow?.() as any) || {}).prompt_spec || null;
   if (!ps) {
     const answers = readQuestionnaireAnswers();
@@ -72,7 +99,6 @@ export default function ChatGenieScreen() {
 
   const [input, setInput] = useState("");
 
-  // product offer state
   const [uiOffer, setUiOffer] = useState<null | {
     title: string;
     why: string;
@@ -83,22 +109,20 @@ export default function ChatGenieScreen() {
   }>(null);
 
   const sendMessage = async () => {
-    if (!input.trim()) return;
-
     const userText = input.trim();
+    if (!userText) return;
+
     setMessages((m) => [...m, { role: "user", text: userText }]);
     setInput("");
 
-    // Belief detection + recommendation (boosted by coachPrompt if present)
+    // belief detection + upsell
     const contextBoost = coachPrompt ? `${coachPrompt}\n\nUser: ${userText}` : userText;
     const { goal, belief } = detectBeliefFrom(contextBoost);
-
     const rec = recommendProduct({ goal, belief });
     if (rec) {
       const why = belief
         ? `Limiting belief detected: “${belief}.” Tonight’s session dissolves that pattern so your next action feels natural.`
         : `Based on your goal, this short trance helps you move without overthinking.`;
-
       setUiOffer({
         title: `Tonight’s prescription: ${rec.title}`,
         why,
@@ -109,23 +133,20 @@ export default function ChatGenieScreen() {
       });
     }
 
-    // placeholder assistant reply (context-aware)
-    setTimeout(() => {
-      const goalHint = ps?.goal ? ` toward “${ps.goal}”` : "";
+    // real assistant reply via API (uses prompt_spec in context)
+    try {
+      const reply = await callGenieAPI({ text: userText, coachPrompt });
+      setMessages((m) => [...m, { role: "assistant", text: reply }]);
+    } catch {
       setMessages((m) => [
         ...m,
-        {
-          role: "assistant",
-          text: belief
-            ? `✨ Noted: “${belief}.” Let’s dissolve that pattern${goalHint}. Breathe with me: in for 4, hold 4, out for 6. Ready for a tiny action you can take in the next 10 minutes?`
-            : `✨ Got it. Let’s break through that belief together${goalHint}. Want a tiny action you can take in the next 10 minutes?`,
-        },
+        { role: "assistant", text: "The lamp flickered. Try again in a moment." },
       ]);
-    }, 600);
+    }
   };
 
   return (
-    <main style={{ maxWidth: 700, margin: "30px auto", padding: "0 20px" }}>
+    <main style={{ maxWidth: 820, margin: "30px auto", padding: "0 20px" }}>
       {coachPrompt ? (
         <div
           style={{
@@ -138,25 +159,37 @@ export default function ChatGenieScreen() {
             padding: "6px 10px",
             display: "inline-block",
           }}
+          aria-live="polite"
         >
           Using your intention from Home •{" "}
-          {new Date(((getFlow?.() as any)?.prompt_spec?.savedAt as string) || Date.now()).toLocaleString()}
+          {new Date(
+            (((getFlow?.() as any)?.prompt_spec?.savedAt as string) || Date.now()) as any
+          ).toLocaleString()}
         </div>
       ) : null}
 
-      <div style={{ border: "1px solid rgba(255,255,255,0.15)", borderRadius: 12, padding: 16 }}>
+      <div
+        style={{
+          border: "1px solid rgba(0,0,0,0.08)",
+          borderRadius: 16,
+          padding: 16,
+          background: "white",
+          boxShadow: "0 6px 22px rgba(0,0,0,0.06)",
+        }}
+      >
         {messages.map((m, i) => (
           <div key={i} style={{ marginBottom: 12, textAlign: m.role === "user" ? "right" : "left" }}>
             <div
               style={{
                 display: "inline-block",
                 padding: "10px 14px",
-                borderRadius: 10,
-                background: m.role === "user" ? "#5A189A" : "#1E2A38",
+                borderRadius: 12,
+                background: m.role === "user" ? "#5A189A" : "#0f172a",
                 color: "white",
-                maxWidth: "80%",
-                fontSize: 18,
+                maxWidth: "74ch",
+                fontSize: 16,
                 lineHeight: 1.6,
+                boxShadow: m.role === "user" ? "0 4px 10px rgba(90,24,154,.25)" : "none",
               }}
             >
               {m.text}
@@ -165,16 +198,18 @@ export default function ChatGenieScreen() {
         ))}
 
         {uiOffer ? (
-          <PrescriptionCard
-            title={uiOffer.title}
-            why={uiOffer.why}
-            priceCents={uiOffer.priceCents}
-            buyUrl="https://hypnoticmeditations.ai/b/l0kmb"
-            onClose={() => setUiOffer(null)}
-          />
+          <div style={{ marginTop: 8 }}>
+            <PrescriptionCard
+              title={uiOffer.title}
+              why={uiOffer.why}
+              priceCents={uiOffer.priceCents}
+              buyUrl="https://hypnoticmeditations.ai/b/l0kmb"
+              onClose={() => setUiOffer(null)}
+            />
+          </div>
         ) : null}
 
-        <div style={{ display: "flex", marginTop: 14 }}>
+        <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
           <input
             value={input}
             onChange={(e) => setInput(e.target.value)}
@@ -183,12 +218,25 @@ export default function ChatGenieScreen() {
             style={{
               flex: 1,
               padding: "12px 14px",
-              borderRadius: 10,
-              border: "1px solid #333",
-              fontSize: 18,
+              borderRadius: 12,
+              border: "1px solid rgba(0,0,0,0.15)",
+              fontSize: 16,
+              background: "#f8fafc",
             }}
           />
-          <button onClick={sendMessage} className="btn btn-primary" style={{ marginLeft: 8 }}>
+          <button
+            onClick={sendMessage}
+            style={{
+              padding: "12px 16px",
+              borderRadius: 12,
+              border: 0,
+              background: "#facc15",
+              borderBottom: "2px solid #eab308",
+              fontWeight: 900,
+              minWidth: 88,
+              cursor: "pointer",
+            }}
+          >
             Send
           </button>
         </div>
