@@ -38,7 +38,9 @@ export default function ChatGenieScreen() {
     setInput("");
 
     // Belief detection + recommendation
-    const { goal, belief } = detectBeliefFrom(userText);
+ const contextBoost = coachPrompt ? `${coachPrompt}\n\nUser: ${userText}` : userText;
+const { goal, belief } = detectBeliefFrom(contextBoost);
+
     const rec = recommendProduct({ goal, belief });
 
     if (rec) {
@@ -57,19 +59,38 @@ export default function ChatGenieScreen() {
     }
 
     // TODO: Replace with real assistant call
-    setTimeout(() => {
-      setMessages((m) => [
-        ...m,
-        {
-          role: "assistant",
-          text: "✨ Got it. Let’s break through that belief together.",
-        },
-      ]);
-    }, 600);
-  };
+setTimeout(() => {
+  const goalHint = ps?.goal ? ` toward “${ps.goal}”` : "";
+  setMessages((m) => [
+    ...m,
+    {
+      role: "assistant",
+      text:
+        belief
+          ? `✨ Noted: “${belief}.” Let’s dissolve that pattern${goalHint}. Breathe with me: in for 4, hold 4, out for 6. Ready for a tiny action you can take in the next 10 minutes?`
+          : `✨ Got it. Let’s break through that belief together${goalHint}. Want a tiny action you can take in the next 10 minutes?`,
+    },
+  ]);
+}, 600);
+
 
   return (
     <main style={{ maxWidth: 700, margin: "30px auto", padding: "0 20px" }}>
+        {coachPrompt ? (
+  <div style={{
+    marginBottom: 10,
+    fontSize: 13,
+    color: "#166534",
+    background: "#dcfce7",
+    border: "1px solid #86efac",
+    borderRadius: 10,
+    padding: "6px 10px",
+    display: "inline-block"
+  }}>
+    Using your intention from Home • {new Date(getFlow()?.prompt_spec?.savedAt || Date.now()).toLocaleString()}
+  </div>
+) : null}
+
       <div style={{ border: "1px solid rgba(255,255,255,0.15)", borderRadius: 12, padding: 16 }}>
         {messages.map((m, i) => (
           <div
