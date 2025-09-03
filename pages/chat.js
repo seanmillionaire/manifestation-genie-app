@@ -1,4 +1,4 @@
-// /pages/chat.js — compact chat console + HM redirect for Unlock (debug + daily/session offer gate)
+// /pages/chat.js — staged flow: Confirm → Prescription → Genie overlay → Chat
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
 import { get, set, newId, pushThread, toPlainMessages } from '../src/flowState';
@@ -7,7 +7,6 @@ import PrescriptionCard from "../components/ChatGenie/PrescriptionCard";
 import { detectBeliefFrom, recommendProduct } from "../src/engine/recommendProduct";
 import TweakChips from "../components/Confirm/TweakChips";
 
-// ✅ soft-confirm helpers
 import SoftConfirmBar from "../components/Confirm/SoftConfirmBar";
 import { parseAnswers, scoreConfidence, variantFromScore } from "../src/features/confirm/decision";
 import { prescribe } from "../src/engine/prescribe";
@@ -37,7 +36,7 @@ function pickFirstName(src){
 
 // ---------- offer gating (once per day + once per session) ----------
 const HM_LINK = "https://hypnoticmeditations.ai/b/l0kmb";
-function todayKey(){ return new Date().toISOString().slice(0,10); } // YYYY-MM-DD
+function todayKey(){ return new Date().toISOString().slice(0,10); }
 function shouldShowOfferNow(){
   try {
     if (typeof window === 'undefined') return false;
@@ -70,6 +69,9 @@ export default function ChatPage(){
   const [firstRx, setFirstRx] = useState(null); // { family, protocol, firstMeditation } | null
   const [showTweaks, setShowTweaks] = useState(false);
 
+  // ✅ staged UI: 'confirm' → 'rx' → 'overlay' → 'chat'
+  const [stage, setStage] = useState('confirm');
+
   // auto-enable debug via ?debug=1
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -78,7 +80,7 @@ export default function ChatPage(){
     }
   }, []);
 
-  // boot + greet + pull name + keep design
+  // boot + greet + pull name
   useEffect(() => {
     const cur = get();
     if (!cur.vibe) { router.replace('/vibe'); return; }
@@ -144,7 +146,7 @@ Sounds like you’ve been carrying a lot. I’d love to hear—what’s been on 
     })();
   }, [router]);
 
-  // ✅ parse outcome/block from flowState and choose confirm variant
+  // derive confirm variant
   useEffect(() => {
     try {
       const a = {
@@ -158,15 +160,15 @@ Sounds like you’ve been carrying a lot. I’d love to hear—what’s been on 
     } catch {}
   }, [S?.currentWish, S?.prompt_spec]);
 
-  // keep scroll pinned (only once chat is visible)
+  // keep scroll pinned once chat is visible
   useEffect(() => {
     const el = listRef.current;
-    if (el && firstRx) el.scrollTop = el.scrollHeight;
-  }, [S.thread, uiOffer, firstRx]);
+    if (el && stage === 'chat') el.scrollTop = el.scrollHeight;
+  }, [S.thread, uiOffer, stage]);
 
-  // ------- central API caller: sets lastChatPayload BEFORE calling /api/chat -------
+  // central API
   async function callGenie({ text }) {
-    const stateNow = get(); // include just-pushed user msg
+    const stateNow = get();
     const payload = {
       userName: stateNow.firstName || null,
       context: {
@@ -174,13 +176,11 @@ Sounds like you’ve been carrying a lot. I’d love to hear—what’s been on 
         block: stateNow.currentWish?.block || null,
         micro: stateNow.currentWish?.micro || null,
         vibe: stateNow.vibe || null,
-        prompt_spec: stateNow.prompt_spec?.prompt || null, // intention from questionnaire/home
+        prompt_spec: stateNow.prompt_spec?.prompt || null,
       },
       messages: toPlainMessages(stateNow.thread || []),
       text
     };
-
-    // 🔥 update debug panel
     setLastChatPayload(payload);
 
     const resp = await fetch('/api/chat', {
@@ -199,11 +199,9 @@ Sounds like you’ve been carrying a lot. I’d love to hear—what’s been on 
     setInput('');
     setThinking(true);
 
-    // 1) push user message into flowState (so callGenie sees it)
     pushThread({ role:'user', content: text });
     setS(get());
 
-    // 2) product recommend (respect daily/session gate)
     try {
       const combined = S?.prompt_spec?.prompt
         ? `${S.prompt_spec.prompt}\n\nUser: ${text}`
@@ -220,11 +218,10 @@ Sounds like you’ve been carrying a lot. I’d love to hear—what’s been on 
           priceCents: rec.price,
           buyUrl: HM_LINK
         });
-        markOfferShown(); // prevent repeat this session/day
+        markOfferShown();
       }
     } catch {}
 
-    // 3) call Genie API
     try {
       const reply = await callGenie({ text });
       pushThread({ role:'assistant', content: reply });
@@ -243,11 +240,11 @@ Sounds like you’ve been carrying a lot. I’d love to hear—what’s been on 
     }
   }
 
-  // ✅ soft-confirm handlers
+  // -------- staged handlers --------
   function onLooksRight() {
     const plan = prescribe(parsed || {});
     setFirstRx(plan);
-    // scroll to first prescription
+    setStage('rx'); // show prescription first
     setTimeout(() => {
       const el = document.getElementById("first-prescription");
       if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -264,8 +261,35 @@ Sounds like you’ve been carrying a lot. I’d love to hear—what’s been on 
     onLooksRight();
   }
 
+  // user taps our CTA below the Rx card (we don't rely on internal card events)
+  function onStartListening(){
+    // Sweet little pause → overlay
+    setStage('overlay');
+    // small focus delay for the overlay feel
+    setTimeout(() => {
+      const ov = document.getElementById('genie-overlay-tap');
+      if (ov) ov.focus();
+    }, 100);
+  }
+
+  function revealChat(){
+    setStage('chat');
+    setTimeout(() => {
+      const el = listRef.current;
+      if (el) el.scrollTop = el.scrollHeight;
+    }, 0);
+  }
+
+  // ------- overlay styles (inline keyframes to keep this file self-contained) -------
+  const overlayStyles = `
+@keyframes popIn { 0% { transform: scale(.7); opacity: 0 } 60% { transform: scale(1.08); opacity:1 } 100% { transform: scale(1) } }
+@keyframes floaty { 0% { transform: translateY(0) } 50% { transform: translateY(-6px) } 100% { transform: translateY(0) } }
+`;
+
   return (
     <>
+      <style dangerouslySetInnerHTML={{__html: overlayStyles}} />
+
       {/* ---- DEBUG PILL + PANEL ---- */}
       <div style={{ display:'flex', justifyContent:'center', margin:'10px 0' }}>
         <button
@@ -341,18 +365,17 @@ Sounds like you’ve been carrying a lot. I’d love to hear—what’s been on 
               </pre>
             </div>
 
-            {/* --- Soft Confirm live state --- */}
             <div style={{ gridColumn:'1 / span 2', background:'#0f172a', padding:10, borderRadius:8 }}>
               <div style={{ fontSize:12, opacity:.8, marginBottom:6 }}>softConfirm</div>
               <pre style={{ margin:0, fontSize:12, whiteSpace:'pre-wrap' }}>
-                {pretty({ parsed, confirmVariant, firstRx })}
+                {pretty({ parsed, confirmVariant, firstRx, stage })}
               </pre>
             </div>
           </div>
         </div>
       )}
 
-      {/* ---- Chat UI (gated) ---- */}
+      {/* ---- Main Card (staged) ---- */}
       <div style={{ maxWidth: 980, margin: '12px auto', padding: '0 10px' }}>
         <div style={{ display:'grid', gridTemplateColumns:'1fr', gap:10 }}>
           <div style={{ background:'#fff', border:'1px solid rgba(0,0,0,0.08)', borderRadius:16, padding:10 }}>
@@ -360,45 +383,65 @@ Sounds like you’ve been carrying a lot. I’d love to hear—what’s been on 
               <div style={{ fontWeight:900, fontSize:18 }}>Genie Chat</div>
             </div>
 
-            {/* Tweaks editor */}
-            {showTweaks && !firstRx && (
-              <div style={{ marginBottom: 8 }}>
-                <TweakChips
-                  outcome={parsed?.outcome || ""}
-                  block={parsed?.block || ""}
-                  stateGuess={parsed?.state || null}
-                  onApply={onApplyTweaks}
-                  onClose={()=>setShowTweaks(false)}
-                />
-              </div>
+            {/* Stage: confirm */}
+            {stage === 'confirm' && (
+              <>
+                {showTweaks && (
+                  <div style={{ marginBottom: 8 }}>
+                    <TweakChips
+                      outcome={parsed?.outcome || ""}
+                      block={parsed?.block || ""}
+                      stateGuess={parsed?.state || null}
+                      onApply={onApplyTweaks}
+                      onClose={()=>setShowTweaks(false)}
+                    />
+                  </div>
+                )}
+                <div style={{ marginBottom: 8 }}>
+                  <SoftConfirmBar
+                    outcome={parsed?.outcome}
+                    block={parsed?.block}
+                    variant={confirmVariant}
+                    onLooksRight={onLooksRight}
+                    onTweak={onTweak}
+                  />
+                </div>
+              </>
             )}
 
-            {/* Soft Confirm bar — always show until Looks Right */}
-            {!firstRx && (
-              <div style={{ marginBottom: 8 }}>
-                <SoftConfirmBar
-                  outcome={parsed?.outcome}
-                  block={parsed?.block}
-                  variant={confirmVariant}
-                  onLooksRight={onLooksRight}
-                  onTweak={onTweak}
-                />
-              </div>
+            {/* Stage: rx (prescription only) */}
+            {stage === 'rx' && firstRx && (
+              <>
+                <div id="first-prescription" style={{ marginBottom: 8 }}>
+                  <PrescriptionCard
+                    title={firstRx.firstMeditation}
+                    why={`Fastest unlock for your path (${firstRx.family} • ${firstRx.protocol}). Use once tonight. Return for next dose.`}
+                    onClose={() => setFirstRx(null)}
+                  />
+                </div>
+
+                {/* Our own CTA to advance to overlay → chat */}
+                <div style={{ display:'flex', justifyContent:'center' }}>
+                  <button
+                    type="button"
+                    onClick={onStartListening}
+                    style={{
+                      padding:'10px 16px',
+                      borderRadius:12,
+                      border:0,
+                      background:'#ffd600',
+                      fontWeight:900,
+                      cursor:'pointer'
+                    }}
+                  >
+                    I’ll listen now — continue »
+                  </button>
+                </div>
+              </>
             )}
 
-            {/* First prescription card after confirmation */}
-            {firstRx && (
-              <div id="first-prescription" style={{ marginBottom: 8 }}>
-                <PrescriptionCard
-                  title={firstRx.firstMeditation} // e.g., "Clarity Prime: 7-min Reset"
-                  why={`Fastest unlock for your path (${firstRx.family} • ${firstRx.protocol}). Use once tonight. Return for next dose.`}
-                  onClose={() => setFirstRx(null)}
-                />
-              </div>
-            )}
-
-            {/* Chat list + input appear ONLY after Looks right */}
-            {firstRx ? (
+            {/* Stage: chat */}
+            {stage === 'chat' && (
               <>
                 <div
                   ref={listRef}
@@ -498,14 +541,51 @@ Sounds like you’ve been carrying a lot. I’d love to hear—what’s been on 
                   </button>
                 </div>
               </>
-            ) : (
-              <div style={{ marginTop: 8, fontSize:12, color:'rgba(0,0,0,0.55)' }}>
-                Tap <strong>Looks right</strong> to receive your first prescription and start chat.
-              </div>
             )}
           </div>
         </div>
       </div>
+
+      {/* Stage: overlay (genie pop & tap) */}
+      {stage === 'overlay' && (
+        <div
+          onClick={revealChat}
+          role="button"
+          id="genie-overlay-tap"
+          tabIndex={0}
+          title="Tap to meet your Genie"
+          style={{
+            position:'fixed', inset:0, background:'rgba(0,0,0,0.55)',
+            display:'flex', alignItems:'center', justifyContent:'center',
+            zIndex: 50, cursor:'pointer'
+          }}
+        >
+          <div
+            style={{
+              width: 360, maxWidth:'88%',
+              background:'#fff',
+              borderRadius:16,
+              padding:'18px 16px',
+              textAlign:'center',
+              border:'1px solid rgba(0,0,0,0.08)',
+              animation: 'popIn .28s ease-out'
+            }}
+          >
+            <div style={{ fontSize:40, lineHeight:1, animation:'floaty 2.2s ease-in-out infinite' }}>🧞‍♂️</div>
+            <div style={{ fontWeight:900, marginTop:8, fontSize:18 }}>The Genie is waiting for you…</div>
+            <div style={{ marginTop:6, fontSize:13, color:'#334155' }}>Tap anywhere to begin your conversation.</div>
+            <div style={{ marginTop:12 }}>
+              <span style={{
+                display:'inline-block',
+                padding:'10px 14px',
+                background:'#ffd600',
+                borderRadius:12,
+                fontWeight:900
+              }}>Tap to enter</span>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }
