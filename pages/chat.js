@@ -343,6 +343,18 @@ function onApplyTweaks(next){
             </div>
           </div>
         </div>
+{/* --- Soft Confirm Debug --- */}
+<div style={{ gridColumn:'1 / span 2', background:'#0f172a', padding:10, borderRadius:8 }}>
+  <div style={{ fontSize:12, opacity:.8, marginBottom:6 }}>softConfirm</div>
+  <pre style={{ margin:0, fontSize:12, whiteSpace:'pre-wrap' }}>
+    {pretty({
+      parsed,                // { outcome, block, state }
+      confirmVariant,        // "high" | "mid" | "low" | null
+      firstRx                // { family, protocol, firstMeditation } | null
+    })}
+  </pre>
+</div>
+
       )}
 
       {/* ---- Chat UI (original design) ---- */}
