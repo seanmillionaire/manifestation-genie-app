@@ -1,16 +1,22 @@
 import { useEffect, useState } from "react";
 import PrescriptionCard from "./PrescriptionCard";
 import { detectBeliefFrom, recommendProduct } from "../../src/engine/recommendProduct";
+import { get as getFlow } from "@/src/flowState";
 
 
 export default function ChatGenieScreen() {
+    const ps = (getFlow?.() as any)?.prompt_spec || null;
+  const coachPrompt: string | undefined = ps?.prompt;
+
   const [messages, setMessages] = useState<{ role: "user" | "assistant"; text: string }[]>([
     {
       role: "assistant",
-      text:
-        "🌟 The lamp glows… I’m here. If you’ve felt stuck—working hard, juggling stress, or doubting yourself—we’ll flip the limiting belief behind it. One tiny move today beats a thousand tomorrows. What belief or snag should we clear right now?",
+      text: coachPrompt
+        ? `🌟 The lamp glows… I’m here.\n\nI’ll guide today’s ritual using your intention:\n${coachPrompt}\n\nWhen you’re ready, tell me the belief or snag to clear first.`
+        : `🌟 The lamp glows… I’m here. If you’ve felt stuck—working hard, juggling stress, or doubting yourself—we’ll flip the limiting belief behind it. One tiny move today beats a thousand tomorrows. What belief or snag should we clear right now?`,
     },
   ]);
+
 
   const [input, setInput] = useState("");
 
