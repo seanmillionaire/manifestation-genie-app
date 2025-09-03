@@ -5,6 +5,8 @@ import { get, set, newId, pushThread, toPlainMessages } from '../src/flowState';
 import { supabase } from '../src/supabaseClient';
 import PrescriptionCard from "../components/ChatGenie/PrescriptionCard";
 import { detectBeliefFrom, recommendProduct } from "../src/engine/recommendProduct";
+import ChatGenieScreen from "@/components/ChatGenie/ChatGenieScreen";
+export default ChatGenieScreen;
 
 function escapeHTML(s=''){ return s.replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'" :'&#39;'}[m])); }
 function nl2br(s=''){ return s.replace(/\n/g, '<br/>'); }
