@@ -4,23 +4,21 @@ type Props = {
   title: string;
   why?: string;
   priceCents?: number;
-  /** External store URL to buy */
-  buyUrl?: string;
+  buyUrl?: string; // external store URL (optional override)
 };
 
 /**
  * PrescriptionCard
- * - Always shows a dummy audio preview (same for every product for now)
- * - Unlock button sends user to external store (buyUrl)
+ * - Always shows the same FLAC audio preview
+ * - Unlock button sends user to external HM store
  */
 export default function PrescriptionCard({
   title,
   why,
   priceCents = 1200,
-  buyUrl = "https://hypnoticmeditations.ai/",
+  buyUrl = "https://hypnoticmeditations.ai/b/l0kmb",
 }: Props) {
-  // 🔊 Dummy preview (same for every product)
-  // Feel free to drop your own small MP3 here later.
+  // 🔊 Your dummy audio (always used)
   const DUMMY_AUDIO =
     "https://cdnstreaming.myclickfunnels.com/audiofile/25873/file/original-3b1398f834c94cd9eeba088f4bcdba73/audiofile/25873/file/original-3b1398f834c94cd9eeba088f4bcdba73.flac";
 
@@ -28,12 +26,7 @@ export default function PrescriptionCard({
 
   function unlock() {
     try {
-      if (buyUrl) {
-        // open in same tab so checkout flow continues
-        window.location.href = buyUrl;
-      } else {
-        alert("Store link is missing.");
-      }
+      window.location.href = buyUrl;
     } catch {
       alert("Could not open the store link.");
     }
@@ -65,9 +58,10 @@ export default function PrescriptionCard({
           marginBottom: 14,
         }}
       >
-        {/* Always the SAME dummy audio for now */}
+        {/* Always this same audio preview */}
         <audio controls preload="none" style={{ width: "100%" }}>
-          <source src=https://cdnstreaming.myclickfunnels.com/audiofile/25873/file/original-3b1398f834c94cd9eeba088f4bcdba73/audiofile/25873/file/original-3b1398f834c94cd9eeba088f4bcdba73.flac type="audio/mpeg" />
+          <source src={DUMMY_AUDIO} type="audio/flac" />
+          <source src={DUMMY_AUDIO} type="audio/x-flac" />
           Your browser does not support the audio element.
         </audio>
       </div>
