@@ -302,7 +302,7 @@ const startManifesting = () => {
           }}
         >
           <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 6 }}>
-            {firstName}&apos;s manifestation technique for {today}
+            {firstName}, try this manifestation technique BEFORE you start your journey:
           </div>
 
           <div style={{ fontSize: 14, lineHeight: 1.6 }}>
