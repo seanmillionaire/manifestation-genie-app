@@ -16,7 +16,7 @@ const LOGO_SRC = 'https://storage.googleapis.com/mixo-sites/images/file-a7eebac5
 
 const navLinks = [
   { href: '/home',  label: 'Home'   },
-  { href: '/vibe',  label: 'Start'  },  // "Start" = Flow page
+  { href: '/flow',  label: 'Start'  },  // "Start" = Flow page
   { href: '/profile', label: 'Profile' }
 ];
 
