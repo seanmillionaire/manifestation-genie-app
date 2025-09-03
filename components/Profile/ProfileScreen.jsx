@@ -1,246 +1,436 @@
-// /pages/profile.js — Progress, Manifestation Board, Wins (client-only)
-import { useEffect, useMemo, useState } from 'react';
-+ import { get, set } from '../../src/flowState';
+// components/Profile/ProfileScreen.jsx
+import { useEffect, useMemo, useState } from "react";
 
-const LS_MANIFESTS = 'mg_manifestations';
-const LS_WINS = 'mg_wins';
-const LS_STREAK = 'mg_streak'; // {count, lastDay}
-
-function loadJSON(key, fallback) {
-  if (typeof window === 'undefined') return fallback;
-  try { const v = JSON.parse(localStorage.getItem(key) || ''); return Array.isArray(fallback) && !Array.isArray(v) ? fallback : (v ?? fallback); } catch { return fallback; }
+// ---- localStorage helpers (safe) ----
+function lsGet(key, fallback = null) {
+  try {
+    const raw = localStorage.getItem(key);
+    if (raw == null) return fallback;
+    if (/^\s*[\[{]/.test(raw)) return JSON.parse(raw);
+    return raw;
+  } catch {
+    return fallback;
+  }
 }
-function saveJSON(key, val) {
-  try { localStorage.setItem(key, JSON.stringify(val)); } catch {}
+function lsSet(key, val) {
+  try {
+    const v = typeof val === "string" ? val : JSON.stringify(val);
+    localStorage.setItem(key, v);
+  } catch {}
 }
-function todayKey() {
-  const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+function todayStr(d = new Date()) {
+  // YYYY-MM-DD in local time
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${dd}`;
+}
+function daysBetween(a, b) {
+  const MS = 24 * 60 * 60 * 1000;
+  return Math.floor((b - a) / MS);
+}
+function isSameDayISO(isoA, isoB) {
+  return (isoA || "").slice(0, 10) === (isoB || "").slice(0, 10);
 }
 
-export default function ProfilePage() {
-  const [S, setS] = useState(get());
-  const [manifests, setManifests] = useState(loadJSON(LS_MANIFESTS, []));
-  const [wins, setWins] = useState(loadJSON(LS_WINS, []));
-  const [newWish, setNewWish] = useState('');
-  const [newWin, setNewWin] = useState('');
+// Compute current streak from a set of YYYY-MM-DD strings
+function computeStreak(daySet) {
+  if (!daySet || daySet.size === 0) return 0;
+  let streak = 0;
+  const now = new Date();
+  // Walk backwards from today until a gap
+  for (let offset = 0; ; offset++) {
+    const d = new Date(now);
+    d.setDate(d.getDate() - offset);
+    const key = todayStr(d);
+    if (daySet.has(key)) streak++;
+    else break;
+  }
+  return streak;
+}
 
-  // ---- simple streak (based on app visits to profile or chat) ----
+// Sessions this week (Mon-Sun)
+function sessionsThisWeek(daySet) {
+  if (!daySet || daySet.size === 0) return 0;
+  const now = new Date();
+  const day = now.getDay(); // 0=Sun..6=Sat
+  const mondayOffset = (day + 6) % 7; // days since Monday
+  const monday = new Date(now);
+  monday.setDate(now.getDate() - mondayOffset);
+  let count = 0;
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(monday);
+    d.setDate(monday.getDate() + i);
+    if (daySet.has(todayStr(d))) count++;
+  }
+  return count;
+}
+
+export default function ProfileScreen() {
+  // Core basics (baseline kept)
+  const [firstName, setFirstName] = useState("Friend");
+  const [vibe, setVibe] = useState("—");
+  const [acceptedAt, setAcceptedAt] = useState(null);
+
+  // Progress + logs
+  const [sessionDays, setSessionDays] = useState([]); // array of YYYY-MM-DD
+  const [lastSessionISO, setLastSessionISO] = useState(null); // ISO string
+  const [sessionsTotal, setSessionsTotal] = useState(0);
+
+  // Lists
+  const [manifestations, setManifestations] = useState([]); // [{wish, block, micro, date}]
+  const [wins, setWins] = useState([]); // [{title, note, date}]
+
+  // Quick add inputs (client-side only UI)
+  const [newWish, setNewWish] = useState("");
+  const [newWinTitle, setNewWinTitle] = useState("");
+  const [newWinNote, setNewWinNote] = useState("");
+
+  // Hydrate from localStorage
   useEffect(() => {
-    const day = todayKey();
-    const st = loadJSON(LS_STREAK, { count: 0, lastDay: '' });
-    if (st.lastDay !== day) {
-      // if consecutive day, increment; else reset to 1
-      const dPrev = new Date(st.lastDay);
-      const dNow = new Date(day);
-      const diff = Math.round((dNow - dPrev) / (1000*60*60*24));
-      const next = {
-        count: st.lastDay && diff === 1 ? (st.count || 0) + 1 : 1,
-        lastDay: day
-      };
-      saveJSON(LS_STREAK, next);
-    }
+    setFirstName(lsGet("mg_first_name", "Friend") || "Friend");
+    setVibe(lsGet("mg_vibe", "—") || "—");
+    setAcceptedAt(lsGet("mg_agreed_v1", null));
+
+    setManifestations(lsGet("mg_manifestations", []) || []);
+    setWins(lsGet("mg_wins", []) || []);
+
+    const days = lsGet("mg_session_days", []) || [];
+    setSessionDays(Array.isArray(days) ? days : []);
+
+    setLastSessionISO(lsGet("mg_last_session_iso", null));
+    setSessionsTotal(Number(lsGet("mg_sessions_total", 0)) || 0);
   }, []);
 
-  const streak = loadJSON(LS_STREAK, { count: 1, lastDay: todayKey() });
-
-  // keep S live if changed elsewhere
-  useEffect(() => {
-    const id = setInterval(() => setS(get()), 1000);
-    return () => clearInterval(id);
-  }, []);
-
-  // ---- derived progress ----
-  const checks = useMemo(() => {
-    return {
-      acceptedEthics: !!S?.ethics?.acceptedAt,
-      pickedVibe: !!S?.vibe?.id,
-      setIntention: !!S?.prompt_spec?.prompt,
-      capturedWish: !!S?.currentWish?.wish,
-      chattedOnce: Array.isArray(S?.thread) && S.thread.length > 0,
-    };
-  }, [S]);
-
-  const progress = useMemo(() => {
-    const vals = Object.values(checks);
-    const done = vals.filter(Boolean).length;
-    const total = vals.length;
-    return { done, total, pct: Math.round((done / total) * 100) };
-  }, [checks]);
-
-  // ---- actions ----
-  function addManifest() {
-    const t = newWish.trim(); if (!t) return;
-    const item = { id: newId(), text: t, status: 'in-progress', createdAt: new Date().toISOString() };
-    const next = [item, ...manifests];
-    setManifests(next); saveJSON(LS_MANIFESTS, next);
-    setNewWish('');
-    // also reflect into flowState as currentWish (non-destructive)
+  // Derived progress
+  const daySet = useMemo(() => new Set(sessionDays || []), [sessionDays]);
+  const streak = useMemo(() => computeStreak(daySet), [daySet]);
+  const thisWeek = useMemo(() => sessionsThisWeek(daySet), [daySet]);
+  const lastSessionLabel = useMemo(() => {
+    if (!lastSessionISO) return "—";
     try {
-      const cur = get() || {};
-      set({ ...cur, currentWish: { ...(cur.currentWish||{}), wish: t, date: todayKey(), vibe: cur.vibe || null } });
-      setS(get());
-    } catch {}
-  }
-  function toggleManifestStatus(id) {
-    const next = manifests.map(m => m.id === id
-      ? { ...m, status: m.status === 'done' ? 'in-progress' : 'done', doneAt: m.status === 'done' ? null : new Date().toISOString() }
-      : m);
-    setManifests(next); saveJSON(LS_MANIFESTS, next);
-  }
-  function deleteManifest(id) {
-    const next = manifests.filter(m => m.id !== id);
-    setManifests(next); saveJSON(LS_MANIFESTS, next);
+      const d = new Date(lastSessionISO);
+      const diff = daysBetween(d, new Date());
+      if (diff === 0) return "Today";
+      if (diff === 1) return "Yesterday";
+      return `${diff} days ago`;
+    } catch {
+      return "—";
+    }
+  }, [lastSessionISO]);
+
+  // Mark today complete (optional, just local)
+  function markTodayComplete() {
+    const t = todayStr();
+    if (!daySet.has(t)) {
+      const next = [...daySet, t];
+      lsSet("mg_session_days", next);
+      setSessionDays(next);
+      const newTotal = sessionsTotal + 1;
+      setSessionsTotal(newTotal);
+      lsSet("mg_sessions_total", newTotal);
+    }
+    const nowISO = new Date().toISOString();
+    setLastSessionISO(nowISO);
+    lsSet("mg_last_session_iso", nowISO);
   }
 
+  // Add manifestation
+  function addManifestation() {
+    const w = newWish.trim();
+    if (!w) return;
+    const item = {
+      wish: w,
+      block: "",
+      micro: "",
+      date: todayStr(),
+    };
+    const next = [item, ...(manifestations || [])].slice(0, 20);
+    setManifestations(next);
+    lsSet("mg_manifestations", next);
+    setNewWish("");
+  }
+
+  // Add win
   function addWin() {
-    const t = newWin.trim(); if (!t) return;
-    const item = { id: newId(), text: t, createdAt: new Date().toISOString() };
-    const next = [item, ...wins];
-    setWins(next); saveJSON(LS_WINS, next);
-    setNewWin('');
-  }
-  function deleteWin(id) {
-    const next = wins.filter(w => w.id !== id);
-    setWins(next); saveJSON(LS_WINS, next);
+    const t = newWinTitle.trim();
+    if (!t) return;
+    const item = {
+      title: t,
+      note: newWinNote.trim(),
+      date: todayStr(),
+    };
+    const next = [item, ...(wins || [])].slice(0, 30);
+    setWins(next);
+    lsSet("mg_wins", next);
+    setNewWinTitle("");
+    setNewWinNote("");
   }
 
-  // ---- UI ----
+  const acceptedLabel = acceptedAt ? new Date(acceptedAt).toLocaleString() : null;
+
   return (
-    <main style={{ maxWidth: 980, margin: '24px auto', padding: '0 10px' }}>
-      <h1 style={{ fontSize: 28, margin: '0 0 8px' }}>Profile</h1>
-      <div style={{ color:'#475569', marginBottom: 16 }}>Let’s make your progress visible.</div>
+    <main style={{ width: "min(900px, 94vw)", margin: "30px auto" }}>
+      <h1 style={{ fontSize: 28, fontWeight: 900, margin: "0 0 12px" }}>Profile</h1>
+      <p className="text-sm text-black/60 h-5" aria-live="polite">More coming soon!</p>
 
-      {/* Progress Tracker */}
-      <section style={{ background:'#fff', border:'1px solid rgba(0,0,0,0.08)', borderRadius:16, padding:16, marginBottom:14 }}>
-        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10 }}>
-          <strong style={{ fontSize:18 }}>Progress</strong>
-          <div style={{ fontSize:12, padding:'4px 8px', border:'1px solid rgba(0,0,0,0.08)', borderRadius:999 }}>
-            🔥 Streak: <b>{streak.count}</b> day{streak.count === 1 ? '' : 's'}
+      {/* ===== Overview / Progress ===== */}
+      <section
+        style={{
+          border: "1px solid rgba(0,0,0,0.08)",
+          borderRadius: 12,
+          padding: 12,
+          background: "#fafafa",
+          marginBottom: 14,
+        }}
+      >
+        {/* Your info */}
+        <div
+          style={{
+            background: "white",
+            border: "1px solid rgba(0,0,0,0.10)",
+            borderRadius: 12,
+            padding: "14px 16px",
+            marginBottom: 12,
+          }}
+        >
+          <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 6 }}>Your info</div>
+          <div style={{ fontSize: 14, lineHeight: 1.6 }}>
+            <div><strong>Name:</strong> {firstName}</div>
           </div>
         </div>
-        <div style={{ height:10, background:'#f1f5f9', borderRadius:999, overflow:'hidden', marginBottom:8 }}>
-          <div style={{ width:`${progress.pct}%`, height:'100%', background:'#10b981' }} />
-        </div>
-        <div style={{ fontSize:12, color:'#334155', marginBottom:10 }}>
-          {progress.done}/{progress.total} complete • {progress.pct}%
-        </div>
-        <ul style={{ margin:0, paddingLeft:18, lineHeight:1.8 }}>
-          <li>{checks.acceptedEthics ? '✅' : '⬜️'} Ethical agreement accepted</li>
-          <li>{checks.pickedVibe ? '✅' : '⬜️'} Vibe selected {S?.vibe?.name ? `• ${S.vibe.name}` : ''}</li>
-          <li>{checks.setIntention ? '✅' : '⬜️'} Intention saved from questionnaire/home</li>
-          <li>{checks.capturedWish ? '✅' : '⬜️'} Current wish captured {S?.currentWish?.wish ? `• “${S.currentWish.wish}”` : ''}</li>
-          <li>{checks.chattedOnce ? '✅' : '⬜️'} First conversation with Genie</li>
-        </ul>
-      </section>
 
-      {/* Your Info */}
-      <section style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, marginBottom:14 }}>
-        <div style={{ background:'#fff', border:'1px solid rgba(0,0,0,0.08)', borderRadius:16, padding:16 }}>
-          <strong style={{ display:'block', marginBottom:6 }}>Your info</strong>
-          <div style={{ fontSize:14 }}><b>Name:</b> {S?.firstName || '—'}</div>
+        {/* Current vibe */}
+        <div
+          style={{
+            background: "white",
+            border: "1px solid rgba(0,0,0,0.10)",
+            borderRadius: 12,
+            padding: "14px 16px",
+            marginBottom: 12,
+          }}
+        >
+          <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 6 }}>Current vibe</div>
+          <div style={{ fontSize: 14 }}>{vibe}</div>
         </div>
-        <div style={{ background:'#fff', border:'1px solid rgba(0,0,0,0.08)', borderRadius:16, padding:16 }}>
-          <strong style={{ display:'block', marginBottom:6 }}>Current vibe</strong>
-          <div style={{ fontSize:14 }}>{S?.vibe?.name || '—'}</div>
-        </div>
-        <div style={{ background:'#fff', border:'1px solid rgba(0,0,0,0.08)', borderRadius:16, padding:16 }}>
-          <strong style={{ display:'block', marginBottom:6 }}>Intention</strong>
-          <div style={{ fontSize:14, whiteSpace:'pre-wrap' }}>{S?.prompt_spec?.prompt || '—'}</div>
-          {S?.prompt_spec?.savedAt && (
-            <div style={{ marginTop:6, fontSize:12, color:'#64748b' }}>
-              Saved {new Date(S.prompt_spec.savedAt).toLocaleString()}
+
+        {/* Progress tracker */}
+        <div
+          style={{
+            background: "white",
+            border: "1px solid rgba(0,0,0,0.10)",
+            borderRadius: 12,
+            padding: "14px 16px",
+            marginBottom: 12,
+          }}
+        >
+          <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 10 }}>Progress</div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
+            <div style={{ border: "1px solid rgba(0,0,0,0.08)", borderRadius: 10, padding: 12 }}>
+              <div style={{ fontSize: 12, opacity: 0.7 }}>Current streak</div>
+              <div style={{ fontSize: 22, fontWeight: 900 }}>{streak} day{streak === 1 ? "" : "s"}</div>
             </div>
+            <div style={{ border: "1px solid rgba(0,0,0,0.08)", borderRadius: 10, padding: 12 }}>
+              <div style={{ fontSize: 12, opacity: 0.7 }}>Sessions this week</div>
+              <div style={{ fontSize: 22, fontWeight: 900 }}>{thisWeek}</div>
+            </div>
+            <div style={{ border: "1px solid rgba(0,0,0,0.08)", borderRadius: 10, padding: 12 }}>
+              <div style={{ fontSize: 12, opacity: 0.7 }}>Last session</div>
+              <div style={{ fontSize: 22, fontWeight: 900 }}>{lastSessionLabel}</div>
+            </div>
+          </div>
+
+          <div style={{ marginTop: 12 }}>
+            <button
+              onClick={markTodayComplete}
+              style={{
+                padding: "8px 12px",
+                borderRadius: 10,
+                border: "1px solid rgba(0,0,0,0.15)",
+                background: "#ffd600",
+                fontWeight: 900,
+                cursor: "pointer",
+              }}
+            >
+              Mark today complete ⭐️
+            </button>
+            <span style={{ marginLeft: 10, fontSize: 12, opacity: 0.7 }}>
+              Total sessions: {sessionsTotal}
+            </span>
+          </div>
+        </div>
+
+        {/* Ethical agreement */}
+        <div
+          style={{
+            background: "white",
+            border: "1px solid rgba(0,0,0,0.10)",
+            borderRadius: 12,
+            padding: "14px 16px",
+          }}
+        >
+          <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 6 }}>Ethical agreement</div>
+          {acceptedLabel ? (
+            <div
+              style={{
+                fontSize: 12,
+                color: "#166534",
+                background: "#dcfce7",
+                border: "1px solid #86efac",
+                borderRadius: 10,
+                padding: "8px 10px",
+                display: "inline-block",
+              }}
+            >
+              Accepted {acceptedLabel} (version v1)
+            </div>
+          ) : (
+            <div style={{ fontSize: 14 }}>—</div>
           )}
         </div>
-        <div style={{ background:'#fff', border:'1px solid rgba(0,0,0,0.08)', borderRadius:16, padding:16 }}>
-          <strong style={{ display:'block', marginBottom:6 }}>Today’s focus</strong>
-          <div style={{ fontSize:14 }}>
-            {S?.currentWish?.micro || '—'}
-          </div>
-        </div>
       </section>
 
-      {/* Manifestation Board */}
-      <section style={{ background:'#fff', border:'1px solid rgba(0,0,0,0.08)', borderRadius:16, padding:16, marginBottom:14 }}>
-        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10 }}>
-          <strong style={{ fontSize:18 }}>Manifestation board</strong>
-          <span style={{ fontSize:12, color:'#64748b' }}>{manifests.length} item{manifests.length===1?'':'s'}</span>
-        </div>
+      {/* ===== Manifestations ===== */}
+      <section
+        style={{
+          border: "1px solid rgba(0,0,0,0.08)",
+          borderRadius: 12,
+          padding: 12,
+          background: "#fafafa",
+          marginBottom: 14,
+        }}
+      >
+        <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 8 }}>Manifestation list</div>
 
-        <div style={{ display:'flex', gap:8, marginBottom:12 }}>
+        <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
           <input
             value={newWish}
-            onChange={e=>setNewWish(e.target.value)}
-            placeholder="Add a manifestation (e.g., land 3 high-ticket clients)"
-            style={{ flex:1, padding:'10px 12px', borderRadius:10, border:'1px solid #e2e8f0' }}
+            onChange={(e) => setNewWish(e.target.value)}
+            placeholder="Add a new intention…"
+            style={{
+              flex: 1,
+              padding: "10px 12px",
+              borderRadius: 10,
+              border: "1px solid rgba(0,0,0,0.15)",
+              fontSize: 14,
+            }}
           />
-          <button onClick={addManifest} style={{ padding:'10px 14px', borderRadius:10, border:0, background:'#0ea5e9', color:'#fff', fontWeight:800 }}>
+          <button
+            onClick={addManifestation}
+            style={{
+              padding: "10px 12px",
+              borderRadius: 10,
+              border: "1px solid rgba(0,0,0,0.15)",
+              background: "white",
+              fontWeight: 800,
+              cursor: "pointer",
+            }}
+          >
             Add
           </button>
         </div>
 
-        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
-          {manifests.length === 0 ? (
-            <div style={{ color:'#64748b' }}>No items yet.</div>
-          ) : manifests.map(m => (
-            <div key={m.id} style={{ border:'1px solid #e2e8f0', borderRadius:12, padding:12, background:'#f8fafc' }}>
-              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:6 }}>
-                <div style={{ fontSize:12, color:'#64748b' }}>
-                  {new Date(m.createdAt).toLocaleDateString()}
+        {manifestations?.length ? (
+          <ul style={{ margin: 0, padding: 0, listStyle: "none", display: "grid", gap: 8 }}>
+            {manifestations.map((m, i) => (
+              <li
+                key={i}
+                style={{
+                  background: "white",
+                  border: "1px solid rgba(0,0,0,0.08)",
+                  borderRadius: 10,
+                  padding: "10px 12px",
+                }}
+              >
+                <div style={{ fontWeight: 700 }}>{m.wish || "—"}</div>
+                <div style={{ fontSize: 12, opacity: 0.8 }}>
+                  {m.date ? `Added ${m.date}` : ""}
                 </div>
-                <div style={{ display:'flex', gap:6 }}>
-                  <button onClick={()=>toggleManifestStatus(m.id)} style={{ fontSize:12, padding:'4px 8px', borderRadius:8, border:'1px solid #cbd5e1', background:'#fff' }}>
-                    {m.status === 'done' ? 'Mark Active' : 'Mark Done'}
-                  </button>
-                  <button onClick={()=>deleteManifest(m.id)} style={{ fontSize:12, padding:'4px 8px', borderRadius:8, border:'1px solid #fecaca', background:'#fff', color:'#ef4444' }}>
-                    Delete
-                  </button>
-                </div>
-              </div>
-              <div style={{ fontWeight:700, marginBottom:6 }}>{m.text}</div>
-              <div style={{ fontSize:12, color: m.status === 'done' ? '#16a34a' : '#0ea5e9' }}>
-                {m.status === 'done' ? `✅ Completed ${m.doneAt ? new Date(m.doneAt).toLocaleDateString() : ''}` : 'In progress'}
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* Wins */}
-      <section style={{ background:'#fff', border:'1px solid rgba(0,0,0,0.08)', borderRadius:16, padding:16 }}>
-        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10 }}>
-          <strong style={{ fontSize:18 }}>Wins</strong>
-          <span style={{ fontSize:12, color:'#64748b' }}>{wins.length} logged</span>
-        </div>
-
-        <div style={{ display:'flex', gap:8, marginBottom:12 }}>
-          <input
-            value={newWin}
-            onChange={e=>setNewWin(e.target.value)}
-            placeholder="Log a quick win (e.g., emailed 2 leads, finished a page)"
-            style={{ flex:1, padding:'10px 12px', borderRadius:10, border:'1px solid #e2e8f0' }}
-          />
-          <button onClick={addWin} style={{ padding:'10px 14px', borderRadius:10, border:0, background:'#10b981', color:'#fff', fontWeight:800 }}>
-            Add
-          </button>
-        </div>
-
-        {wins.length === 0 ? (
-          <div style={{ color:'#64748b' }}>No wins yet. Small steps count the most ✨</div>
-        ) : (
-          <ul style={{ listStyle:'none', padding:0, margin:0 }}>
-            {wins.map(w => (
-              <li key={w.id} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', border:'1px solid #e2e8f0', borderRadius:12, padding:'8px 10px', background:'#f8fafc', marginBottom:8 }}>
-                <div>
-                  <div style={{ fontWeight:700 }}>{w.text}</div>
-                  <div style={{ fontSize:12, color:'#64748b' }}>{new Date(w.createdAt).toLocaleString()}</div>
-                </div>
-                <button onClick={()=>deleteWin(w.id)} style={{ fontSize:12, padding:'4px 8px', borderRadius:8, border:'1px solid #fecaca', background:'#fff', color:'#ef4444' }}>
-                  Remove
-                </button>
+                {(m.block || m.micro) && (
+                  <div style={{ fontSize: 13, marginTop: 4 }}>
+                    {m.block ? <><strong>Block:</strong> {m.block} · </> : null}
+                    {m.micro ? <><strong>Micro:</strong> {m.micro}</> : null}
+                  </div>
+                )}
               </li>
             ))}
           </ul>
+        ) : (
+          <div style={{ fontSize: 14, opacity: 0.7 }}>No intentions logged yet.</div>
+        )}
+      </section>
+
+      {/* ===== Wins ===== */}
+      <section
+        style={{
+          border: "1px solid rgba(0,0,0,0.08)",
+          borderRadius: 12,
+          padding: 12,
+          background: "#fafafa",
+        }}
+      >
+        <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 8 }}>Wins</div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "2fr 3fr auto", gap: 8, marginBottom: 10 }}>
+          <input
+            value={newWinTitle}
+            onChange={(e) => setNewWinTitle(e.target.value)}
+            placeholder="Title (e.g., Finished the pitch deck)"
+            style={{
+              padding: "10px 12px",
+              borderRadius: 10,
+              border: "1px solid rgba(0,0,0,0.15)",
+              fontSize: 14,
+            }}
+          />
+          <input
+            value={newWinNote}
+            onChange={(e) => setNewWinNote(e.target.value)}
+            placeholder="Optional note…"
+            style={{
+              padding: "10px 12px",
+              borderRadius: 10,
+              border: "1px solid rgba(0,0,0,0.15)",
+              fontSize: 14,
+            }}
+          />
+          <button
+            onClick={addWin}
+            style={{
+              padding: "10px 12px",
+              borderRadius: 10,
+              border: "1px solid rgba(0,0,0,0.15)",
+              background: "white",
+              fontWeight: 800,
+              cursor: "pointer",
+            }}
+          >
+            Add
+          </button>
+        </div>
+
+        {wins?.length ? (
+          <ul style={{ margin: 0, padding: 0, listStyle: "none", display: "grid", gap: 8 }}>
+            {wins.map((w, i) => (
+              <li
+                key={i}
+                style={{
+                  background: "white",
+                  border: "1px solid rgba(0,0,0,0.08)",
+                  borderRadius: 10,
+                  padding: "10px 12px",
+                }}
+              >
+                <div style={{ fontWeight: 700 }}>{w.title || "—"}</div>
+                {w.note ? <div style={{ fontSize: 13, marginTop: 2 }}>{w.note}</div> : null}
+                <div style={{ fontSize: 12, opacity: 0.8, marginTop: 4 }}>
+                  {w.date ? `Logged ${w.date}` : ""}
+                </div>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <div style={{ fontSize: 14, opacity: 0.7 }}>No wins yet. Celebrate a tiny one today.</div>
         )}
       </section>
     </main>
