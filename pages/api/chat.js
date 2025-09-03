@@ -1,15 +1,18 @@
 // /pages/api/chat.js
 // Warm, curiosity-first Genie with occasional (30%) tiny story/metaphor.
-// Node runtime (simplest for Vercel). Needs env: OPENAI_API_KEY
 
-function sysPrompt({ userName, vibe, wantStoryFlag }) {
+function sysPrompt({ userName, vibe, wantStoryFlag, promptSpecText }) {
   const name = userName || "Friend";
   const vibeLine = vibe?.name ? ` The user's chosen vibe is "${vibe.name}".` : "";
 
-  // If wantStoryFlag=true, we nudge the model to include a short story/metaphor this turn.
   const storyRule = wantStoryFlag
-    ? `Sometimes (about 30% of the time) include ONE super-short, relatable story or metaphor (1–2 sentences max) before your question. Keep it grounded, not cheesy.`
+    ? `Sometimes (about 30%) include ONE super-short, relatable story or metaphor (1–2 sentences max) before your question. Keep it grounded, not cheesy.`
     : `Only include a story/metaphor if it naturally helps, and keep it to 1–2 sentences max.`;
+
+  // ⬇ NEW: grounding rule – must tie back to user's intention if we have it
+  const groundingRule = promptSpecText?.trim()
+    ? `Every reply must include one crisp clause that ties back to the user's intention (from prompt_spec): reference at least one of Goal / Blocker / Timeframe / Constraint / Proof target when relevant.`
+    : `When the user shares intentions, reflect them back concisely and use them to focus the next question.`;
 
   return `
 You are Manifestation Genie, a warm, playful coach that talks like a caring friend.
@@ -22,6 +25,7 @@ Core style (ALWAYS):
 4) Keep replies short: 2–4 sentences total. Never wall-of-text.
 
 ${storyRule}
+${groundingRule}
 
 Action rules:
 - Do NOT prescribe steps or exercises on your first reply unless the user explicitly asks for it.
@@ -38,29 +42,6 @@ Personalization:
 `.trim();
 }
 
-// NEW: build a tiny “intention primer” so the model actively uses questionnaire data
-function intentionPrimer(context = {}) {
-  const wish = context.wish || null;
-  const block = context.block || null;
-  const micro = context.micro || null;
-  const promptSpec = context.prompt_spec || null; // string built on Home/Flow
-
-  if (!wish && !block && !micro && !promptSpec) return null;
-
-  // Short, actionable guardrails the model can follow every turn
-  const lines = [
-    "Use the user's saved intention to keep the conversation on-track.",
-    promptSpec ? `Intention (from questionnaire/home): ${promptSpec}` : null,
-    wish ? `Wish/Goal: ${wish}` : null,
-    block ? `Main blocker: ${block}` : null,
-    micro ? `Today's micro-move: ${micro}` : null,
-    "When offering examples or questions, tie them to the wish and respect any blockers/constraints.",
-    "If the chat drifts, gently reconnect to the intention in 1 sentence."
-  ].filter(Boolean);
-
-  return lines.join("\n");
-}
-
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
@@ -73,17 +54,26 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: "Missing OPENAI_API_KEY" });
     }
 
-    // 30% chance to encourage a tiny story this turn (server-side coin flip).
     const wantStoryFlag = Math.random() < 0.3;
 
-    // NEW: compute intention system message (if there’s any saved data)
-    const primer = intentionPrimer(context);
+    // ⬇ pull prompt_spec text if present (keeps everything else intact)
+    const promptSpecText = typeof context?.prompt_spec === "string"
+      ? context.prompt_spec
+      : (context?.prompt_spec?.prompt || null);
 
     // Build the conversation for the model
     const chat = [
-      { role: "system", content: sysPrompt({ userName, vibe: context.vibe, wantStoryFlag }) },
+      {
+        role: "system",
+        content: sysPrompt({
+          userName,
+          vibe: context.vibe,
+          wantStoryFlag,
+          promptSpecText
+        }),
+      },
 
-      // Keep your existing “optional context” blob (unchanged)
+      // ⬇ existing optional JSON context (kept)
       {
         role: "system",
         content: "Optional context: " + JSON.stringify({
@@ -91,13 +81,24 @@ export default async function handler(req, res) {
           block: context.block || null,
           micro: context.micro || null,
           vibe: context.vibe || null,
-          // NEW: pass through for transparency/debug
-          prompt_spec: context.prompt_spec || null,
         }),
       },
 
-      // NEW: add a crisp instruction the model will actually follow
-      ...(primer ? [{ role: "system", content: primer }] : []),
+      // ⬇ NEW: explicit intention packet (only if we have prompt_spec text)
+      ...(promptSpecText
+        ? [{
+            role: "system",
+            content:
+              [
+                "User intention (prompt_spec):",
+                promptSpecText.trim(),
+                "",
+                "Checklist for every reply:",
+                "- Reflect or reference at least one of: Goal / Blocker / Timeframe / Constraint / Proof target when relevant.",
+                "- Keep 2–4 sentences total. One question only.",
+              ].join("\n"),
+          }]
+        : []),
 
       ...(Array.isArray(messages) ? messages : []).map(m => ({
         role: m.role === "user" ? "user" : "assistant",
@@ -132,10 +133,11 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: "OpenAI API error", detail: data });
     }
 
-    const reply = data?.choices?.[0]?.message?.content?.trim()
-      || "I’m here. What’s on your mind?";
-    return res.status(200).json({ reply });
+    const reply =
+      data?.choices?.[0]?.message?.content?.trim() ||
+      "I’m here. What’s on your mind?";
 
+    return res.status(200).json({ reply });
   } catch (e) {
     console.error("Server error:", e);
     return res.status(500).json({ error: "Server error", detail: String(e?.message || e) });
