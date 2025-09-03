@@ -1,4 +1,4 @@
-// /pages/chat.js — compact chat console + HM redirect for Unlock (restored + debug)
+// /pages/chat.js — compact chat console + HM redirect for Unlock (restored + debug + product rec fix)
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
 import { get, set, newId, pushThread, toPlainMessages } from '../src/flowState';
@@ -128,12 +128,15 @@ Sounds like you’ve been carrying a lot. I’d love to hear—what’s been on 
         block: state.currentWish?.block || null,
         micro: state.currentWish?.micro || null,
         vibe: state.vibe || null,
-        // also pass intention created from questionnaire/home
+        // intention created from questionnaire/home
         prompt_spec: state.prompt_spec?.prompt || null,
       },
       messages: toPlainMessages(state.thread || []),
       text
     };
+
+    // expose to debug panel
+    setLastChatPayload(payload);
 
     const resp = await fetch('/api/chat', {
       method:'POST',
@@ -145,50 +148,60 @@ Sounds like you’ve been carrying a lot. I’d love to hear—what’s been on 
     return data?.reply || 'I’m here.';
   }
 
-async function send(){
-  const text = input.trim();
-  if (!text || thinking) return;
-  setInput('');
-  setThinking(true);
-
-  pushThread({ role:'user', content: text });
-  setS(get());
-
-  try {
-    // build the payload here
-    const payload = {
-      userName: S.firstName || null,
-      context: {
-        wish: S.currentWish?.wish || null,
-        block: S.currentWish?.block || null,
-        micro: S.currentWish?.micro || null,
-        vibe: S.vibe || null,
-        prompt_spec: S.prompt_spec?.prompt || null,
-      },
-      messages: toPlainMessages(S.thread || []),
-      text
-    };
-
-    // 🔥 this will show in your debug panel
-    setLastChatPayload(payload);
-
-    const resp = await fetch('/api/chat', {
-      method:'POST',
-      headers:{ 'Content-Type':'application/json' },
-      body: JSON.stringify(payload)
-    });
-    const data = await resp.json();
-    const reply = data?.reply || 'I’m here.';
-    pushThread({ role:'assistant', content: reply });
-    setS(get());
-  } catch {
-    pushThread({ role:'assistant', content: 'The lamp flickered. Try again in a moment.' });
-    setS(get());
-  } finally {
-    setThinking(false);
+  // Build richer text for belief detection (uses intention + current wish)
+  function beliefDetectionContext(rawText){
+    const a = [];
+    if (S.prompt_spec?.prompt) a.push(`Intention: ${S.prompt_spec.prompt}`);
+    if (S.currentWish?.wish) a.push(`Wish: ${S.currentWish.wish}`);
+    if (S.currentWish?.block) a.push(`Block: ${S.currentWish.block}`);
+    if (S.currentWish?.micro) a.push(`Micro: ${S.currentWish.micro}`);
+    a.push(`User: ${rawText}`);
+    return a.join('\n');
   }
-}
 
+  async function send(){
+    const text = input.trim();
+    if (!text || thinking) return;
+    setInput('');
+    setThinking(true);
+
+    pushThread({ role:'user', content: text });
+    setS(get());
+
+    // --- Product recommendation (fixed) ---
+    try {
+      const enriched = beliefDetectionContext(text);
+      const { goal, belief } = detectBeliefFrom(enriched);
+      const rec = recommendProduct({ goal, belief });
+
+      if (rec) {
+        const why = belief
+          ? `Limiting belief detected: “${belief}.” Tonight’s session dissolves that pattern so your next action feels natural.`
+          : `Based on your goal, this short trance helps you move without overthinking.`;
+
+        // Use the fixed HM link; PrescriptionCard expects title/why/priceCents/buyUrl
+        const HM_LINK = "https://hypnoticmeditations.ai/b/l0kmb";
+        setUiOffer({
+          title: rec.title,
+          why,
+          priceCents: rec.price,
+          buyUrl: HM_LINK
+        });
+      }
+    } catch {}
+
+    // --- Call Genie API ---
+    try {
+      const reply = await callGenie({ text, state: get() });
+      pushThread({ role:'assistant', content: reply });
+      setS(get());
+    } catch {
+      pushThread({ role:'assistant', content: 'The lamp flickered. Try again in a moment.' });
+      setS(get());
+    } finally {
+      setThinking(false);
+    }
+  }
 
   function onKey(e){
     if (e.key === 'Enter' && !e.shiftKey) {
