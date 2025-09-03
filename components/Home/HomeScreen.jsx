@@ -347,7 +347,16 @@ const startManifesting = () => {
               </p>
             )}
             {agreedAt && !hasAnswers && (
-
+  <p
+    style={{
+      marginTop: 8,
+      fontSize: 13,
+      color: "#b91c1c",
+      textAlign: "center",
+    }}
+    aria-live="polite"
+  >
+   </p>
 )}
 
           </div>
