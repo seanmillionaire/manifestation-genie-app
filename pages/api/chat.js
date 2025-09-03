@@ -1,10 +1,16 @@
 // /pages/api/chat.js
-// Warm, curiosity-first Genie (Node runtime)
-// Needs env: OPENAI_API_KEY
+// Warm, curiosity-first Genie with occasional (30%) tiny story/metaphor.
+// Node runtime (simplest for Vercel). Needs env: OPENAI_API_KEY
 
-function sysPrompt({ userName, vibe }) {
+function sysPrompt({ userName, vibe, wantStoryFlag }) {
   const name = userName || "Friend";
   const vibeLine = vibe?.name ? ` The user's chosen vibe is "${vibe.name}".` : "";
+
+  // If wantStoryFlag=true, we nudge the model to include a short story/metaphor this turn.
+  const storyRule = wantStoryFlag
+    ? `Sometimes (about 30% of the time) include ONE super-short, relatable story or metaphor (1–2 sentences max) before your question. Keep it grounded, not cheesy.`
+    : `Only include a story/metaphor if it naturally helps, and keep it to 1–2 sentences max.`;
+
   return `
 You are Manifestation Genie, a warm, playful coach that talks like a caring friend.
 Your job is to help the user feel seen first, then move them toward one tiny action.
@@ -13,7 +19,9 @@ Core style (ALWAYS):
 1) Start with EMPATHY in 1 short sentence (no therapy clichés).
 2) Reflect back what you heard in your own words (1 sentence).
 3) Ask ONE concise question to learn more (ends with a question mark).
-4) Keep messages short (2–4 sentences total). Never wall-of-text.
+4) Keep replies short: 2–4 sentences total. Never wall-of-text.
+
+${storyRule}
 
 Action rules:
 - Do NOT prescribe steps or exercises on your first reply unless the user explicitly asks for it.
@@ -23,7 +31,7 @@ Action rules:
 
 Tone:
 - Warm, encouraging, non-woo jargon.
-- Use at most one subtle emoji when it fits (⭐️, ✨).
+- At most one subtle emoji when it fits (⭐️, ✨).
 
 Personalization:
 - Greet the user by name if provided: ${name}.${vibeLine}
@@ -36,17 +44,19 @@ export default async function handler(req, res) {
   }
 
   try {
-    // Node runtime: body is already parsed by Next (if JSON header set from client)
     const { userName, context = {}, messages = [], text = "" } = req.body || {};
-
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) {
       return res.status(500).json({ error: "Missing OPENAI_API_KEY" });
     }
 
-    // Build conversation
+    // 30% chance to encourage a tiny story this turn (server-side coin flip).
+    // If you ever want to control this from the client, pass a flag instead.
+    const wantStoryFlag = Math.random() < 0.3;
+
+    // Build the conversation for the model
     const chat = [
-      { role: "system", content: sysPrompt({ userName, vibe: context.vibe }) },
+      { role: "system", content: sysPrompt({ userName, vibe: context.vibe, wantStoryFlag }) },
       {
         role: "system",
         content: "Optional context: " + JSON.stringify({
@@ -73,19 +83,19 @@ export default async function handler(req, res) {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "gpt-4o-mini",   // confirmed available on your key
+        model: "gpt-4o-mini",         // confirmed available
         messages: chat,
-        temperature: 0.9,
+        temperature: 0.95,            // a bit more playful to make stories feel natural
         top_p: 1,
-        presence_penalty: 0.2,
+        presence_penalty: 0.3,
         frequency_penalty: 0.2,
-        max_tokens: 350,
+        max_tokens: 350,              // short + conversational
       }),
     });
 
     const data = await resp.json();
     if (!resp.ok) {
-      console.error("OpenAI error:", data);
+      console.error("OpenAI API error:", data);
       return res.status(500).json({ error: "OpenAI API error", detail: data });
     }
 
