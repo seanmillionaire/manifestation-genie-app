@@ -1,6 +1,6 @@
 // /pages/profile.js — Progress, Manifestation Board, Wins (client-only)
 import { useEffect, useMemo, useState } from 'react';
-import { get, set, newId } from '../src/flowState';
++ import { get, set } from '../../src/flowState';
 
 const LS_MANIFESTS = 'mg_manifestations';
 const LS_WINS = 'mg_wins';
