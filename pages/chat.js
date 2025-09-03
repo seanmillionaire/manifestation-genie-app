@@ -148,7 +148,7 @@ Sounds like you’ve been carrying a lot. I’d love to hear—what’s been on 
         const HM_LINK = "https://hypnoticmeditations.ai/b/l0kmb"; // 🔗 always use this link for now
 
         setUiOffer({
-          title: `Tonight’s prescription: ${rec.title}`,
+          title: rec.title,
           why,
           priceCents: rec.price,
           buyUrl: HM_LINK,
