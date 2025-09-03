@@ -38,7 +38,7 @@ export default function PrescriptionCard({
   async function handleUnlock() {
     try {
       if (buyUrl) {
-        window.location.href = buyUrl; // Preferred: HM store checkout
+          window.open(buyUrl, "_blank"); // 🔗 open in new tab
         return;
       }
       if (onUnlock) {
