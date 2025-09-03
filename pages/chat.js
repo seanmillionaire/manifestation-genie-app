@@ -233,16 +233,18 @@ Sounds like you’ve been carrying a lot. I’d love to hear—what’s been on 
               )
             })}
 
-            {uiOffer ? (
-              <div style={{ marginTop: 8 }}>
-                <PrescriptionCard
-                  title={uiOffer.title}
-                  why={uiOffer.why}
-                  priceCents={uiOffer.priceCents}
-                  buyUrl={uiOffer.buyUrl} // → always HM link
-                />
-              </div>
-            ) : null}
+   {uiOffer ? (
+  <div style={{ marginTop: 8 }}>
+    <PrescriptionCard
+      title={uiOffer.title}
+      why={uiOffer.why}
+      priceCents={uiOffer.priceCents}
+      buyUrl={uiOffer.buyUrl || "https://hypnoticmeditations.ai/b/l0kmb"}
+      onClose={() => setUiOffer(null)}   // ✅ hide after click
+    />
+  </div>
+) : null}
+
 
             {thinking && (
               <div style={{ opacity:.7, fontStyle:'italic', marginTop:6 }}>Genie is thinking…</div>
