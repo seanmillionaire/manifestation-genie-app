@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import PrescriptionCard from "./PrescriptionCard";
 import { detectBeliefFrom, recommendProduct } from "../../src/engine/recommendProduct";
-import { get as getFlow } from "@/src/flowState";
 
 
 export default function ChatGenieScreen() {
