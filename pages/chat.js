@@ -1,16 +1,14 @@
-// /pages/chat.js — compact chat console (same font sizes, tighter spacing)
+// /pages/chat.js — compact chat console + HM redirect for Unlock
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
 import { get, set, newId, pushThread, toPlainMessages } from '../src/flowState';
 import { supabase } from '../src/supabaseClient';
-import FomoFeed from '../components/FomoFeed';
 import PrescriptionCard from "../components/ChatGenie/PrescriptionCard";
 import { detectBeliefFrom, recommendProduct } from "../src/engine/recommendProduct";
 
 function escapeHTML(s=''){ return s.replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'" :'&#39;'}[m])); }
 function nl2br(s=''){ return s.replace(/\n/g, '<br/>'); }
 
-// pick the best available first name from any source
 function pickFirstName(src){
   const first = (v)=> v ? String(v).trim().split(/\s+/)[0] : '';
   const cands = [
@@ -58,14 +56,11 @@ export default function ChatPage(){
   const [uiOffer, setUiOffer] = useState(null);
   const listRef = useRef(null);
 
-  // hydrate name BEFORE creating the first assistant line (no debug)
   useEffect(() => {
     const cur = get();
-
     if (!cur.vibe) { router.replace('/vibe'); return; }
     if (!cur.currentWish) { router.replace('/flow'); return; }
 
-    // 1) localStorage first
     let lsName = '';
     try {
       const cached = localStorage.getItem('mg_first_name');
@@ -75,27 +70,23 @@ export default function ChatPage(){
       }
     } catch {}
 
-    // 2) Supabase rows
     (async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
         const user = session?.user;
         if (user) {
-          // profiles
           const { data: p } = await supabase
             .from('profiles')
             .select('first_name, full_name')
             .eq('id', user.id)
             .maybeSingle();
 
-          // user_profile (optional)
           const { data: up } = await supabase
             .from('user_profile')
             .select('first_name, full_name')
             .eq('user_id', user.id)
             .maybeSingle();
 
-          // decide best name and push to store/cache
           const best = pickFirstName({
             first_name: p?.first_name || up?.first_name,
             full_name: p?.full_name || up?.full_name,
@@ -110,34 +101,26 @@ export default function ChatPage(){
         }
       } catch {}
 
-      // 3) ensure first assistant line uses belief-breaker intro
       const after = get();
-      const intro = `🌟 The lamp glows… I’m here, ${after.firstName || 'Friend'}.
-If you’ve felt stuck—working hard, juggling stress, or doubting yourself—we’ll flip the limiting belief behind it.
-One tiny move today beats a thousand tomorrows. What belief or snag should we clear right now?`;
+      const intro = `🌟 The lamp glows softly… I’m here, ${after.firstName || 'Friend'}.
+Sounds like you’ve been carrying a lot. I’d love to hear—what’s been on your mind most lately?`;
 
       if (!after.thread || after.thread.length === 0) {
-        // no messages yet → set our intro
         pushThread({ role: 'assistant', content: intro });
       } else {
-        // already has a first message → replace old generic prompts with our intro
         const t0 = after.thread[0];
         const looksOld =
           t0?.role === 'assistant' &&
           /what do you want to manifest|how do you feel about that|\bwhat'?s the snag\b/i.test(t0.content || '');
-
         if (looksOld) {
           const updated = [{ ...t0, content: intro }, ...after.thread.slice(1)];
           set({ thread: updated });
         }
       }
-
-      // reflect latest store in this component
       setS(get());
     })();
   }, [router]);
 
-  // keep list scrolled
   useEffect(() => {
     const el = listRef.current;
     if (el) el.scrollTop = el.scrollHeight;
@@ -149,11 +132,10 @@ One tiny move today beats a thousand tomorrows. What belief or snag should we cl
     setInput('');
     setThinking(true);
 
-    // don't freeze author; derive label at render
     pushThread({ role:'user', content: text });
     setS(get());
 
-    // 1) belief detection + recommend
+    // Recommend + build fixed HM link
     try {
       const { goal, belief } = detectBeliefFrom(text);
       const rec = recommendProduct({ goal, belief });
@@ -163,18 +145,17 @@ One tiny move today beats a thousand tomorrows. What belief or snag should we cl
           ? `Limiting belief detected: “${belief}.” Tonight’s session dissolves that pattern so your next action feels natural.`
           : `Based on your goal, this short trance helps you move without overthinking.`;
 
+        const HM_LINK = "https://hypnoticmeditations.ai/b/l0kmb"; // 🔗 always use this link for now
+
         setUiOffer({
           title: `Tonight’s prescription: ${rec.title}`,
           why,
           priceCents: rec.price,
-          previewUrl: rec.preview,
-          sku: rec.sku,
-          stripe_price_id: rec.stripe_price_id,
+          buyUrl: HM_LINK,
         });
       }
     } catch {}
 
-    // 2) call Genie
     try {
       const reply = await callGenie({ text, state: get() });
       pushThread({ role:'assistant', content: reply });
@@ -199,10 +180,8 @@ One tiny move today beats a thousand tomorrows. What belief or snag should we cl
         <div style={{ background:'#fff', border:'1px solid rgba(0,0,0,0.08)', borderRadius:16, padding:10 }}>
           <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:6 }}>
             <div style={{ fontWeight:900, fontSize:18 }}>Genie Chat</div>
-        
           </div>
 
-          {/* Compact message list: shorter min/max heights, tighter padding; font sizes unchanged */}
           <div
             ref={listRef}
             style={{
@@ -229,7 +208,7 @@ One tiny move today beats a thousand tomorrows. What belief or snag should we cl
                 >
                   <div
                     style={{
-                      fontSize: 12,               // unchanged
+                      fontSize: 12,
                       fontWeight: 700,
                       color: '#334155',
                       marginBottom: 4,
@@ -243,10 +222,10 @@ One tiny move today beats a thousand tomorrows. What belief or snag should we cl
                       background: isAI ? 'rgba(0,0,0,0.04)' : 'rgba(255,214,0,0.15)',
                       border: '1px solid rgba(0,0,0,0.08)',
                       borderRadius: 12,
-                      padding: '8px 10px',       // tighter padding
-                      maxWidth: '90%',            // wider bubble = fewer line wraps (more compact)
+                      padding: '8px 10px',
+                      maxWidth: '90%',
                       whiteSpace: 'pre-wrap',
-                      lineHeight: 1.4             // unchanged readability
+                      lineHeight: 1.4
                     }}
                     dangerouslySetInnerHTML={{ __html: nl2br(escapeHTML(m.content || '')) }}
                   />
@@ -254,29 +233,13 @@ One tiny move today beats a thousand tomorrows. What belief or snag should we cl
               )
             })}
 
-            {/* Offer card just a bit tighter on top margin */}
             {uiOffer ? (
               <div style={{ marginTop: 8 }}>
                 <PrescriptionCard
                   title={uiOffer.title}
                   why={uiOffer.why}
                   priceCents={uiOffer.priceCents}
-                  previewUrl={uiOffer.previewUrl}
-                  onUnlock={async () => {
-                    const used = localStorage.getItem("mg_free_session_used");
-                    if (!used) {
-                      localStorage.setItem("mg_free_session_used", "1");
-                      alert("Enjoy a free listen! (Payments coming soon)");
-                      return;
-                    }
-                    const res = await fetch("/api/checkout", {
-                      method: "POST",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ sku: uiOffer.sku }),
-                    });
-                    const data = await res.json();
-                    if (data?.url) window.location.href = data.url;
-                  }}
+                  buyUrl={uiOffer.buyUrl} // → always HM link
                 />
               </div>
             ) : null}
@@ -286,10 +249,9 @@ One tiny move today beats a thousand tomorrows. What belief or snag should we cl
             )}
           </div>
 
-          {/* Input row: tighter gap & paddings; font size unchanged */}
           <div style={{ display:'flex', gap:8, marginTop:10 }}>
             <textarea
-              rows={1}                          // single line by default for a tighter feel
+              rows={1}
               value={input}
               onChange={e=>setInput(e.target.value)}
               onKeyDown={onKey}
@@ -299,7 +261,7 @@ One tiny move today beats a thousand tomorrows. What belief or snag should we cl
                 padding:'10px 12px',
                 borderRadius:12,
                 border:'1px solid rgba(0,0,0,0.15)',
-                resize:'vertical'               // still allow expansion if needed
+                resize:'vertical'
               }}
             />
             <button
