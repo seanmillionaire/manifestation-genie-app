@@ -7,7 +7,7 @@ import PrescriptionCard from "../components/ChatGenie/PrescriptionCard";
 import { detectBeliefFrom, recommendProduct } from "../src/engine/recommendProduct";
 import TweakChips from "../components/Confirm/TweakChips";
 
-// ✅ NEW: soft-confirm helpers
+// ✅ soft-confirm helpers
 import SoftConfirmBar from "../components/Confirm/SoftConfirmBar";
 import { parseAnswers, scoreConfidence, variantFromScore } from "../src/features/confirm/decision";
 import { prescribe } from "../src/engine/prescribe";
@@ -64,11 +64,11 @@ export default function ChatPage(){
   const [lastChatPayload, setLastChatPayload] = useState(null);
   const listRef = useRef(null);
 
-  // ✅ NEW: soft-confirm state
+  // ✅ soft-confirm state
   const [confirmVariant, setConfirmVariant] = useState(null); // "high" | "mid" | "low" | null
   const [parsed, setParsed] = useState({ outcome: null, block: null, state: null });
   const [firstRx, setFirstRx] = useState(null); // { family, protocol, firstMeditation } | null
-const [showTweaks, setShowTweaks] = useState(false);
+  const [showTweaks, setShowTweaks] = useState(false);
 
   // auto-enable debug via ?debug=1
   useEffect(() => {
@@ -144,7 +144,7 @@ Sounds like you’ve been carrying a lot. I’d love to hear—what’s been on 
     })();
   }, [router]);
 
-  // ✅ NEW: parse outcome/block from your flowState and decide whether to show SoftConfirm
+  // ✅ parse outcome/block from flowState and choose confirm variant
   useEffect(() => {
     try {
       const a = {
@@ -158,10 +158,10 @@ Sounds like you’ve been carrying a lot. I’d love to hear—what’s been on 
     } catch {}
   }, [S?.currentWish, S?.prompt_spec]);
 
-  // keep scroll pinned
+  // keep scroll pinned (only once chat is visible)
   useEffect(() => {
     const el = listRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
+    if (el && firstRx) el.scrollTop = el.scrollHeight;
   }, [S.thread, uiOffer, firstRx]);
 
   // ------- central API caller: sets lastChatPayload BEFORE calling /api/chat -------
@@ -243,29 +243,26 @@ Sounds like you’ve been carrying a lot. I’d love to hear—what’s been on 
     }
   }
 
-  // ✅ NEW: soft-confirm handlers
+  // ✅ soft-confirm handlers
   function onLooksRight() {
     const plan = prescribe(parsed || {});
     setFirstRx(plan);
-    // scroll to it
+    // scroll to first prescription
     setTimeout(() => {
       const el = document.getElementById("first-prescription");
       if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
     }, 0);
   }
-function onTweak() { setShowTweaks(true); }
-function onApplyTweaks(next){
-  // update the parsed values locally, do NOT force user back to a form
-  setParsed({
-    outcome: next.outcome || parsed.outcome,
-    block: next.block || parsed.block,
-    state: (next.state ?? parsed.state) || null
-  });
-  setShowTweaks(false);
-  // Re-run the “Looks right” to keep flow snappy
-  onLooksRight();
-}
-
+  function onTweak() { setShowTweaks(true); }
+  function onApplyTweaks(next){
+    setParsed({
+      outcome: next.outcome || parsed.outcome,
+      block: next.block || parsed.block,
+      state: (next.state ?? parsed.state) || null
+    });
+    setShowTweaks(false);
+    onLooksRight();
+  }
 
   return (
     <>
@@ -301,10 +298,7 @@ function onApplyTweaks(next){
                     vibe: S.vibe || null,
                     currentWish: S.currentWish || null,
                     prompt_spec: S.prompt_spec || null,
-                    <pre style={{ margin:0, fontSize:12, overflowX:'auto' }}>
-  {pretty(lastChatPayload ?? { info: "No chat call yet. Send a message to populate lastChatPayload." })}
-</pre>
-
+                    lastChatPayload
                   };
                   navigator.clipboard?.writeText(JSON.stringify(snapshot, null, 2));
                 } catch {}
@@ -342,59 +336,57 @@ function onApplyTweaks(next){
 
             <div style={{ gridColumn:'1 / span 2', background:'#0f172a', padding:10, borderRadius:8 }}>
               <div style={{ fontSize:12, opacity:.8, marginBottom:6 }}>lastChatPayload → /api/chat</div>
-              <pre style={{ margin:0, fontSize:12, overflowX:'auto' }}>{pretty(lastChatPayload)}</pre>
+              <pre style={{ margin:0, fontSize:12, overflowX:'auto' }}>
+                {pretty(lastChatPayload ?? { info: "No chat call yet. Send a message to populate lastChatPayload." })}
+              </pre>
+            </div>
+
+            {/* --- Soft Confirm live state --- */}
+            <div style={{ gridColumn:'1 / span 2', background:'#0f172a', padding:10, borderRadius:8 }}>
+              <div style={{ fontSize:12, opacity:.8, marginBottom:6 }}>softConfirm</div>
+              <pre style={{ margin:0, fontSize:12, whiteSpace:'pre-wrap' }}>
+                {pretty({ parsed, confirmVariant, firstRx })}
+              </pre>
             </div>
           </div>
         </div>
-{/* --- Soft Confirm Debug --- */}
-<div style={{ gridColumn:'1 / span 2', background:'#0f172a', padding:10, borderRadius:8 }}>
-  <div style={{ fontSize:12, opacity:.8, marginBottom:6 }}>softConfirm</div>
-  <pre style={{ margin:0, fontSize:12, whiteSpace:'pre-wrap' }}>
-    {pretty({
-      parsed,                // { outcome, block, state }
-      confirmVariant,        // "high" | "mid" | "low" | null
-      firstRx                // { family, protocol, firstMeditation } | null
-    })}
-  </pre>
-</div>
-
       )}
 
-      {/* ---- Chat UI (original design) ---- */}
+      {/* ---- Chat UI (gated) ---- */}
       <div style={{ maxWidth: 980, margin: '12px auto', padding: '0 10px' }}>
         <div style={{ display:'grid', gridTemplateColumns:'1fr', gap:10 }}>
           <div style={{ background:'#fff', border:'1px solid rgba(0,0,0,0.08)', borderRadius:16, padding:10 }}>
             <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:6 }}>
               <div style={{ fontWeight:900, fontSize:18 }}>Genie Chat</div>
             </div>
-{showTweaks && !firstRx && (
-  <div style={{ marginBottom: 8 }}>
-    <TweakChips
-      outcome={parsed?.outcome || ""}
-      block={parsed?.block || ""}
-      stateGuess={parsed?.state || null}
-      onApply={onApplyTweaks}
-      onClose={()=>setShowTweaks(false)}
-    />
-  </div>
-)}
 
-            {/* ✅ NEW: Soft Confirm bar (high-confidence only for now) */}
-{!firstRx && (
-  <div style={{ marginBottom: 8 }}>
-    <SoftConfirmBar
-      outcome={parsed?.outcome}
-      block={parsed?.block}
-      variant={confirmVariant}
-      onLooksRight={onLooksRight}
-      onTweak={onTweak}
-    />
-  </div>
-)}
+            {/* Tweaks editor */}
+            {showTweaks && !firstRx && (
+              <div style={{ marginBottom: 8 }}>
+                <TweakChips
+                  outcome={parsed?.outcome || ""}
+                  block={parsed?.block || ""}
+                  stateGuess={parsed?.state || null}
+                  onApply={onApplyTweaks}
+                  onClose={()=>setShowTweaks(false)}
+                />
+              </div>
+            )}
 
+            {/* Soft Confirm bar — always show until Looks Right */}
+            {!firstRx && (
+              <div style={{ marginBottom: 8 }}>
+                <SoftConfirmBar
+                  outcome={parsed?.outcome}
+                  block={parsed?.block}
+                  variant={confirmVariant}
+                  onLooksRight={onLooksRight}
+                  onTweak={onTweak}
+                />
+              </div>
+            )}
 
-
-            {/* ✅ NEW: First prescription card after confirmation */}
+            {/* First prescription card after confirmation */}
             {firstRx && (
               <div id="first-prescription" style={{ marginBottom: 8 }}>
                 <PrescriptionCard
@@ -405,102 +397,112 @@ function onApplyTweaks(next){
               </div>
             )}
 
-            <div
-              ref={listRef}
-              style={{
-                minHeight: 280,
-                maxHeight: 420,
-                overflowY: 'auto',
-                border: '1px solid rgba(0,0,0,0.08)',
-                borderRadius: 12,
-                padding: 10,
-                background: '#f8fafc'
-              }}
-            >
-              {(S.thread || []).map(m => {
-                const isAI = m.role !== 'user';
-                return (
-                  <div
-                    key={m.id || newId()}
+            {/* Chat list + input appear ONLY after Looks right */}
+            {firstRx ? (
+              <>
+                <div
+                  ref={listRef}
+                  style={{
+                    minHeight: 280,
+                    maxHeight: 420,
+                    overflowY: 'auto',
+                    border: '1px solid rgba(0,0,0,0.08)',
+                    borderRadius: 12,
+                    padding: 10,
+                    background: '#f8fafc'
+                  }}
+                >
+                  {(S.thread || []).map(m => {
+                    const isAI = m.role !== 'user';
+                    return (
+                      <div
+                        key={m.id || newId()}
+                        style={{
+                          marginBottom: 8,
+                          display: 'flex',
+                          flexDirection: 'column',
+                          alignItems: isAI ? 'flex-start' : 'flex-end'
+                        }}
+                      >
+                        <div
+                          style={{
+                            fontSize: 12,
+                            fontWeight: 700,
+                            color: '#334155',
+                            marginBottom: 4,
+                            textAlign: isAI ? 'left' : 'right'
+                          }}
+                        >
+                          {isAI ? 'Genie' : (S.firstName || 'You')}
+                        </div>
+                        <div
+                          style={{
+                            background: isAI ? 'rgba(0,0,0,0.04)' : 'rgba(255,214,0,0.15)',
+                            border: '1px solid rgba(0,0,0,0.08)',
+                            borderRadius: 12,
+                            padding: '8px 10px',
+                            maxWidth: '90%',
+                            whiteSpace: 'pre-wrap',
+                            lineHeight: 1.4
+                          }}
+                          dangerouslySetInnerHTML={{ __html: nl2br(escapeHTML(m.content || '')) }}
+                        />
+                      </div>
+                    )
+                  })}
+
+                  {uiOffer ? (
+                    <div style={{ marginTop: 8 }}>
+                      <PrescriptionCard
+                        title={uiOffer.title}
+                        why={uiOffer.why}
+                        priceCents={uiOffer.priceCents}
+                        buyUrl={uiOffer.buyUrl || HM_LINK}
+                        onClose={() => setUiOffer(null)}
+                      />
+                    </div>
+                  ) : null}
+
+                  {thinking && (
+                    <div style={{ opacity:.7, fontStyle:'italic', marginTop:6 }}>Genie is thinking…</div>
+                  )}
+                </div>
+
+                <div style={{ display:'flex', gap:8, marginTop:10 }}>
+                  <textarea
+                    rows={1}
+                    value={input}
+                    onChange={e=>setInput(e.target.value)}
+                    onKeyDown={onKey}
+                    placeholder={`Speak to your Genie, ${S.firstName || 'Friend'}…`}
                     style={{
-                      marginBottom: 8,
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: isAI ? 'flex-start' : 'flex-end'
+                      flex:1,
+                      padding:'10px 12px',
+                      borderRadius:12,
+                      border:'1px solid rgba(0,0,0,0.15)',
+                      resize:'vertical'
+                    }}
+                  />
+                  <button
+                    onClick={send}
+                    style={{
+                      padding:'10px 14px',
+                      borderRadius:12,
+                      border:0,
+                      background:'#ffd600',
+                      fontWeight:900,
+                      cursor:'pointer'
                     }}
                   >
-                    <div
-                      style={{
-                        fontSize: 12,
-                        fontWeight: 700,
-                        color: '#334155',
-                        marginBottom: 4,
-                        textAlign: isAI ? 'left' : 'right'
-                      }}
-                    >
-                      {isAI ? 'Genie' : (S.firstName || 'You')}
-                    </div>
-                    <div
-                      style={{
-                        background: isAI ? 'rgba(0,0,0,0.04)' : 'rgba(255,214,0,0.15)',
-                        border: '1px solid rgba(0,0,0,0.08)',
-                        borderRadius: 12,
-                        padding: '8px 10px',
-                        maxWidth: '90%',
-                        whiteSpace: 'pre-wrap',
-                        lineHeight: 1.4
-                      }}
-                      dangerouslySetInnerHTML={{ __html: nl2br(escapeHTML(m.content || '')) }}
-                    />
-                  </div>
-                )
-              })}
-
-              {uiOffer ? (
-                <div style={{ marginTop: 8 }}>
-                  <PrescriptionCard
-                    title={uiOffer.title}
-                    why={uiOffer.why}
-                    priceCents={uiOffer.priceCents}
-                    buyUrl={uiOffer.buyUrl || HM_LINK}
-                    onClose={() => setUiOffer(null)}
-                  />
+                    Send
+                  </button>
                 </div>
-              ) : null}
-
-              {thinking && (
-                <div style={{ opacity:.7, fontStyle:'italic', marginTop:6 }}>Genie is thinking…</div>
-              )}
-            </div>
-
-            <div style={{ display:'flex', gap:8, marginTop:10 }}>
-              <textarea
-                rows={1}
-                value={input}
-                onChange={e=>setInput(e.target.value)}
-                onKeyDown={onKey}
-                placeholder={`Speak to your Genie, ${S.firstName || 'Friend'}…`}
-                style={{
-                  flex:1,
-                  padding:'10px 12px',
-                  borderRadius:12,
-                  border:'1px solid rgba(0,0,0,0.15)',
-                  resize:'vertical'
-                }}
-              />
-              <button
-                onClick={send}
-                style={{
-                  padding:'10px 14px',
-                  borderRadius:12,
-                  border:0,
-                  background:'#ffd600',
-                  fontWeight:900
-                }}
-              >
-                Send
-              </button>
-            </div>
+              </>
+            ) : (
+              <div style={{ marginTop: 8, fontSize:12, color:'rgba(0,0,0,0.55)' }}>
+                Tap <strong>Looks right</strong> to receive your first prescription and start chat.
+              </div>
+            )}
           </div>
         </div>
       </div>
