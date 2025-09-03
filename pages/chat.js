@@ -1,4 +1,4 @@
-// /pages/chat.js — staged flow: Confirm → Prescription → Genie overlay → Chat
+// /pages/chat.js — staged flow: Confirm → Prescription → Chat (with emoji overlay gate)
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
 import { get, set, newId, pushThread, toPlainMessages } from '../src/flowState';
@@ -63,14 +63,16 @@ export default function ChatPage(){
   const [lastChatPayload, setLastChatPayload] = useState(null);
   const listRef = useRef(null);
 
+  // ✅ staged UI: 'confirm' → 'rx' → 'chat'
+  const [stage, setStage] = useState('confirm');
+  // overlay is now independent of stage; when true it sits above the chat
+  const [overlayVisible, setOverlayVisible] = useState(false);
+
   // ✅ soft-confirm state
   const [confirmVariant, setConfirmVariant] = useState(null); // "high" | "mid" | "low" | null
   const [parsed, setParsed] = useState({ outcome: null, block: null, state: null });
   const [firstRx, setFirstRx] = useState(null); // { family, protocol, firstMeditation } | null
   const [showTweaks, setShowTweaks] = useState(false);
-
-  // ✅ staged UI: 'confirm' → 'rx' → 'overlay' → 'chat'
-  const [stage, setStage] = useState('confirm');
 
   // auto-enable debug via ?debug=1
   useEffect(() => {
@@ -244,7 +246,7 @@ Sounds like you’ve been carrying a lot. I’d love to hear—what’s been on 
   function onLooksRight() {
     const plan = prescribe(parsed || {});
     setFirstRx(plan);
-    setStage('rx'); // show prescription first
+    setStage('rx'); // show prescription and wait
     setTimeout(() => {
       const el = document.getElementById("first-prescription");
       if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -261,19 +263,22 @@ Sounds like you’ve been carrying a lot. I’d love to hear—what’s been on 
     onLooksRight();
   }
 
-  // user taps our CTA below the Rx card (we don't rely on internal card events)
+  // 🔊 User taps "Listen" under the prescription
   function onStartListening(){
-    // Sweet little pause → overlay
-    setStage('overlay');
-    // small focus delay for the overlay feel
+    // 1) move to chat stage (so the console is mounted)
+    setStage('chat');
+    // 2) show the overlay ABOVE the chat; one tap will hide it
+    setOverlayVisible(true);
+    // focus for a11y (non-blocking)
     setTimeout(() => {
       const ov = document.getElementById('genie-overlay-tap');
       if (ov) ov.focus();
     }, 100);
   }
 
-  function revealChat(){
-    setStage('chat');
+  function dismissOverlay(){
+    setOverlayVisible(false);
+    // small scroll pin after reveal
     setTimeout(() => {
       const el = listRef.current;
       if (el) el.scrollTop = el.scrollHeight;
@@ -368,7 +373,7 @@ Sounds like you’ve been carrying a lot. I’d love to hear—what’s been on 
             <div style={{ gridColumn:'1 / span 2', background:'#0f172a', padding:10, borderRadius:8 }}>
               <div style={{ fontSize:12, opacity:.8, marginBottom:6 }}>softConfirm</div>
               <pre style={{ margin:0, fontSize:12, whiteSpace:'pre-wrap' }}>
-                {pretty({ parsed, confirmVariant, firstRx, stage })}
+                {pretty({ parsed, confirmVariant, firstRx, stage, overlayVisible })}
               </pre>
             </div>
           </div>
@@ -409,38 +414,21 @@ Sounds like you’ve been carrying a lot. I’d love to hear—what’s been on 
               </>
             )}
 
-            {/* Stage: rx (prescription only) */}
+            {/* Stage: rx (prescription only; wait for Listen) */}
             {stage === 'rx' && firstRx && (
-              <>
-                <div id="first-prescription" style={{ marginBottom: 8 }}>
-                  <PrescriptionCard
-                    title={firstRx.firstMeditation}
-                    why={`Fastest unlock for your path (${firstRx.family} • ${firstRx.protocol}). Use once tonight. Return for next dose.`}
-                    onClose={() => setFirstRx(null)}
-                  />
-                </div>
-
-                {/* Our own CTA to advance to overlay → chat */}
-                <div style={{ display:'flex', justifyContent:'center' }}>
-                  <button
-                    type="button"
-                    onClick={onStartListening}
-                    style={{
-                      padding:'10px 16px',
-                      borderRadius:12,
-                      border:0,
-                      background:'#ffd600',
-                      fontWeight:900,
-                      cursor:'pointer'
-                    }}
-                  >
-                    I’ll listen now — continue »
-                  </button>
-                </div>
-              </>
+              <div id="first-prescription" style={{ marginBottom: 8 }}>
+                <PrescriptionCard
+                  title={firstRx.firstMeditation}
+                  why={`Fastest unlock for your path (${firstRx.family} • ${firstRx.protocol}). Use once tonight. Return for next dose.`}
+                  // If your component supports CTA props, this wires the Listen button:
+                  ctaLabel="Listen To This »"
+                  onCta={onStartListening}
+                  onClose={() => setFirstRx(null)}
+                />
+              </div>
             )}
 
-            {/* Stage: chat */}
+            {/* Stage: chat (mounted; overlay may still be up) */}
             {stage === 'chat' && (
               <>
                 <div
@@ -546,10 +534,10 @@ Sounds like you’ve been carrying a lot. I’d love to hear—what’s been on 
         </div>
       </div>
 
-      {/* Stage: overlay (genie pop & tap) */}
-      {stage === 'overlay' && (
+      {/* Emoji overlay — shows ABOVE chat after tapping Listen; one tap to unlock */}
+      {overlayVisible && (
         <div
-          onClick={revealChat}
+          onClick={dismissOverlay}
           role="button"
           id="genie-overlay-tap"
           tabIndex={0}
