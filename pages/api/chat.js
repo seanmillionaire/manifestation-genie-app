@@ -1,4 +1,4 @@
-// /pages/api/chat.js — RAW, brain-driven
+// /pages/api/chat.js — RAW, GenieBrain-only
 import OpenAI from "openai";
 import { buildSystemPrompt, modelConfig } from "../../src/genieBrain";
 
@@ -14,27 +14,18 @@ export default async function handler(req, res) {
   try {
     const {
       userName = null,
-      context = {},     // optional: { vibe, wish, block, micro }
-      messages = [],    // prior thread: [{ role, content }]
-      text = ""         // latest user input (optional)
+      // you can pass these if you want, but we won’t force them into the prompt:
+      // context = {},   // { vibe, wish, block, micro }
+      messages = [],      // prior thread: [{ role, content }]
+      text = ""           // latest user input (optional)
     } = req.body || {};
 
-    // 🔮 Single source of truth: your Genie personality
+    // 🔮 Single source of truth: YOUR Genie Brain (personality + style)
     const SYSTEM = buildSystemPrompt({ user: { firstName: userName || "" } });
 
-    // (Optional) plain facts to ground, not instructions
-    const facts = [];
-    if (userName) facts.push(`User: ${userName}`);
-    if (context?.vibe)  facts.push(`Vibe: ${context.vibe}`);
-    if (context?.wish)  facts.push(`Wish: ${context.wish}`);
-    if (context?.block) facts.push(`Block: ${context.block}`);
-    if (context?.micro) facts.push(`Last micro: ${context.micro}`);
-    const CONTEXT = facts.length ? { role: "system", content: facts.join(" | ") } : null;
-
-    // 🚫 No sanitizers, no clamps, no hard-coded add-ons
+    // 🚫 No rails. Just system + conversation.
     const convo = [
       { role: "system", content: SYSTEM },
-      CONTEXT,
       ...messages,
       text ? { role: "user", content: text } : null
     ].filter(Boolean);
@@ -42,6 +33,7 @@ export default async function handler(req, res) {
     const completion = await openai.chat.completions.create({
       model: MODEL,
       messages: convo,
+      // Use only your brain config knobs. No extra constraints.
       temperature: modelConfig?.temperature ?? 0.9,
       top_p: modelConfig?.top_p ?? 1,
       presence_penalty: modelConfig?.presence_penalty ?? 0.6,
@@ -53,6 +45,9 @@ export default async function handler(req, res) {
     return res.status(200).json({ reply });
   } catch (err) {
     console.error("API /chat error:", err);
-    return res.status(200).json({ reply: "The lamp flickered. Try again.", error: "chat_api_error" });
+    return res.status(200).json({
+      reply: "The lamp flickered. Try again.",
+      error: "chat_api_error"
+    });
   }
 }
