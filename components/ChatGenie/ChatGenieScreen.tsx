@@ -3,23 +3,35 @@ import PrescriptionCard from "./PrescriptionCard";
 import { detectBeliefFrom, recommendProduct } from "../../src/engine/recommendProduct";
 import { get as getFlow, set as setFlow } from "../../src/flowState";
 
-function readQuestionnaireAnswers() {
+type PromptAnswers = {
+  goal?: string;
+  blocker?: string;
+  timeframe?: string;
+  constraint?: string;
+  proof_line?: string;
+  // allow extra keys without errors
+  [k: string]: unknown;
+};
+
+
+function readQuestionnaireAnswers(): PromptAnswers | null {
   // 1) from flowState
   try {
     const cur = getFlow?.() || {};
-    if (cur?.questionnaire?.answers) return cur.questionnaire.answers;
+    if (cur?.questionnaire?.answers) return cur.questionnaire.answers as PromptAnswers;
   } catch {}
   // 2) from localStorage
   if (typeof window !== "undefined") {
     try {
       const raw = localStorage.getItem("questionnaire_answers");
-      if (raw) return JSON.parse(raw);
+      if (raw) return JSON.parse(raw) as PromptAnswers;
     } catch {}
   }
   return null;
 }
 
-function makePromptFrom(answers) {
+
+function makePromptFrom(answers: PromptAnswers | null): string {
   if (!answers) return "";
   const { goal, blocker, timeframe, constraint, proof_line } = answers;
   return [
@@ -28,8 +40,11 @@ function makePromptFrom(answers) {
     timeframe && `Timeframe: ${timeframe}`,
     constraint && `Constraint: ${constraint}`,
     proof_line && `Proof target: ${proof_line}`,
-  ].filter(Boolean).join("\n");
+  ]
+    .filter(Boolean)
+    .join("\n");
 }
+
 
 type Msg = { role: "user" | "assistant"; text: string };
 
