@@ -135,8 +135,6 @@ Sounds like you’ve been carrying a lot. I’d love to hear—what’s been on 
       text
     };
 
-    setLastChatPayload(payload);
-
     const resp = await fetch('/api/chat', {
       method:'POST',
       headers:{ 'Content-Type':'application/json' },
@@ -147,40 +145,50 @@ Sounds like you’ve been carrying a lot. I’d love to hear—what’s been on 
     return data?.reply || 'I’m here.';
   }
 
-  async function send(){
-    const text = input.trim();
-    if (!text || thinking) return;
-    setInput('');
-    setThinking(true);
+async function send(){
+  const text = input.trim();
+  if (!text || thinking) return;
+  setInput('');
+  setThinking(true);
 
-    pushThread({ role:'user', content: text });
+  pushThread({ role:'user', content: text });
+  setS(get());
+
+  try {
+    // build the payload here
+    const payload = {
+      userName: S.firstName || null,
+      context: {
+        wish: S.currentWish?.wish || null,
+        block: S.currentWish?.block || null,
+        micro: S.currentWish?.micro || null,
+        vibe: S.vibe || null,
+        prompt_spec: S.prompt_spec?.prompt || null,
+      },
+      messages: toPlainMessages(S.thread || []),
+      text
+    };
+
+    // 🔥 this will show in your debug panel
+    setLastChatPayload(payload);
+
+    const resp = await fetch('/api/chat', {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const data = await resp.json();
+    const reply = data?.reply || 'I’m here.';
+    pushThread({ role:'assistant', content: reply });
     setS(get());
-
-    // Offer recommendation
-    try {
-      const { goal, belief } = detectBeliefFrom(text);
-      const rec = recommendProduct({ goal, belief });
-      if (rec) {
-        const why = belief
-          ? `Limiting belief detected: “${belief}.” Tonight’s session dissolves that pattern so your next action feels natural.`
-          : `Based on your goal, this short trance helps you move without overthinking.`;
-        const HM_LINK = "https://hypnoticmeditations.ai/b/l0kmb";
-        setUiOffer({ title: rec.title, why, priceCents: rec.price, buyUrl: HM_LINK });
-      }
-    } catch {}
-
-    // Get Genie reply
-    try {
-      const reply = await callGenie({ text, state: get() });
-      pushThread({ role:'assistant', content: reply });
-      setS(get());
-    } catch {
-      pushThread({ role:'assistant', content: 'The lamp flickered. Try again in a moment.' });
-      setS(get());
-    } finally {
-      setThinking(false);
-    }
+  } catch {
+    pushThread({ role:'assistant', content: 'The lamp flickered. Try again in a moment.' });
+    setS(get());
+  } finally {
+    setThinking(false);
   }
+}
+
 
   function onKey(e){
     if (e.key === 'Enter' && !e.shiftKey) {
