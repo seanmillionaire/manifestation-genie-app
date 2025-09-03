@@ -15,44 +15,6 @@ async function hydrateName() {
 const AGREEMENT_VERSION = "v1";
 const AGREED_KEY = `mg_agreed_${AGREEMENT_VERSION}`;
 
-// --- Auto-prompt: build from what we already have ---
-function readExistingAnswers() {
-  // try flowState first (if Questionnaire saved there)
-  try {
-    const s = get?.() || {};
-    if (s?.questionnaire?.answers) return s.questionnaire.answers;
-    if (s?.answers) return s.answers; // fallback key, if used elsewhere
-  } catch {}
-
-  // then try localStorage JSON (common patterns)
-  try {
-    if (typeof window !== "undefined") {
-      const raw =
-        localStorage.getItem("questionnaire_answers") ||
-        localStorage.getItem("mg_questionnaire") ||
-        localStorage.getItem("mg_answers");
-      if (raw) return JSON.parse(raw);
-    }
-  } catch {}
-
-  return {};
-}
-
-function makePromptFrom(answers = {}) {
-  const a = answers || {};
-  const parts = [
-    a.goal && `Goal: ${a.goal}`,
-    (a.blocker || a.pain) && `Blocker: ${a.blocker || a.pain}`,
-    (a.deadline || a.timeframe) && `Timeframe: ${a.deadline || a.timeframe}`,
-    a.constraint && `Constraint: ${a.constraint}`,
-    (a.proof_line || a.success || a.metric) && `Proof: ${a.proof_line || a.success || a.metric}`,
-  ].filter(Boolean);
-
-  if (parts.length === 0) {
-    return "Guide me through today’s manifestation ritual step by step. Keep it short and actionable.";
-  }
-  return `Use these to guide my ritual. Be concrete, short, and motivational.\n${parts.join("\n")}`;
-}
 // --- Pull normalized answers from flowState or localStorage
 function readQuestionnaireAnswers() {
   try {
@@ -100,26 +62,56 @@ const [hasAnswers, setHasAnswers] = useState(() => !!readQuestionnaireAnswers())
   );
 
   // --- Name hydration ---
-  useEffect(() => {
-    let alive = true;
-    (async () => {
-      try {
-        await hydrateName();
+// --- Name hydration ---
+useEffect(() => {
+  let alive = true;
+  (async () => {
+    try {
+      await hydrateName();
 
-        if (typeof window !== "undefined") {
-          const lsName = (localStorage.getItem("mg_first_name") || "").trim();
-          if (lsName && (!get().firstName || get().firstName === "Friend")) {
-            set({ firstName: lsName });
-          }
+      if (typeof window !== "undefined") {
+        const lsName = (localStorage.getItem("mg_first_name") || "").trim();
+        if (lsName && (!get().firstName || get().firstName === "Friend")) {
+          set({ firstName: lsName });
         }
-
-        if (alive) setS(get());
-      } catch (e) {
-        if (alive) setErr("Could not load your profile. Showing default view.");
-      } finally {
-        if (alive) setLoading(false);
       }
-    })();
+
+      if (alive) {
+        setS(get());
+        // also reflect current questionnaire state
+        setHasAnswers(!!readQuestionnaireAnswers());
+      }
+    } catch (e) {
+      if (alive) setErr("Could not load your profile. Showing default view.");
+    } finally {
+      if (alive) setLoading(false);
+    }
+  })();
+
+  const onStorage = (e) => {
+    if (e.key === "mg_first_name") {
+      const val = (e.newValue || "").trim();
+      if (val) set({ firstName: val });
+      setS(get());
+    }
+    if (e.key === AGREED_KEY) setAgreedAt(e.newValue);
+    if (e.key === "questionnaire_answers") {
+      setHasAnswers(!!e.newValue);
+    }
+  };
+
+  if (typeof window !== "undefined") {
+    window.addEventListener("storage", onStorage);
+  }
+
+  return () => {
+    alive = false;
+    if (typeof window !== "undefined") {
+      window.removeEventListener("storage", onStorage);
+    }
+  };
+}, []);
+
 
 const onStorage = (e) => {
   if (e.key === "mg_first_name") {
