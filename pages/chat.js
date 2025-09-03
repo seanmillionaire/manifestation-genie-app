@@ -1,17 +1,15 @@
-// /pages/chat.js — compact chat console + HM redirect for Unlock (restored)
+// /pages/chat.js — compact chat console + HM redirect for Unlock (restored + debug)
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
 import { get, set, newId, pushThread, toPlainMessages } from '../src/flowState';
 import { supabase } from '../src/supabaseClient';
 import PrescriptionCard from "../components/ChatGenie/PrescriptionCard";
 import { detectBeliefFrom, recommendProduct } from "../src/engine/recommendProduct";
-// --- Debug helpers (simple, no deps)
-function pretty(obj) {
-  try { return JSON.stringify(obj, null, 2); } catch { return String(obj); }
-}
 
+// ---------- tiny helpers ----------
 function escapeHTML(s=''){ return s.replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'" :'&#39;'}[m])); }
 function nl2br(s=''){ return s.replace(/\n/g, '<br/>'); }
+function pretty(o){ try { return JSON.stringify(o, null, 2); } catch { return String(o); } }
 
 function pickFirstName(src){
   const first = (v)=> v ? String(v).trim().split(/\s+/)[0] : '';
@@ -31,46 +29,17 @@ function pickFirstName(src){
   return '';
 }
 
-async function callGenie({ text, state }) {
-  const payload = {
-    userName: state.firstName || null,
-    context: {
-      wish: state.currentWish?.wish || null,
-      block: state.currentWish?.block || null,
-      micro: state.currentWish?.micro || null,
-      vibe: state.vibe || null,
-      // keep the prompt from questionnaire/home
-      prompt_spec: state.prompt_spec?.prompt || null,
-    },
-    messages: toPlainMessages(state.thread || []),
-    text
-  };
-
-  // ⬇ expose in UI if debug is on
-  try { setLastChatPayload(payload); } catch {}
-
-  const resp = await fetch('/api/chat', {
-    method:'POST',
-    headers:{ 'Content-Type':'application/json' },
-    body: JSON.stringify(payload)
-  });
-  if (!resp.ok) throw new Error('Genie API error');
-  const data = await resp.json();
-  return data?.reply || 'I’m here.';
-}
-
-
 export default function ChatPage(){
   const router = useRouter();
   const [S, setS] = useState(get());
   const [input, setInput] = useState('');
   const [thinking, setThinking] = useState(false);
   const [uiOffer, setUiOffer] = useState(null);
-  const listRef = useRef(null);
   const [debugOn, setDebugOn] = useState(false);
   const [lastChatPayload, setLastChatPayload] = useState(null);
+  const listRef = useRef(null);
 
-  // turn on automatically via ?debug=1
+  // auto-enable debug via ?debug=1
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const q = new URLSearchParams(window.location.search);
@@ -78,6 +47,7 @@ export default function ChatPage(){
     }
   }, []);
 
+  // boot + greet + pull name + keep design
   useEffect(() => {
     const cur = get();
     if (!cur.vibe) { router.replace('/vibe'); return; }
@@ -143,10 +113,39 @@ Sounds like you’ve been carrying a lot. I’d love to hear—what’s been on 
     })();
   }, [router]);
 
+  // keep scroll pinned
   useEffect(() => {
     const el = listRef.current;
     if (el) el.scrollTop = el.scrollHeight;
   }, [S.thread, uiOffer]);
+
+  // real API caller, kept inside component so we can set lastChatPayload
+  async function callGenie({ text, state }) {
+    const payload = {
+      userName: state.firstName || null,
+      context: {
+        wish: state.currentWish?.wish || null,
+        block: state.currentWish?.block || null,
+        micro: state.currentWish?.micro || null,
+        vibe: state.vibe || null,
+        // also pass intention created from questionnaire/home
+        prompt_spec: state.prompt_spec?.prompt || null,
+      },
+      messages: toPlainMessages(state.thread || []),
+      text
+    };
+
+    setLastChatPayload(payload);
+
+    const resp = await fetch('/api/chat', {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json' },
+      body: JSON.stringify(payload)
+    });
+    if (!resp.ok) throw new Error('Genie API error');
+    const data = await resp.json();
+    return data?.reply || 'I’m here.';
+  }
 
   async function send(){
     const text = input.trim();
@@ -157,7 +156,7 @@ Sounds like you’ve been carrying a lot. I’d love to hear—what’s been on 
     pushThread({ role:'user', content: text });
     setS(get());
 
-    // Recommend + fixed HM link
+    // Offer recommendation
     try {
       const { goal, belief } = detectBeliefFrom(text);
       const rec = recommendProduct({ goal, belief });
@@ -170,6 +169,7 @@ Sounds like you’ve been carrying a lot. I’d love to hear—what’s been on 
       }
     } catch {}
 
+    // Get Genie reply
     try {
       const reply = await callGenie({ text, state: get() });
       pushThread({ role:'assistant', content: reply });
@@ -189,8 +189,9 @@ Sounds like you’ve been carrying a lot. I’d love to hear—what’s been on 
   }
 
   return (
-          {/* ---- DEBUG PILL + PANEL ---- */}
-      <div style={{ display:'flex', justifyContent:'center', marginBottom:10 }}>
+    <>
+      {/* ---- DEBUG PILL + PANEL ---- */}
+      <div style={{ display:'flex', justifyContent:'center', margin:'10px 0' }}>
         <button
           onClick={() => setDebugOn(v => !v)}
           style={{
@@ -265,111 +266,113 @@ Sounds like you’ve been carrying a lot. I’d love to hear—what’s been on 
         </div>
       )}
 
-    <div style={{ maxWidth: 980, margin: '12px auto', padding: '0 10px' }}>
-      <div style={{ display:'grid', gridTemplateColumns:'1fr', gap:10 }}>
-        <div style={{ background:'#fff', border:'1px solid rgba(0,0,0,0.08)', borderRadius:16, padding:10 }}>
-          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:6 }}>
-            <div style={{ fontWeight:900, fontSize:18 }}>Genie Chat</div>
-          </div>
+      {/* ---- Chat UI (original design) ---- */}
+      <div style={{ maxWidth: 980, margin: '12px auto', padding: '0 10px' }}>
+        <div style={{ display:'grid', gridTemplateColumns:'1fr', gap:10 }}>
+          <div style={{ background:'#fff', border:'1px solid rgba(0,0,0,0.08)', borderRadius:16, padding:10 }}>
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:6 }}>
+              <div style={{ fontWeight:900, fontSize:18 }}>Genie Chat</div>
+            </div>
 
-          <div
-            ref={listRef}
-            style={{
-              minHeight: 280,
-              maxHeight: 420,
-              overflowY: 'auto',
-              border: '1px solid rgba(0,0,0,0.08)',
-              borderRadius: 12,
-              padding: 10,
-              background: '#f8fafc'
-            }}
-          >
-            {(S.thread || []).map(m => {
-              const isAI = m.role !== 'user';
-              return (
-                <div
-                  key={m.id || newId()}
-                  style={{
-                    marginBottom: 8,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: isAI ? 'flex-start' : 'flex-end'
-                  }}
-                >
-                  <div
-                    style={{
-                      fontSize: 12,
-                      fontWeight: 700,
-                      color: '#334155',
-                      marginBottom: 4,
-                      textAlign: isAI ? 'left' : 'right'
-                    }}
-                  >
-                    {isAI ? 'Genie' : (S.firstName || 'You')}
-                  </div>
-                  <div
-                    style={{
-                      background: isAI ? 'rgba(0,0,0,0.04)' : 'rgba(255,214,0,0.15)',
-                      border: '1px solid rgba(0,0,0,0.08)',
-                      borderRadius: 12,
-                      padding: '8px 10px',
-                      maxWidth: '90%',
-                      whiteSpace: 'pre-wrap',
-                      lineHeight: 1.4
-                    }}
-                    dangerouslySetInnerHTML={{ __html: nl2br(escapeHTML(m.content || '')) }}
-                  />
-                </div>
-              )
-            })}
-
-            {uiOffer ? (
-              <div style={{ marginTop: 8 }}>
-                <PrescriptionCard
-                  title={uiOffer.title}
-                  why={uiOffer.why}
-                  priceCents={uiOffer.priceCents}
-                  buyUrl={uiOffer.buyUrl || "https://hypnoticmeditations.ai/b/l0kmb"}
-                  onClose={() => setUiOffer(null)}
-                />
-              </div>
-            ) : null}
-
-            {thinking && (
-              <div style={{ opacity:.7, fontStyle:'italic', marginTop:6 }}>Genie is thinking…</div>
-            )}
-          </div>
-
-          <div style={{ display:'flex', gap:8, marginTop:10 }}>
-            <textarea
-              rows={1}
-              value={input}
-              onChange={e=>setInput(e.target.value)}
-              onKeyDown={onKey}
-              placeholder={`Speak to your Genie, ${S.firstName || 'Friend'}…`}
+            <div
+              ref={listRef}
               style={{
-                flex:1,
-                padding:'10px 12px',
-                borderRadius:12,
-                border:'1px solid rgba(0,0,0,0.15)',
-                resize:'vertical'
-              }}
-            />
-            <button
-              onClick={send}
-              style={{
-                padding:'10px 14px',
-                borderRadius:12,
-                border:0,
-                background:'#ffd600',
-                fontWeight:900
+                minHeight: 280,
+                maxHeight: 420,
+                overflowY: 'auto',
+                border: '1px solid rgba(0,0,0,0.08)',
+                borderRadius: 12,
+                padding: 10,
+                background: '#f8fafc'
               }}
             >
-              Send
-            </button>
+              {(S.thread || []).map(m => {
+                const isAI = m.role !== 'user';
+                return (
+                  <div
+                    key={m.id || newId()}
+                    style={{
+                      marginBottom: 8,
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: isAI ? 'flex-start' : 'flex-end'
+                    }}
+                  >
+                    <div
+                      style={{
+                        fontSize: 12,
+                        fontWeight: 700,
+                        color: '#334155',
+                        marginBottom: 4,
+                        textAlign: isAI ? 'left' : 'right'
+                      }}
+                    >
+                      {isAI ? 'Genie' : (S.firstName || 'You')}
+                    </div>
+                    <div
+                      style={{
+                        background: isAI ? 'rgba(0,0,0,0.04)' : 'rgba(255,214,0,0.15)',
+                        border: '1px solid rgba(0,0,0,0.08)',
+                        borderRadius: 12,
+                        padding: '8px 10px',
+                        maxWidth: '90%',
+                        whiteSpace: 'pre-wrap',
+                        lineHeight: 1.4
+                      }}
+                      dangerouslySetInnerHTML={{ __html: nl2br(escapeHTML(m.content || '')) }}
+                    />
+                  </div>
+                )
+              })}
+
+              {uiOffer ? (
+                <div style={{ marginTop: 8 }}>
+                  <PrescriptionCard
+                    title={uiOffer.title}
+                    why={uiOffer.why}
+                    priceCents={uiOffer.priceCents}
+                    buyUrl={uiOffer.buyUrl || "https://hypnoticmeditations.ai/b/l0kmb"}
+                    onClose={() => setUiOffer(null)}
+                  />
+                </div>
+              ) : null}
+
+              {thinking && (
+                <div style={{ opacity:.7, fontStyle:'italic', marginTop:6 }}>Genie is thinking…</div>
+              )}
+            </div>
+
+            <div style={{ display:'flex', gap:8, marginTop:10 }}>
+              <textarea
+                rows={1}
+                value={input}
+                onChange={e=>setInput(e.target.value)}
+                onKeyDown={onKey}
+                placeholder={`Speak to your Genie, ${S.firstName || 'Friend'}…`}
+                style={{
+                  flex:1,
+                  padding:'10px 12px',
+                  borderRadius:12,
+                  border:'1px solid rgba(0,0,0,0.15)',
+                  resize:'vertical'
+                }}
+              />
+              <button
+                onClick={send}
+                style={{
+                  padding:'10px 14px',
+                  borderRadius:12,
+                  border:0,
+                  background:'#ffd600',
+                  fontWeight:900
+                }}
+              >
+                Send
+              </button>
+            </div>
           </div>
         </div>
       </div>
-    </div>
+    </>
   );
 }
