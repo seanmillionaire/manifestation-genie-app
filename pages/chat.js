@@ -1,4 +1,4 @@
-// /pages/chat.js — clean (no debug), hydrated name, no frozen author
+// /pages/chat.js — compact chat console (same font sizes, tighter spacing)
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
 import { get, set, newId, pushThread, toPlainMessages } from '../src/flowState';
@@ -110,28 +110,27 @@ export default function ChatPage(){
         }
       } catch {}
 
-// 3) ensure first assistant line uses belief-breaker intro
-const after = get();
-const intro = `🌟 The lamp glows… I’m here, ${after.firstName || 'Friend'}.
+      // 3) ensure first assistant line uses belief-breaker intro
+      const after = get();
+      const intro = `🌟 The lamp glows… I’m here, ${after.firstName || 'Friend'}.
 If you’ve felt stuck—working hard, juggling stress, or doubting yourself—we’ll flip the limiting belief behind it.
 One tiny move today beats a thousand tomorrows. What belief or snag should we clear right now?`;
 
-if (!after.thread || after.thread.length === 0) {
-  // no messages yet → set our intro
-  pushThread({ role: 'assistant', content: intro });
-} else {
-  // already has a first message → replace old generic prompts with our intro
-  const t0 = after.thread[0];
-  const looksOld =
-    t0?.role === 'assistant' &&
-    /what do you want to manifest|how do you feel about that|\bwhat'?s the snag\b/i.test(t0.content || '');
+      if (!after.thread || after.thread.length === 0) {
+        // no messages yet → set our intro
+        pushThread({ role: 'assistant', content: intro });
+      } else {
+        // already has a first message → replace old generic prompts with our intro
+        const t0 = after.thread[0];
+        const looksOld =
+          t0?.role === 'assistant' &&
+          /what do you want to manifest|how do you feel about that|\bwhat'?s the snag\b/i.test(t0.content || '');
 
-  if (looksOld) {
-    const updated = [{ ...t0, content: intro }, ...after.thread.slice(1)];
-    set({ thread: updated });
-  }
-}
-
+        if (looksOld) {
+          const updated = [{ ...t0, content: intro }, ...after.thread.slice(1)];
+          set({ thread: updated });
+        }
+      }
 
       // reflect latest store in this component
       setS(get());
@@ -195,30 +194,64 @@ if (!after.thread || after.thread.length === 0) {
   }
 
   return (
-    <div style={{maxWidth:980, margin:'24px auto', padding:'0 14px'}}>
-      <div style={{display:'grid', gridTemplateColumns:'1fr', gap:14}}>
-        <div style={{ background:'#fff', border:'1px solid rgba(0,0,0,0.08)', borderRadius:18, padding:16 }}>
-          <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:10}}>
-            <div style={{fontWeight:900, fontSize:18}}>Genie Chat</div>
-            <button onClick={()=>{ set({ thread: [] }); setS(get()); }} style={{border:'1px solid rgba(0,0,0,0.12)', borderRadius:8, padding:'6px 10px', background:'#fff', cursor:'pointer'}}>
+    <div style={{ maxWidth: 980, margin: '12px auto', padding: '0 10px' }}>
+      <div style={{ display:'grid', gridTemplateColumns:'1fr', gap:10 }}>
+        <div style={{ background:'#fff', border:'1px solid rgba(0,0,0,0.08)', borderRadius:16, padding:10 }}>
+          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:6 }}>
+            <div style={{ fontWeight:900, fontSize:18 }}>Genie Chat</div>
+            <button
+              onClick={()=>{ set({ thread: [] }); setS(get()); }}
+              style={{ border:'1px solid rgba(0,0,0,0.12)', borderRadius:8, padding:'4px 8px', background:'#fff', cursor:'pointer' }}
+            >
               New belief to clear
             </button>
           </div>
 
-          <div ref={listRef} style={{minHeight:360, maxHeight:520, overflowY:'auto', border:'1px solid rgba(0,0,0,0.08)', borderRadius:12, padding:12, background:'#f8fafc'}}>
+          {/* Compact message list: shorter min/max heights, tighter padding; font sizes unchanged */}
+          <div
+            ref={listRef}
+            style={{
+              minHeight: 280,
+              maxHeight: 420,
+              overflowY: 'auto',
+              border: '1px solid rgba(0,0,0,0.08)',
+              borderRadius: 12,
+              padding: 10,
+              background: '#f8fafc'
+            }}
+          >
             {(S.thread || []).map(m => {
               const isAI = m.role !== 'user';
               return (
-                <div key={m.id || newId()} style={{ marginBottom:12, display:'flex', flexDirection:'column', alignItems: isAI ? 'flex-start' : 'flex-end' }}>
-                  <div style={{fontSize:12, fontWeight:700, color:'#334155', marginBottom:6, textAlign: isAI ? 'left' : 'right'}}>
+                <div
+                  key={m.id || newId()}
+                  style={{
+                    marginBottom: 8,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: isAI ? 'flex-start' : 'flex-end'
+                  }}
+                >
+                  <div
+                    style={{
+                      fontSize: 12,               // unchanged
+                      fontWeight: 700,
+                      color: '#334155',
+                      marginBottom: 4,
+                      textAlign: isAI ? 'left' : 'right'
+                    }}
+                  >
                     {isAI ? 'Genie' : (S.firstName || 'You')}
                   </div>
                   <div
                     style={{
                       background: isAI ? 'rgba(0,0,0,0.04)' : 'rgba(255,214,0,0.15)',
-                      border:'1px solid rgba(0,0,0,0.08)',
-                      borderRadius:12, padding:'10px 12px',
-                      maxWidth:'78%', whiteSpace:'pre-wrap', lineHeight:1.4
+                      border: '1px solid rgba(0,0,0,0.08)',
+                      borderRadius: 12,
+                      padding: '8px 10px',       // tighter padding
+                      maxWidth: '90%',            // wider bubble = fewer line wraps (more compact)
+                      whiteSpace: 'pre-wrap',
+                      lineHeight: 1.4             // unchanged readability
                     }}
                     dangerouslySetInnerHTML={{ __html: nl2br(escapeHTML(m.content || '')) }}
                   />
@@ -226,9 +259,9 @@ if (!after.thread || after.thread.length === 0) {
               )
             })}
 
-            {/* Offer card goes OUTSIDE the .map, after the messages */}
+            {/* Offer card just a bit tighter on top margin */}
             {uiOffer ? (
-              <div style={{ marginTop: 12 }}>
+              <div style={{ marginTop: 8 }}>
                 <PrescriptionCard
                   title={uiOffer.title}
                   why={uiOffer.why}
@@ -254,26 +287,40 @@ if (!after.thread || after.thread.length === 0) {
             ) : null}
 
             {thinking && (
-              <div style={{opacity:.7, fontStyle:'italic'}}>Genie is thinking…</div>
+              <div style={{ opacity:.7, fontStyle:'italic', marginTop:6 }}>Genie is thinking…</div>
             )}
           </div>
 
-          <div style={{display:'flex', gap:10, marginTop:12}}>
+          {/* Input row: tighter gap & paddings; font size unchanged */}
+          <div style={{ display:'flex', gap:8, marginTop:10 }}>
             <textarea
-              rows={2}
+              rows={1}                          // single line by default for a tighter feel
               value={input}
               onChange={e=>setInput(e.target.value)}
               onKeyDown={onKey}
               placeholder={`Speak to your Genie, ${S.firstName || 'Friend'}…`}
-              style={{flex:1, padding:'12px 14px', borderRadius:12, border:'1px solid rgba(0,0,0,0.15)'}}
+              style={{
+                flex:1,
+                padding:'10px 12px',
+                borderRadius:12,
+                border:'1px solid rgba(0,0,0,0.15)',
+                resize:'vertical'               // still allow expansion if needed
+              }}
             />
-            <button onClick={send} style={{ padding:'12px 16px', borderRadius:14, border:0, background:'#ffd600', fontWeight:900 }}>
+            <button
+              onClick={send}
+              style={{
+                padding:'10px 14px',
+                borderRadius:12,
+                border:0,
+                background:'#ffd600',
+                fontWeight:900
+              }}
+            >
               Send
             </button>
           </div>
         </div>
-
-       
       </div>
     </div>
   );
