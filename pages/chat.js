@@ -365,17 +365,19 @@ function onApplyTweaks(next){
 )}
 
             {/* ✅ NEW: Soft Confirm bar (high-confidence only for now) */}
-            {confirmVariant === "high" && !firstRx && (
-              <div style={{ marginBottom: 8 }}>
-                <SoftConfirmBar
-                  outcome={parsed?.outcome}
-                  block={parsed?.block}
-                  variant={confirmVariant}
-                  onLooksRight={onLooksRight}
-                  onTweak={onTweak}
-                />
-              </div>
-            )}
+   {true && !firstRx && (
+  <div style={{ marginBottom: 8 }}>
+    {console.log('SOFT-CONFIRM DEBUG →', { parsed, confirmVariant })}
+    <SoftConfirmBar
+      outcome={parsed?.outcome}
+      block={parsed?.block}
+      variant={confirmVariant}
+      onLooksRight={onLooksRight}
+      onTweak={onTweak}
+    />
+  </div>
+)}
+
 
             {/* ✅ NEW: First prescription card after confirmation */}
             {firstRx && (
