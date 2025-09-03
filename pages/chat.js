@@ -7,7 +7,7 @@ import PrescriptionCard from "../components/ChatGenie/PrescriptionCard";
 import { detectBeliefFrom, recommendProduct } from "../src/engine/recommendProduct";
 
 // ---------- tiny helpers ----------
-function escapeHTML(s=''){ return s.replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'" :'&#39;'}[m])); }
+function escapeHTML(s=''){return s.replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
 function nl2br(s=''){ return s.replace(/\n/g, '<br/>'); }
 function pretty(o){ try { return JSON.stringify(o, null, 2); } catch { return String(o); } }
 
