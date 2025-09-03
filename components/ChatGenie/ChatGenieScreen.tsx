@@ -2,12 +2,52 @@ import { useState } from "react";
 import PrescriptionCard from "./PrescriptionCard";
 import { detectBeliefFrom, recommendProduct } from "../../src/engine/recommendProduct";
 import { get as getFlow } from "../../src/flowState"; // ← use relative import
+import { get as getFlow, set as setFlow } from "@/src/flowState";
+
+function readQuestionnaireAnswers() {
+  // 1) from flowState
+  try {
+    const cur = getFlow?.() || {};
+    if (cur?.questionnaire?.answers) return cur.questionnaire.answers;
+  } catch {}
+  // 2) from localStorage
+  if (typeof window !== "undefined") {
+    try {
+      const raw = localStorage.getItem("questionnaire_answers");
+      if (raw) return JSON.parse(raw);
+    } catch {}
+  }
+  return null;
+}
+
+function makePromptFrom(answers) {
+  if (!answers) return "";
+  const { goal, blocker, timeframe, constraint, proof_line } = answers;
+  return [
+    goal && `Goal: ${goal}`,
+    blocker && `Blocker: ${blocker}`,
+    timeframe && `Timeframe: ${timeframe}`,
+    constraint && `Constraint: ${constraint}`,
+    proof_line && `Proof target: ${proof_line}`,
+  ].filter(Boolean).join("\n");
+}
 
 type Msg = { role: "user" | "assistant"; text: string };
 
 export default function ChatGenieScreen() {
   const ps = (getFlow?.() as any)?.prompt_spec || null;
   const coachPrompt: string | undefined = ps?.prompt;
+// Ensure we have a prompt_spec even if user came straight to /chat
+let ps = (getFlow?.() || {}).prompt_spec || null;
+if (!ps) {
+  const answers = readQuestionnaireAnswers();
+  if (answers) {
+    const prompt = makePromptFrom(answers);
+    ps = { ...answers, prompt, savedAt: new Date().toISOString() };
+    try { setFlow({ ...(getFlow?.() || {}), prompt_spec: ps }); } catch {}
+  }
+}
+const coachPrompt = ps?.prompt;
 
   const [messages, setMessages] = useState<Msg[]>([
     {
