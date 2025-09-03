@@ -1,4 +1,4 @@
-// /pages/chat.js — compact chat console + HM redirect for Unlock (restored + debug + product rec fix)
+// /pages/chat.js — compact chat console + HM redirect for Unlock (restored + debug + 1x/day offer)
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
 import { get, set, newId, pushThread, toPlainMessages } from '../src/flowState';
@@ -10,6 +10,8 @@ import { detectBeliefFrom, recommendProduct } from "../src/engine/recommendProdu
 function escapeHTML(s=''){ return s.replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'" :'&#39;'}[m])); }
 function nl2br(s=''){ return s.replace(/\n/g, '<br/>'); }
 function pretty(o){ try { return JSON.stringify(o, null, 2); } catch { return String(o); } }
+const todayStr = () => new Date().toISOString().slice(0,10);
+const LS_OFFER_KEY = () => `mg_offer_shown_${todayStr()}`;
 
 function pickFirstName(src){
   const first = (v)=> v ? String(v).trim().split(/\s+/)[0] : '';
@@ -37,6 +39,8 @@ export default function ChatPage(){
   const [uiOffer, setUiOffer] = useState(null);
   const [debugOn, setDebugOn] = useState(false);
   const [lastChatPayload, setLastChatPayload] = useState(null);
+  const [canShowOffer, setCanShowOffer] = useState(true); // daily gate
+  const offerShownThisSession = useRef(false);            // session gate
   const listRef = useRef(null);
 
   // auto-enable debug via ?debug=1
@@ -44,6 +48,14 @@ export default function ChatPage(){
     if (typeof window !== 'undefined') {
       const q = new URLSearchParams(window.location.search);
       if (q.get('debug') === '1') setDebugOn(true);
+    }
+  }, []);
+
+  // initialize daily offer flag
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const shown = localStorage.getItem(LS_OFFER_KEY());
+      setCanShowOffer(!shown);
     }
   }, []);
 
@@ -119,46 +131,6 @@ Sounds like you’ve been carrying a lot. I’d love to hear—what’s been on 
     if (el) el.scrollTop = el.scrollHeight;
   }, [S.thread, uiOffer]);
 
-  // real API caller, kept inside component so we can set lastChatPayload
-  async function callGenie({ text, state }) {
-    const payload = {
-      userName: state.firstName || null,
-      context: {
-        wish: state.currentWish?.wish || null,
-        block: state.currentWish?.block || null,
-        micro: state.currentWish?.micro || null,
-        vibe: state.vibe || null,
-        // intention created from questionnaire/home
-        prompt_spec: state.prompt_spec?.prompt || null,
-      },
-      messages: toPlainMessages(state.thread || []),
-      text
-    };
-
-    // expose to debug panel
-    setLastChatPayload(payload);
-
-    const resp = await fetch('/api/chat', {
-      method:'POST',
-      headers:{ 'Content-Type':'application/json' },
-      body: JSON.stringify(payload)
-    });
-    if (!resp.ok) throw new Error('Genie API error');
-    const data = await resp.json();
-    return data?.reply || 'I’m here.';
-  }
-
-  // Build richer text for belief detection (uses intention + current wish)
-  function beliefDetectionContext(rawText){
-    const a = [];
-    if (S.prompt_spec?.prompt) a.push(`Intention: ${S.prompt_spec.prompt}`);
-    if (S.currentWish?.wish) a.push(`Wish: ${S.currentWish.wish}`);
-    if (S.currentWish?.block) a.push(`Block: ${S.currentWish.block}`);
-    if (S.currentWish?.micro) a.push(`Micro: ${S.currentWish.micro}`);
-    a.push(`User: ${rawText}`);
-    return a.join('\n');
-  }
-
   async function send(){
     const text = input.trim();
     if (!text || thinking) return;
@@ -168,31 +140,54 @@ Sounds like you’ve been carrying a lot. I’d love to hear—what’s been on 
     pushThread({ role:'user', content: text });
     setS(get());
 
-    // --- Product recommendation (fixed) ---
+    // ---- Product recommendation (guarded: once/day + once/session) ----
     try {
-      const enriched = beliefDetectionContext(text);
-      const { goal, belief } = detectBeliefFrom(enriched);
-      const rec = recommendProduct({ goal, belief });
+      if (canShowOffer && !offerShownThisSession.current) {
+        const { goal, belief } = detectBeliefFrom(text);
+        const rec = recommendProduct({ goal, belief });
+        if (rec) {
+          const why = belief
+            ? `Limiting belief detected: “${belief}.” Tonight’s session dissolves that pattern so your next action feels natural.`
+            : `Based on your goal, this short trance helps you move without overthinking.`;
+          const HM_LINK = "https://hypnoticmeditations.ai/b/l0kmb";
 
-      if (rec) {
-        const why = belief
-          ? `Limiting belief detected: “${belief}.” Tonight’s session dissolves that pattern so your next action feels natural.`
-          : `Based on your goal, this short trance helps you move without overthinking.`;
+          setUiOffer({ title: rec.title, why, priceCents: rec.price, buyUrl: HM_LINK });
 
-        // Use the fixed HM link; PrescriptionCard expects title/why/priceCents/buyUrl
-        const HM_LINK = "https://hypnoticmeditations.ai/b/l0kmb";
-        setUiOffer({
-          title: rec.title,
-          why,
-          priceCents: rec.price,
-          buyUrl: HM_LINK
-        });
+          // flip both gates
+          offerShownThisSession.current = true;
+          try {
+            localStorage.setItem(LS_OFFER_KEY(), '1'); // today's date key
+            setCanShowOffer(false);
+          } catch {}
+        }
       }
     } catch {}
 
-    // --- Call Genie API ---
+    // ---- Real API call (unchanged) ----
     try {
-      const reply = await callGenie({ text, state: get() });
+      const payload = {
+        userName: (get().firstName) || null,
+        context: {
+          wish: get().currentWish?.wish || null,
+          block: get().currentWish?.block || null,
+          micro: get().currentWish?.micro || null,
+          vibe: get().vibe || null,
+          // also pass intention created from questionnaire/home
+          prompt_spec: get().prompt_spec?.prompt || null,
+        },
+        messages: toPlainMessages(get().thread || []),
+        text
+      };
+
+      setLastChatPayload(payload); // visible in debug panel
+
+      const resp = await fetch('/api/chat', {
+        method:'POST',
+        headers:{ 'Content-Type':'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const data = await resp.json();
+      const reply = data?.reply || 'I’m here.';
       pushThread({ role:'assistant', content: reply });
       setS(get());
     } catch {
