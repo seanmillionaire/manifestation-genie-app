@@ -13,11 +13,10 @@ type PromptAnswers = {
   [k: string]: unknown;
 };
 
-
 function readQuestionnaireAnswers(): PromptAnswers | null {
   // 1) from flowState
   try {
-    const cur = getFlow?.() || {};
+    const cur = (getFlow?.() as any) || {};
     if (cur?.questionnaire?.answers) return cur.questionnaire.answers as PromptAnswers;
   } catch {}
   // 2) from localStorage
@@ -29,7 +28,6 @@ function readQuestionnaireAnswers(): PromptAnswers | null {
   }
   return null;
 }
-
 
 function makePromptFrom(answers: PromptAnswers | null): string {
   if (!answers) return "";
@@ -45,25 +43,23 @@ function makePromptFrom(answers: PromptAnswers | null): string {
     .join("\n");
 }
 
-
 type Msg = { role: "user" | "assistant"; text: string };
 
 export default function ChatGenieScreen() {
-
-// Ensure we have a prompt_spec even if user came straight to /chat
-let ps: any = (getFlow?.() || {}).prompt_spec || null;
-if (!ps) {
-  const answers = readQuestionnaireAnswers();
-  if (answers) {
-    const prompt = makePromptFrom(answers);
-    ps = { ...answers, prompt, savedAt: new Date().toISOString() };
-    try {
-      setFlow({ ...(getFlow?.() || {}), prompt_spec: ps });
-    } catch {}
+  // ensure we have a prompt_spec even if user came straight to /chat
+  let ps: any = ((getFlow?.() as any) || {}).prompt_spec || null;
+  if (!ps) {
+    const answers = readQuestionnaireAnswers();
+    if (answers) {
+      const prompt = makePromptFrom(answers);
+      ps = { ...answers, prompt, savedAt: new Date().toISOString() };
+      try {
+        const cur = (getFlow?.() as any) || {};
+        setFlow({ ...cur, prompt_spec: ps });
+      } catch {}
+    }
   }
-}
-const coachPrompt: string | undefined = ps?.prompt;
-
+  const coachPrompt: string | undefined = ps?.prompt;
 
   const [messages, setMessages] = useState<Msg[]>([
     {
@@ -76,7 +72,7 @@ const coachPrompt: string | undefined = ps?.prompt;
 
   const [input, setInput] = useState("");
 
-  // New state for product offer
+  // product offer state
   const [uiOffer, setUiOffer] = useState<null | {
     title: string;
     why: string;
@@ -113,7 +109,7 @@ const coachPrompt: string | undefined = ps?.prompt;
       });
     }
 
-    // Placeholder assistant reply (context-aware)
+    // placeholder assistant reply (context-aware)
     setTimeout(() => {
       const goalHint = ps?.goal ? ` toward “${ps.goal}”` : "";
       setMessages((m) => [
@@ -126,7 +122,7 @@ const coachPrompt: string | undefined = ps?.prompt;
         },
       ]);
     }, 600);
-  }; // ← CLOSE sendMessage (was missing)
+  };
 
   return (
     <main style={{ maxWidth: 700, margin: "30px auto", padding: "0 20px" }}>
@@ -144,16 +140,13 @@ const coachPrompt: string | undefined = ps?.prompt;
           }}
         >
           Using your intention from Home •{" "}
-          {new Date((getFlow?.() as any)?.prompt_spec?.savedAt || Date.now()).toLocaleString()}
+          {new Date(((getFlow?.() as any)?.prompt_spec?.savedAt as string) || Date.now()).toLocaleString()}
         </div>
       ) : null}
 
       <div style={{ border: "1px solid rgba(255,255,255,0.15)", borderRadius: 12, padding: 16 }}>
         {messages.map((m, i) => (
-          <div
-            key={i}
-            style={{ marginBottom: 12, textAlign: m.role === "user" ? "right" : "left" }}
-          >
+          <div key={i} style={{ marginBottom: 12, textAlign: m.role === "user" ? "right" : "left" }}>
             <div
               style={{
                 display: "inline-block",
