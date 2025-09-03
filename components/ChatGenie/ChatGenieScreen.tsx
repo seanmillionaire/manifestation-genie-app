@@ -1,14 +1,15 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import PrescriptionCard from "./PrescriptionCard";
 import { detectBeliefFrom, recommendProduct } from "../../src/engine/recommendProduct";
-import { get as getFlow } from "@/src/flowState";
+import { get as getFlow } from "../../src/flowState"; // ← use relative import
 
+type Msg = { role: "user" | "assistant"; text: string };
 
 export default function ChatGenieScreen() {
-    const ps = (getFlow?.() as any)?.prompt_spec || null;
+  const ps = (getFlow?.() as any)?.prompt_spec || null;
   const coachPrompt: string | undefined = ps?.prompt;
 
-  const [messages, setMessages] = useState<{ role: "user" | "assistant"; text: string }[]>([
+  const [messages, setMessages] = useState<Msg[]>([
     {
       role: "assistant",
       text: coachPrompt
@@ -16,7 +17,6 @@ export default function ChatGenieScreen() {
         : `🌟 The lamp glows… I’m here. If you’ve felt stuck—working hard, juggling stress, or doubting yourself—we’ll flip the limiting belief behind it. One tiny move today beats a thousand tomorrows. What belief or snag should we clear right now?`,
     },
   ]);
-
 
   const [input, setInput] = useState("");
 
@@ -37,12 +37,11 @@ export default function ChatGenieScreen() {
     setMessages((m) => [...m, { role: "user", text: userText }]);
     setInput("");
 
-    // Belief detection + recommendation
- const contextBoost = coachPrompt ? `${coachPrompt}\n\nUser: ${userText}` : userText;
-const { goal, belief } = detectBeliefFrom(contextBoost);
+    // Belief detection + recommendation (boosted by coachPrompt if present)
+    const contextBoost = coachPrompt ? `${coachPrompt}\n\nUser: ${userText}` : userText;
+    const { goal, belief } = detectBeliefFrom(contextBoost);
 
     const rec = recommendProduct({ goal, belief });
-
     if (rec) {
       const why = belief
         ? `Limiting belief detected: “${belief}.” Tonight’s session dissolves that pattern so your next action feels natural.`
@@ -58,47 +57,46 @@ const { goal, belief } = detectBeliefFrom(contextBoost);
       });
     }
 
-    // TODO: Replace with real assistant call
-setTimeout(() => {
-  const goalHint = ps?.goal ? ` toward “${ps.goal}”` : "";
-  setMessages((m) => [
-    ...m,
-    {
-      role: "assistant",
-      text:
-        belief
-          ? `✨ Noted: “${belief}.” Let’s dissolve that pattern${goalHint}. Breathe with me: in for 4, hold 4, out for 6. Ready for a tiny action you can take in the next 10 minutes?`
-          : `✨ Got it. Let’s break through that belief together${goalHint}. Want a tiny action you can take in the next 10 minutes?`,
-    },
-  ]);
-}, 600);
-
+    // Placeholder assistant reply (context-aware)
+    setTimeout(() => {
+      const goalHint = ps?.goal ? ` toward “${ps.goal}”` : "";
+      setMessages((m) => [
+        ...m,
+        {
+          role: "assistant",
+          text: belief
+            ? `✨ Noted: “${belief}.” Let’s dissolve that pattern${goalHint}. Breathe with me: in for 4, hold 4, out for 6. Ready for a tiny action you can take in the next 10 minutes?`
+            : `✨ Got it. Let’s break through that belief together${goalHint}. Want a tiny action you can take in the next 10 minutes?`,
+        },
+      ]);
+    }, 600);
+  }; // ← CLOSE sendMessage (was missing)
 
   return (
     <main style={{ maxWidth: 700, margin: "30px auto", padding: "0 20px" }}>
-        {coachPrompt ? (
-  <div style={{
-    marginBottom: 10,
-    fontSize: 13,
-    color: "#166534",
-    background: "#dcfce7",
-    border: "1px solid #86efac",
-    borderRadius: 10,
-    padding: "6px 10px",
-    display: "inline-block"
-  }}>
-    Using your intention from Home • {new Date(getFlow()?.prompt_spec?.savedAt || Date.now()).toLocaleString()}
-  </div>
-) : null}
+      {coachPrompt ? (
+        <div
+          style={{
+            marginBottom: 10,
+            fontSize: 13,
+            color: "#166534",
+            background: "#dcfce7",
+            border: "1px solid #86efac",
+            borderRadius: 10,
+            padding: "6px 10px",
+            display: "inline-block",
+          }}
+        >
+          Using your intention from Home •{" "}
+          {new Date((getFlow?.() as any)?.prompt_spec?.savedAt || Date.now()).toLocaleString()}
+        </div>
+      ) : null}
 
       <div style={{ border: "1px solid rgba(255,255,255,0.15)", borderRadius: 12, padding: 16 }}>
         {messages.map((m, i) => (
           <div
             key={i}
-            style={{
-              marginBottom: 12,
-              textAlign: m.role === "user" ? "right" : "left",
-            }}
+            style={{ marginBottom: 12, textAlign: m.role === "user" ? "right" : "left" }}
           >
             <div
               style={{
@@ -117,16 +115,15 @@ setTimeout(() => {
           </div>
         ))}
 
-{uiOffer ? (
-  <PrescriptionCard
-    title={uiOffer.title}
-    why={uiOffer.why}
-    priceCents={uiOffer.priceCents}
-    buyUrl="https://hypnoticmeditations.ai/b/l0kmb" // open in new tab
-    onClose={() => setUiOffer(null)}               // hide card after click
-  />
-) : null}
-
+        {uiOffer ? (
+          <PrescriptionCard
+            title={uiOffer.title}
+            why={uiOffer.why}
+            priceCents={uiOffer.priceCents}
+            buyUrl="https://hypnoticmeditations.ai/b/l0kmb"
+            onClose={() => setUiOffer(null)}
+          />
+        ) : null}
 
         <div style={{ display: "flex", marginTop: 14 }}>
           <input
@@ -142,11 +139,7 @@ setTimeout(() => {
               fontSize: 18,
             }}
           />
-          <button
-            onClick={sendMessage}
-            className="btn btn-primary"
-            style={{ marginLeft: 8 }}
-          >
+          <button onClick={sendMessage} className="btn btn-primary" style={{ marginLeft: 8 }}>
             Send
           </button>
         </div>
