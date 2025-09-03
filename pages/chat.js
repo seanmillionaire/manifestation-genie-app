@@ -5,6 +5,10 @@ import { get, set, newId, pushThread, toPlainMessages } from '../src/flowState';
 import { supabase } from '../src/supabaseClient';
 import PrescriptionCard from "../components/ChatGenie/PrescriptionCard";
 import { detectBeliefFrom, recommendProduct } from "../src/engine/recommendProduct";
+// --- Debug helpers (simple, no deps)
+function pretty(obj) {
+  try { return JSON.stringify(obj, null, 2); } catch { return String(obj); }
+}
 
 function escapeHTML(s=''){ return s.replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'" :'&#39;'}[m])); }
 function nl2br(s=''){ return s.replace(/\n/g, '<br/>'); }
@@ -28,28 +32,33 @@ function pickFirstName(src){
 }
 
 async function callGenie({ text, state }) {
+  const payload = {
+    userName: state.firstName || null,
+    context: {
+      wish: state.currentWish?.wish || null,
+      block: state.currentWish?.block || null,
+      micro: state.currentWish?.micro || null,
+      vibe: state.vibe || null,
+      // keep the prompt from questionnaire/home
+      prompt_spec: state.prompt_spec?.prompt || null,
+    },
+    messages: toPlainMessages(state.thread || []),
+    text
+  };
+
+  // ⬇ expose in UI if debug is on
+  try { setLastChatPayload(payload); } catch {}
+
   const resp = await fetch('/api/chat', {
     method:'POST',
     headers:{ 'Content-Type':'application/json' },
-    body: JSON.stringify({
-      userName: state.firstName || null,
-      // ⬇ keep the original context
-      context: {
-        wish: state.currentWish?.wish || null,
-        block: state.currentWish?.block || null,
-        micro: state.currentWish?.micro || null,
-        vibe: state.vibe || null,
-        // ⬇ NEW: pass prompt_spec intention too (when present)
-        prompt_spec: state.prompt_spec?.prompt || null,
-      },
-      messages: toPlainMessages(state.thread || []),
-      text
-    })
+    body: JSON.stringify(payload)
   });
   if (!resp.ok) throw new Error('Genie API error');
   const data = await resp.json();
   return data?.reply || 'I’m here.';
 }
+
 
 export default function ChatPage(){
   const router = useRouter();
@@ -58,6 +67,16 @@ export default function ChatPage(){
   const [thinking, setThinking] = useState(false);
   const [uiOffer, setUiOffer] = useState(null);
   const listRef = useRef(null);
+  const [debugOn, setDebugOn] = useState(false);
+  const [lastChatPayload, setLastChatPayload] = useState(null);
+
+  // turn on automatically via ?debug=1
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const q = new URLSearchParams(window.location.search);
+      if (q.get('debug') === '1') setDebugOn(true);
+    }
+  }, []);
 
   useEffect(() => {
     const cur = get();
@@ -170,6 +189,82 @@ Sounds like you’ve been carrying a lot. I’d love to hear—what’s been on 
   }
 
   return (
+          {/* ---- DEBUG PILL + PANEL ---- */}
+      <div style={{ display:'flex', justifyContent:'center', marginBottom:10 }}>
+        <button
+          onClick={() => setDebugOn(v => !v)}
+          style={{
+            fontSize:12, fontWeight:800, letterSpacing:.3,
+            background: debugOn ? '#dcfce7' : '#e5e7eb',
+            color: '#111', border:'1px solid rgba(0,0,0,0.15)',
+            borderRadius: 999, padding:'6px 10px', cursor:'pointer'
+          }}
+          aria-pressed={debugOn}
+        >
+          Debug: {debugOn ? 'ON' : 'OFF'}
+        </button>
+      </div>
+
+      {debugOn && (
+        <div style={{
+          maxWidth: 980, margin:'0 auto 10px', padding:12,
+          background:'#0b1220', color:'#e5e7eb',
+          border:'1px solid rgba(255,255,255,0.12)', borderRadius:12
+        }}>
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+            <strong>Live FlowState Snapshot</strong>
+            <button
+              onClick={() => {
+                try {
+                  const snapshot = {
+                    firstName: S.firstName || null,
+                    vibe: S.vibe || null,
+                    currentWish: S.currentWish || null,
+                    prompt_spec: S.prompt_spec || null,
+                    lastChatPayload
+                  };
+                  navigator.clipboard?.writeText(JSON.stringify(snapshot, null, 2));
+                } catch {}
+              }}
+              style={{
+                fontSize:12, padding:'4px 8px', borderRadius:8,
+                border:'1px solid rgba(255,255,255,0.15)', background:'transparent', color:'#e5e7eb',
+                cursor:'pointer'
+              }}
+            >
+              Copy JSON
+            </button>
+          </div>
+
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginTop:10 }}>
+            <div style={{ background:'#0f172a', padding:10, borderRadius:8 }}>
+              <div style={{ fontSize:12, opacity:.8, marginBottom:6 }}>firstName</div>
+              <pre style={{ margin:0, fontSize:12, whiteSpace:'pre-wrap' }}>{pretty(S.firstName)}</pre>
+            </div>
+
+            <div style={{ background:'#0f172a', padding:10, borderRadius:8 }}>
+              <div style={{ fontSize:12, opacity:.8, marginBottom:6 }}>vibe</div>
+              <pre style={{ margin:0, fontSize:12, whiteSpace:'pre-wrap' }}>{pretty(S.vibe)}</pre>
+            </div>
+
+            <div style={{ background:'#0f172a', padding:10, borderRadius:8 }}>
+              <div style={{ fontSize:12, opacity:.8, marginBottom:6 }}>currentWish</div>
+              <pre style={{ margin:0, fontSize:12, whiteSpace:'pre-wrap' }}>{pretty(S.currentWish)}</pre>
+            </div>
+
+            <div style={{ background:'#0f172a', padding:10, borderRadius:8 }}>
+              <div style={{ fontSize:12, opacity:.8, marginBottom:6 }}>prompt_spec</div>
+              <pre style={{ margin:0, fontSize:12, whiteSpace:'pre-wrap' }}>{pretty(S.prompt_spec)}</pre>
+            </div>
+
+            <div style={{ gridColumn:'1 / span 2', background:'#0f172a', padding:10, borderRadius:8 }}>
+              <div style={{ fontSize:12, opacity:.8, marginBottom:6 }}>lastChatPayload → /api/chat</div>
+              <pre style={{ margin:0, fontSize:12, overflowX:'auto' }}>{pretty(lastChatPayload)}</pre>
+            </div>
+          </div>
+        </div>
+      )}
+
     <div style={{ maxWidth: 980, margin: '12px auto', padding: '0 10px' }}>
       <div style={{ display:'grid', gridTemplateColumns:'1fr', gap:10 }}>
         <div style={{ background:'#fff', border:'1px solid rgba(0,0,0,0.08)', borderRadius:16, padding:10 }}>
