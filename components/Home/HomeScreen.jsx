@@ -25,15 +25,13 @@ export default function HomeScreen() {
     typeof window !== "undefined" ? localStorage.getItem(AGREED_KEY) : null
   );
 
-  // --- Name hydration (more reliable) ---
+  // --- Name hydration ---
   useEffect(() => {
     let alive = true;
     (async () => {
       try {
-        // always try server/profile hydration
         await hydrateName();
 
-        // immediate localStorage fallback
         if (typeof window !== "undefined") {
           const lsName = (localStorage.getItem("mg_first_name") || "").trim();
           if (lsName && (!get().firstName || get().firstName === "Friend")) {
@@ -98,16 +96,20 @@ export default function HomeScreen() {
 
   return (
     <main style={{ width: "min(900px, 94vw)", margin: "30px auto" }}>
-<h1 style={{ fontSize: 28, fontWeight: 900, margin: "0 0 12px" }}>
-  {firstName}, your portal is open 🌟
-</h1>
-<p
-  style={{ marginTop: -6, marginBottom: 14, color: "rgba(0,0,0,.75)", lineHeight: 1.5 }}
->
-  If you’ve felt stuck before—working hard, juggling stress, or doubting yourself...
-  Genie helps turn those <strong>old beliefs into breakthroughs</strong>, one day at a time.
-</p>
-
+      <h1 style={{ fontSize: 28, fontWeight: 900, margin: "0 0 12px" }}>
+        {firstName}, your portal is open 🌟
+      </h1>
+      <p
+        style={{
+          marginTop: -6,
+          marginBottom: 14,
+          color: "rgba(0,0,0,.75)",
+          lineHeight: 1.5,
+        }}
+      >
+        If you’ve felt stuck before—working hard, juggling stress, or doubting yourself...
+        Genie helps turn those <strong>old beliefs into breakthroughs</strong>, one day at a time.
+      </p>
 
       <p className="text-sm text-black/60 h-5" aria-live="polite">
         {loading ? "Loading your profile…" : err ? err : ""}
@@ -121,7 +123,7 @@ export default function HomeScreen() {
           background: "#fafafa",
         }}
       >
-        {/* card 1 — Ethical Agreement (short + playful + real) */}
+        {/* card 1 — Ethical Agreement */}
         <div
           style={{
             background: "white",
@@ -166,7 +168,12 @@ export default function HomeScreen() {
               }}
             >
               <label
-                style={{ display: "inline-flex", alignItems: "center", gap: 8, cursor: "pointer" }}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 8,
+                  cursor: "pointer",
+                }}
               >
                 <input
                   type="checkbox"
@@ -199,7 +206,7 @@ export default function HomeScreen() {
           )}
         </div>
 
-        {/* card 2 — One Super Tip + One Big CTA */}
+        {/* card 2 — Tip + CTA */}
         <div
           style={{
             marginTop: 12,
@@ -216,29 +223,44 @@ export default function HomeScreen() {
           <div style={{ fontSize: 14, lineHeight: 1.6 }}>
             <strong>3-Breath Quantum Lock-In:</strong> Close your eyes. On each inhale, feel your
             desired reality already true. On each exhale, whisper:{" "}
-            <em>“It’s done. I am now so thankful to have this in my life."</em> Do this three times, then
-            take one tiny action that matches this reality within 60 minutes.
+            <em>“It’s done. I am now so thankful to have this in my life."</em> Do this three times,
+            then take one tiny action that matches this reality within 60 minutes.
           </div>
 
           <div style={{ marginTop: 14 }}>
             <button
               onClick={startManifesting}
+              disabled={!agreedAt}
+              aria-disabled={!agreedAt}
               style={{
                 width: "100%",
-                background: "#facc15",
-                border: "1px solid #eab308",
+                background: agreedAt ? "#facc15" : "rgba(250, 204, 21, .6)",
+                border: `1px solid ${agreedAt ? "#eab308" : "rgba(234, 179, 8, .6)"}`,
                 borderRadius: 12,
                 padding: "14px 18px",
                 fontWeight: 900,
                 fontSize: 16,
                 letterSpacing: 0.3,
                 minHeight: 48,
-                cursor: "pointer",
+                cursor: agreedAt ? "pointer" : "not-allowed",
               }}
               aria-label="Start Manifesting"
             >
               START MANIFESTING »
             </button>
+
+            {!agreedAt && (
+              <p
+                style={{
+                  marginTop: 8,
+                  fontSize: 13,
+                  color: "#b91c1c",
+                  textAlign: "center",
+                }}
+              >
+                Please accept the agreement first ✨
+              </p>
+            )}
           </div>
         </div>
       </section>
