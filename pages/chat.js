@@ -13,15 +13,31 @@ import { prescribe } from "../src/engine/prescribe";
 /* ----------------------- helpers (pure / top-level) ----------------------- */
 
 // strict confirm matcher (single-word yes/es, trimmed)
-function isYes(s = '') {
-  const n = s.trim().toLowerCase();
-  const clean = n.replace(/[.!?\s]+$/g, '');
-  const ACCEPT = [
-    'yes','y','yep','yeah','ok','okay','sure',
-    'looks right','correct',"that's right",'sounds right','ready'
+// looser yes detector
+function isYesLoose(raw = '') {
+  const s = raw.trim().toLowerCase();
+  if (!s) return false;
+  const t = s.replace(/[.!?…\s]+$/g, ''); // strip trailing punctuation/spaces
+
+  // direct matches
+  const DIRECT = [
+    'yes','y','yep','yeah','ok','okay','sure','ready',
+    'looks right','correct',"that's right",'sounds right','let’s go',"let's go"
   ];
-  return ACCEPT.includes(clean);
+  if (DIRECT.includes(t)) return true;
+
+  // contains “yes” or “ok” variants (“yesss”, “ok cool”, “okay then”)
+  if (/^y(es)+\b/.test(t) || /\bok(ay)?\b/.test(t)) return true;
+
+  // intent words
+  if (/\b(start|begin|go|proceed|continue|ready)\b/.test(t)) return true;
+
+  // “you know already”, “same”, “no change”
+  if (/\b(you know already|same|no change)\b/.test(t)) return true;
+
+  return false;
 }
+
 
 async function saveProgressToProfile({ supabase, step, details }) {
   try {
@@ -125,6 +141,8 @@ export default function ChatPage(){
   const [debugOn, setDebugOn] = useState(false);
   const [lastChatPayload, setLastChatPayload] = useState(null);
   const listRef = useRef(null);
+// counts how many off-format replies during confirm
+const confirmNudgesRef = useRef(0);
 
   // staged UI: 'confirm' → 'rx' → 'chat'
   const [stage, setStage] = useState('confirm');
@@ -312,37 +330,63 @@ export default function ChatPage(){
 
     try {
       // ----- PHASE: confirm -----
-      if (chatScriptPhase === 'confirm') {
-        if (isYes(text)) {
-          await saveProgressToProfile({
-            supabase,
-            step: 'confirmed',
-            details: {
-              wish: S?.currentWish?.wish || null,
-              block: S?.currentWish?.block || null,
-              micro: S?.currentWish?.micro || null
-            }
-          });
-          setChatScriptPhase('exercise');
-          startFirstExercise();
-          setS(get());
-          return;
-        } else {
-          const stateNow = get();
-          const nextWish = parseInlineUpdate(text, stateNow);
-          if (nextWish) {
-            set({ currentWish: nextWish });
-            pushRecapMessage();
-            return;
-          }
-          pushThread({
-            role:'assistant',
-            content: `Got it. Tell me your goal and sticking point in one line, like:\n“Goal: … | Block: …”`
-          });
-          setS(get());
-          return;
-        }
+if (chatScriptPhase === 'confirm') {
+  // 3A) explicit/implicit YES → start exercise
+  if (isYesLoose(text)) {
+    confirmNudgesRef.current = 0;
+    await saveProgressToProfile({
+      supabase,
+      step: 'confirmed',
+      details: {
+        wish: S?.currentWish?.wish || null,
+        block: S?.currentWish?.block || null,
+        micro: S?.currentWish?.micro || null
       }
+    });
+    setChatScriptPhase('exercise');
+    startFirstExercise();
+    setS(get());
+    return;
+  }
+
+  // 3B) parse inline updates like "Goal: ... | Block: ..."
+  const stateNow = get();
+  const nextWish = parseInlineUpdate(text, stateNow);
+  if (nextWish) {
+    set({ currentWish: nextWish });
+    pushRecapMessage();
+    // do NOT increment nudges on a valid update
+    return;
+  }
+
+  // 3C) off-format reply → nudge. After 2 nudges, assume YES and proceed.
+  confirmNudgesRef.current += 1;
+  if (confirmNudgesRef.current >= 2) {
+    confirmNudgesRef.current = 0;
+    setChatScriptPhase('exercise');
+    pushThread({
+      role: 'assistant',
+      content:
+        'Got it — let’s get you a quick win now.\n\n' +
+        '🧠 2-Min Focus Reset\n' +
+        '1) Sit tall. Close your eyes.\n' +
+        '2) Inhale for 4… hold 2… exhale for 6. Do 6 breaths.\n' +
+        `3) On each exhale, picture taking the tiniest step toward “${get().currentWish?.wish || 'your goal'}”.\n\n` +
+        'Type **done** when you finish.'
+    });
+    setS(get());
+    return;
+  }
+
+  // gentle nudge (first or second time)
+  pushThread({
+    role: 'assistant',
+    content: 'Got it. Tell me your goal and sticking point in one line, like:\n“Goal: … | Block: …”\n(or just say **yes** to begin).'
+  });
+  setS(get());
+  return;
+}
+
 
       // ----- PHASE: exercise -----
       if (chatScriptPhase === 'exercise') {
