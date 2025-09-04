@@ -194,6 +194,14 @@ export default function ChatPage(){
     // push user message
     pushThread({ role:'user', content: text });
     setS(get());
+
+// ✅ top-level inside ChatPage, not nested
+function onKey(e){
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    send();
+  }
+}
     
     try {
       // optional offer logic
@@ -212,13 +220,7 @@ export default function ChatPage(){
           markOfferShown();
         }
       } catch {}
-// ✅ top-level inside ChatPage, not nested
-function onKey(e){
-  if (e.key === 'Enter' && !e.shiftKey) {
-    e.preventDefault();
-    send();
-  }
-}
+
       // build payload from latest state (includes the message we just pushed)
       const stateNow = get();
       const payload = {
