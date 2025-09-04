@@ -77,41 +77,6 @@ function escapeHTML(s=''){return s.replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&
 function nl2br(s=''){ return s.replace(/\n/g, '<br/>'); }
 function pretty(o){ try { return JSON.stringify(o, null, 2); } catch { return String(o); } }
 
-function startFirstExercise(){
-  const st = get();
-  const goal = st.currentWish?.wish || 'your goal';
-  const msg = [
-    `Great — let’s get you a quick win now.`,
-    ``,
-    `🧠 2-Min Focus Reset`,
-    `1) Sit tall. Close your eyes.`,
-    `2) Inhale for 4… hold 2… exhale for 6. Do 6 breaths.`,
-    `3) On each exhale, picture taking the tiniest step toward “${goal}”.`,
-    ``,
-    `Type **done** when you finish.`
-  ].join('\n');
-
-  pushThread({ role:'assistant', content: msg });
-  set(get()); // write-through for external listeners
-}
-
-async function finishExerciseAndWrap(){
-  await saveProgressToProfile({
-    supabase,
-    step: 'exercise_done',
-    details: { when: new Date().toISOString() }
-  });
-
-  const msg = [
-    `✨ Nice work. That small reset wires momentum.`,
-    ``,
-    `You can come back tomorrow for your next dose…`,
-    `or keep going now — ask me anything and we’ll go deeper.`
-  ].join('\n');
-
-  pushThread({ role:'assistant', content: msg });
-  set(get());
-}
 
 function pickFirstName(src){
   const first = (v)=> v ? String(v).trim().split(/\s+/)[0] : '';
@@ -333,6 +298,7 @@ export default function ChatPage(){
           });
           setChatScriptPhase('exercise');
           startFirstExercise();
+          setS(get());        // <- force re-render so the exercise message shows
           return;
         } else {
           const stateNow = get();
