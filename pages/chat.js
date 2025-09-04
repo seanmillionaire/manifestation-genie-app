@@ -182,7 +182,13 @@ export default function ChatPage(){
     const data = await resp.json();
     return data?.reply || 'I’m here.';
   }
-
+  // 🔑 key handler (component scope so JSX can see it)
+  function onKey(e){
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      send();
+    }
+  }
   // ✅ Free-flow send (saves lastChatPayload)
   async function send(){
     const text = input.trim();
@@ -194,14 +200,6 @@ export default function ChatPage(){
     // push user message
     pushThread({ role:'user', content: text });
     setS(get());
-
-// ✅ top-level inside ChatPage, not nested
-function onKey(e){
-  if (e.key === 'Enter' && !e.shiftKey) {
-    e.preventDefault();
-    send();
-  }
-}
     
     try {
       // optional offer logic
