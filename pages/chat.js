@@ -244,11 +244,6 @@ export default function ChatPage(){
     }
   }
 
-  function onKey(e){
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault(); send();
-    }
-  }
 
   // script-only handlers (kept but UI hidden when FREE_FLOW)
   function onLooksRight() {
