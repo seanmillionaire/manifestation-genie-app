@@ -1,4 +1,4 @@
-// /pages/chat.js — staged flow: Confirm → Prescription → (overlay) → Chat
+// /pages/chat.js — Confirm → Prescription → (overlay) → Chat
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
 import { get, set, newId, pushThread, toPlainMessages } from '../src/flowState';
@@ -65,7 +65,7 @@ export default function ChatPage(){
 
   // staged UI: 'confirm' → 'rx' → 'chat'
   const [stage, setStage] = useState('confirm');
-  // overlay separate from stage; covers current stage
+  // overlay separate from stage
   const [overlayVisible, setOverlayVisible] = useState(false);
 
   // soft-confirm state
@@ -263,19 +263,16 @@ Sounds like you’ve been carrying a lot. I’d love to hear—what’s been on 
     onLooksRight();
   }
 
-  // 🔊 Listen button (under Rx card)
-  function onStartListening(){
-    // DO NOT flip to chat yet — keep Rx showing
-    // Just bring up overlay; chat will mount after tap
+  // 🔊 Listen button (INSIDE the card). Keep RX visible; show overlay; chat after tap.
+  function onStartListening(e){
+    if (e?.preventDefault) e.preventDefault();
     setOverlayVisible(true);
     setTimeout(() => {
       const ov = document.getElementById('genie-overlay-tap');
       if (ov) ov.focus();
     }, 100);
   }
-
   function dismissOverlay(){
-    // Now reveal chat (console stays mounted; no vanish)
     setStage('chat');
     setOverlayVisible(false);
     setTimeout(() => {
@@ -413,33 +410,17 @@ Sounds like you’ve been carrying a lot. I’d love to hear—what’s been on 
               </>
             )}
 
-            {/* Stage: rx (prescription only; wait for Listen) */}
+            {/* Stage: rx (prescription only; single CTA INSIDE card) */}
             {stage === 'rx' && firstRx && (
-              <>
-                <div id="first-prescription" style={{ marginBottom: 8 }}>
-                  <PrescriptionCard
-                    title={firstRx.firstMeditation}
-                    why={`Fastest unlock for your path (${firstRx.family} • ${firstRx.protocol}). Use once tonight. Return for next dose.`}
-                    onClose={() => setFirstRx(null)}
-                  />
-                </div>
-                <div style={{ display:'flex', justifyContent:'center' }}>
-                  <button
-                    type="button"
-                    onClick={onStartListening}
-                    style={{
-                      padding:'10px 16px',
-                      borderRadius:12,
-                      border:0,
-                      background:'#ffd600',
-                      fontWeight:900,
-                      cursor:'pointer'
-                    }}
-                  >
-                    Listen To This »
-                  </button>
-                </div>
-              </>
+              <div id="first-prescription" style={{ marginBottom: 8 }}>
+                <PrescriptionCard
+                  title={firstRx.firstMeditation}
+                  why={`Fastest unlock for your path (${firstRx.family} • ${firstRx.protocol}). Use once tonight. Return for next dose.`}
+                  ctaLabel="Listen To This »"
+                  onCta={onStartListening}  // uses preventDefault internally
+                  onClose={() => setFirstRx(null)}
+                />
+              </div>
             )}
 
             {/* Stage: chat */}
