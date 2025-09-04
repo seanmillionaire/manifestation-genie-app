@@ -66,7 +66,7 @@ const SoftConfirmBar: React.FC<Props> = ({
               )}
             >
               <span className="mr-2">✅</span>
-              <span className="font-semibold">Looks right</span>
+              <span className="font-semibold"> Looks right</span>
             </button>
 
           </div>
