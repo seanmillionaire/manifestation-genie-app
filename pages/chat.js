@@ -414,33 +414,33 @@ Sounds like you’ve been carrying a lot. I’d love to hear—what’s been on 
             )}
 
             {/* Stage: rx (prescription only; wait for Listen) */}
-            {stage === 'rx' && firstRx && (
-              <>
-                <div id="first-prescription" style={{ marginBottom: 8 }}>
-                  <PrescriptionCard
-                    title={firstRx.firstMeditation}
-                    why={`Fastest unlock for your path (${firstRx.family} • ${firstRx.protocol}). Use once tonight. Return for next dose.`}
-                    onClose={() => setFirstRx(null)}
-                  />
-                </div>
-                <div style={{ display:'flex', justifyContent:'center' }}>
-                  <button
-                    type="button"
-                    onClick={onStartListening}
-                    style={{
-                      padding:'10px 16px',
-                      borderRadius:12,
-                      border:0,
-                      background:'#ffd600',
-                      fontWeight:900,
-                      cursor:'pointer'
-                    }}
-                  >
-                    Listen To This »
-                  </button>
-                </div>
-              </>
-            )}
+        {/* Stage: rx (prescription only; button does everything) */}
+{stage === 'rx' && firstRx && (
+  <>
+    <div id="first-prescription" style={{ marginBottom: 8 }}>
+      <PrescriptionCard
+        title={firstRx.firstMeditation}
+        why={`Fastest unlock for your path (${firstRx.family} • ${firstRx.protocol}). Use once tonight. Return for next dose.`}
+        onClose={() => setFirstRx(null)}
+        ctaLabel="Listen To This »"
+        onCta={() => {
+          // 1) open correct link in a new tab
+          window.open(HM_LINK, "_blank", "noopener,noreferrer");
+          // 2) pop up the genie waiting overlay
+          setOverlayVisible(true);
+          setTimeout(() => {
+            const ov = document.getElementById("genie-overlay-tap");
+            if (ov) ov.focus();
+          }, 100);
+          // 3) chat will load after user taps overlay (handled by dismissOverlay)
+        }}
+      />
+    </div>
+
+    {/* removed the duplicate center "Listen To This »" button */}
+  </>
+)}
+
 
             {/* Stage: chat */}
             {stage === 'chat' && (
