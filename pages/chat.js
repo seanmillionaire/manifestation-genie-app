@@ -317,12 +317,12 @@ async function send(){
   setInput('');
   setThinking(true);
 
-  // push user message
+  // 1) Push the user's message into the thread
   pushThread({ role:'user', content: text });
   setS(get());
 
   try {
-    // (optional) product offer detect stays, using the plain text
+    // 2) (optional) offer logic on raw text
     try {
       const { goal, belief } = detectBeliefFrom(text);
       const rec = recommendProduct({ goal, belief });
@@ -339,17 +339,39 @@ async function send(){
       }
     } catch {}
 
-    // 🚀 pure free-flow call (no templating / no prompt_spec prepend)
-    const reply = await callGenie({ text });
+    // 3) Build payload from the updated state (includes the user msg we just pushed)
+    const stateNow = get();
+    const payload = {
+      userName: stateNow.firstName || null,
+      context: {
+        wish: stateNow.currentWish?.wish || null,
+        block: stateNow.currentWish?.block || null,
+        micro: stateNow.currentWish?.micro || null,
+        vibe: stateNow.vibe || null,
+        prompt_spec: stateNow.prompt_spec?.prompt || null,
+      },
+      messages: toPlainMessages(stateNow.thread || []),
+      text
+    };
+
+    // 4) Save for the debug panel immediately
+    setLastChatPayload(payload);
+
+    // 5) Call API with exactly this payload
+    const reply = await callGenie({ payload });
+
+    // 6) Render reply
     pushThread({ role:'assistant', content: reply });
     setS(get());
-  } catch {
+  } catch (e) {
     pushThread({ role:'assistant', content: 'The lamp flickered. Try again in a moment.' });
     setS(get());
+    // Optional: console.error(e)
   } finally {
     setThinking(false);
   }
 }
+
 
   function onKey(e){
     if (e.key === 'Enter' && !e.shiftKey) {
