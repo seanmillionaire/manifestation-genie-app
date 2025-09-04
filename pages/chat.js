@@ -353,55 +353,6 @@ async function send(){
   }
 }
 
-
-      if (chatScriptPhase === 'exercise') {
-        if (/^done\b/i.test(text)) {
-          setChatScriptPhase('win');
-          await finishExerciseAndWrap();
-          setChatScriptPhase('free');
-          return;
-        } else {
-          pushThread({
-            role:'assistant',
-            content: `No rush. Do the 2-min reset, then type **done** when finished.`
-          });
-          setS(get());
-          return;
-        }
-      }
-
-      // --- FREE CHAT (existing behavior) ---
-      const combined = S?.prompt_spec?.prompt
-        ? `${S.prompt_spec.prompt}\n\nUser: ${text}`
-        : text;
-
-      try {
-        const { goal, belief } = detectBeliefFrom(combined);
-        const rec = recommendProduct({ goal, belief });
-        if (rec && shouldShowOfferNow()) {
-          setUiOffer({
-            title: rec.title,
-            why: belief
-              ? `Limiting belief detected: “${belief}.” Tonight’s session dissolves that pattern so your next action feels natural.`
-              : `Based on your goal, this short trance helps you move without overthinking.`,
-            priceCents: rec.price,
-            buyUrl: HM_LINK
-          });
-          markOfferShown();
-        }
-      } catch {}
-
-      const reply = await callGenie({ text: combined });
-      pushThread({ role:'assistant', content: reply });
-      setS(get());
-    } catch {
-      pushThread({ role:'assistant', content: 'The lamp flickered. Try again in a moment.' });
-      setS(get());
-    } finally {
-      setThinking(false);
-    }
-  }
-
   function onKey(e){
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault(); send();
