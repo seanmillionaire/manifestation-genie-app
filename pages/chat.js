@@ -11,8 +11,17 @@ import SoftConfirmBar from "../components/Confirm/SoftConfirmBar";
 import { parseAnswers, scoreConfidence, variantFromScore } from "../src/features/confirm/decision";
 import { prescribe } from "../src/engine/prescribe";
 // ---------- chat day-1 script helpers ----------
-const YES_WORDS = ['yes','yep','yeah','y','ok','okay','sure','looks right','correct','that\'s right','sounds right','ready'];
-function isYes(s=''){ return YES_WORDS.some(w => s.toLowerCase().includes(w)); }
+// replaces the old isYes
+function isYes(s = '') {
+  const n = s.trim().toLowerCase();
+  // accept only exact confirmations (ignore trailing punctuation/spaces)
+  const clean = n.replace(/[.!?\s]+$/g, '');
+  const ACCEPT = [
+    'yes','y','yep','yeah','ok','okay','sure',
+    'looks right','correct',"that's right",'sounds right','ready'
+  ];
+  return ACCEPT.includes(clean);
+}
 
 async function saveProgressToProfile({ supabase, step, details }) {
   try {
