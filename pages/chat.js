@@ -13,7 +13,7 @@ import { prescribe } from "../src/engine/prescribe";
 
 
 // 🔓 Free-flow mode (no confirm/exercise rails)
-const FREE_FLOW = true;
+const FREE_FLOW = false;
 
 // ---------- utils ----------
 function escapeHTML(s=''){return s.replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
