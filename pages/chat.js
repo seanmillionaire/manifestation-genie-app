@@ -1,7 +1,4 @@
-// /pages/chat.js — staged flow: Rx → (overlay) → Chat
-// Greeting → Recap → “Yes, I’m ready” button → 2-min reset → user types “done” → fast confetti + points
-// → Date-of-Birth Numerology Exercise → “Did that make sense?” (Yes/No)
-
+// /pages/chat.js — Rx → (overlay) → Chat (intro bubbles → Ex1 → Ex2 numerology)
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
 import { get, set, newId, pushThread, toPlainMessages } from '../src/flowState';
@@ -13,73 +10,41 @@ import { parseAnswers, scoreConfidence, variantFromScore } from "../src/features
 import { prescribe } from "../src/engine/prescribe";
 import { detectBeliefFrom, recommendProduct } from "../src/engine/recommendProduct";
 
-// ---------------- client-only confetti (safe on SSR) ----------------
-let _confetti = null;
-useConfettiLazyLoad();
+/* ----------------------------- tiny helpers ----------------------------- */
 
-// Faster, snappier confetti (shorter lifetime, clears quickly)
-function fireConfettiSnappy() {
-  try {
-    if (!_confetti || typeof window === 'undefined') return;
-
-    // brief 650ms stream + 2 punchy bursts
-    const end = Date.now() + 650;
-
-    (function frame() {
-      _confetti({
-        particleCount: 10,
-        startVelocity: 40,
-        spread: 70,
-        gravity: 1.2,
-        ticks: 80,         // shorter life → clears quicker
-        scalar: 0.9,
-        origin: { x: Math.random(), y: Math.random() * 0.2 + 0.1 }
-      });
-      if (Date.now() < end) requestAnimationFrame(frame);
-    })();
-
-    // two quick big pops
-    for (let i = 0; i < 2; i++) {
-      _confetti({
-        particleCount: 90,
-        startVelocity: 52,
-        spread: 360,
-        ticks: 75,        // fade fast
-        origin: { y: 0.55 }
-      });
-    }
-  } catch {}
-}
-
-function useConfettiLazyLoad(){
-  useEffect(() => {
-    let alive = true;
-    (async () => {
-      try {
-        const m = await import('canvas-confetti');
-        if (alive) _confetti = m.default || m;
-      } catch {}
-    })();
-    return () => { alive = false; };
-  }, []);
-}
-
-// ---------------- tiny utils ----------------
 function escapeHTML(s=''){return s.replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
 function nl2br(s=''){ return s.replace(/\n/g, '<br/>'); }
 function pretty(o){ try { return JSON.stringify(o, null, 2); } catch { return String(o); } }
+function firstWord(v){ return v ? String(v).trim().split(/\s+/)[0] : ''; }
 function pickFirstName(src){
-  const first = (v)=> v ? String(v).trim().split(/\s+/)[0] : '';
-  const cands = [src?.first_name, src?.firstName, src?.display_name, src?.displayName, src?.name, src?.full_name, src?.fullName]
-    .map(first).filter(Boolean);
-  for (const c of cands){
-    const t = c.trim();
-    if (!t) continue;
-    if (t.toLowerCase() === 'friend') continue;
-    if (/[0-9_@]/.test(t)) continue;
+  const c = [src?.first_name, src?.firstName, src?.display_name, src?.displayName, src?.name, src?.full_name, src?.fullName]
+    .map(firstWord).filter(Boolean);
+  for (const t0 of c){
+    const t = (t0||'').trim();
+    if (!t || t.toLowerCase()==='friend' || /[0-9_@]/.test(t)) continue;
     return t[0].toUpperCase() + t.slice(1);
   }
   return '';
+}
+
+// light daily gating (HM card)
+const HM_LINK = "https://hypnoticmeditations.ai/b/l0kmb";
+function todayKey(){ return new Date().toISOString().slice(0,10); }
+function shouldShowOfferNow(){
+  try {
+    if (typeof window === 'undefined') return false;
+    const shownSession = sessionStorage.getItem('mg_offer_shown_session') === '1';
+    const shownDay = localStorage.getItem('mg_offer_day') === todayKey();
+    return !(shownSession || shownDay);
+  } catch { return true; }
+}
+function markOfferShown(){
+  try {
+    if (typeof window !== 'undefined') {
+      sessionStorage.setItem('mg_offer_shown_session', '1');
+      localStorage.setItem('mg_offer_day', todayKey());
+    }
+  } catch {}
 }
 
 async function saveProgressToProfile({ supabase, step, details }) {
@@ -99,23 +64,6 @@ async function saveProgressToProfile({ supabase, step, details }) {
   } catch {}
 }
 
-// offer gating (unchanged)
-const HM_LINK = "https://hypnoticmeditations.ai/b/l0kmb";
-function todayKey(){ return new Date().toISOString().slice(0,10); }
-function shouldShowOfferNow(){
-  try {
-    if (typeof window === 'undefined') return false;
-    const shownSession = sessionStorage.getItem('mg_offer_shown_session') === '1';
-    const shownDay = localStorage.getItem('mg_offer_day') === todayKey();
-    return !(shownSession || shownDay);
-  } catch { return true; }
-}
-function markOfferShown(){
-  try { if (typeof window !== 'undefined') {
-    sessionStorage.setItem('mg_offer_shown_session', '1');
-    localStorage.setItem('mg_offer_day', todayKey());
-  }} catch {}
-}
 async function markWizardDoneToday(){
   try { localStorage.setItem('mg_wizard_day', todayKey()); } catch {}
   await saveProgressToProfile({
@@ -125,61 +73,28 @@ async function markWizardDoneToday(){
   });
 }
 
-// ---------------- Numerology helpers ----------------
-function reduceToDigit(n){
-  // reduce to 1 digit, but keep master 11/22/33
-  const s = String(n).replace(/\D/g,'');
-  let sum = 0;
-  for (const ch of s) sum += (ch.charCodeAt(0) - 48);
-  while (sum > 9 && sum !== 11 && sum !== 22 && sum !== 33){
-    let t = 0;
-    for (const ch of String(sum)) t += (ch.charCodeAt(0) - 48);
-    sum = t;
-  }
-  return sum;
-}
-function lifePathFromDOB(dobStr){
-  // expects YYYY-MM-DD or MM/DD/YYYY or DD-MM-YYYY etc. Try to parse flexibly.
-  if (!dobStr) return null;
-  const clean = dobStr.replace(/[^\d]/g,'');
-  // heuristics
-  let y, m, d;
-  if (clean.length === 8){
-    // try YYYYMMDD first
-    const y1 = parseInt(clean.slice(0,4),10);
-    const m1 = parseInt(clean.slice(4,6),10);
-    const d1 = parseInt(clean.slice(6,8),10);
-    if (m1>=1 && m1<=12 && d1>=1 && d1<=31) { y=y1;m=m1;d=d1; }
-    else {
-      // try MMDDYYYY
-      const m2 = parseInt(clean.slice(0,2),10);
-      const d2 = parseInt(clean.slice(2,4),10);
-      const y2 = parseInt(clean.slice(4,8),10);
-      if (m2>=1 && m2<=12 && d2>=1 && d2<=31) { y=y2;m=m2;d=d2; }
+/* ------------------------ confetti (client-only) ------------------------ */
+let _confetti = null; // will be set by dynamic import
+
+async function bigConfettiShow(){
+  try {
+    if (!_confetti) return;
+    const end = Date.now() + 1500;
+    const colors = ['#FFD600', '#22c55e', '#60a5fa', '#f472b6', '#fbbf24', '#34d399'];
+
+    (function frame(){
+      _confetti({ particleCount: 8, angle: 60, spread: 70, origin: { x: 0 }, colors });
+      _confetti({ particleCount: 8, angle: 120, spread: 70, origin: { x: 1 }, colors });
+      if (Date.now() < end) requestAnimationFrame(frame);
+    })();
+
+    // three beefy bursts
+    for (let i=0;i<3;i++){
+      _confetti({ particleCount: 180, startVelocity: 52, spread: 360, ticks: 140, scalar: 1.1, origin: { y: 0.55 }});
+      // eslint-disable-next-line no-await-in-loop
+      await new Promise(r=>setTimeout(r, 180));
     }
-  }
-  if (!y || !m || !d) return null;
-  const total = reduceToDigit(y) + reduceToDigit(m) + reduceToDigit(d);
-  const path = reduceToDigit(total);
-  return { y, m, d, lifePath: path };
-}
-function humanLifePathMeaning(n){
-  // very short, friendly blurbs (feel free to expand later)
-  const map = {
-    1: "Leader vibes — bold, independent, start-energy.",
-    2: "Connector — intuitive, collaborative, harmony-seeker.",
-    3: "Creator — expressive, magnetic, talk-it-into-existence.",
-    4: "Builder — systems, discipline, compound wins.",
-    5: "Explorer — change, freedom, momentum junkie.",
-    6: "Nurturer — heart-led, responsibility, home base.",
-    7: "Seeker — depth, wisdom, inner clarity.",
-    8: "Powerhouse — wealth channel, scale, authority.",
-    9: "Humanitarian — purpose, compassion, big arc.",
-    11: "Master Intuition — visionary antenna up.",
-    22: "Master Builder — dream → blueprint → real.",
-    33: "Master Healer — unconditional love engine."
-  };
-  return map[n] || "A unique pattern that wants consistent attention.";
+  } catch {}
 }
 
 /* ------------------------------ component ------------------------------ */
@@ -187,7 +102,6 @@ function humanLifePathMeaning(n){
 export default function ChatPage(){
   const router = useRouter();
   const [S, setS] = useState(get());
-
   const [input, setInput] = useState('');
   const [thinking, setThinking] = useState(false);
   const [uiOffer, setUiOffer] = useState(null);
@@ -195,16 +109,21 @@ export default function ChatPage(){
   const [lastChatPayload, setLastChatPayload] = useState(null);
   const listRef = useRef(null);
 
-  // UI stages: 'confirm' (soft bar) → 'rx' → 'chat'
+  // UI stages: 'confirm' (soft bar only) → 'rx' → 'chat'
   const [stage, setStage] = useState('confirm');
 
-  // chat script phases: 'readyGate' → 'exercise' → 'postWin' → 'numerologyAskDOB' → 'numerologyShow' → 'free'
-  const [chatScriptPhase, setChatScriptPhase] = useState('free');
+  // chat phases:
+  // 'intro' (three staggered bubbles with CTA) →
+  // 'exercise1' (2-min reset, waits for "done") →
+  // 'exercise2_dob' (asks DOB) →
+  // 'exercise2_work' (numerology analysis) →
+  // 'free'
+  const [phase, setPhase] = useState('free');
 
-  // overlay covers current stage
+  // overlay (launch chat)
   const [overlayVisible, setOverlayVisible] = useState(false);
 
-  // soft-confirm state (pre-chat)
+  // soft confirm (before chat)
   const [confirmVariant, setConfirmVariant] = useState(null);
   const [parsed, setParsed] = useState({ outcome: null, block: null, state: null });
   const [firstRx, setFirstRx] = useState(null);
@@ -212,157 +131,21 @@ export default function ChatPage(){
 
   // dopamine UI
   const [pointsBurst, setPointsBurst] = useState(0);
-
-  // “Yes, I’m ready” gate
   const [showReadyCTA, setShowReadyCTA] = useState(false);
 
-  // numerology subflow
-  const [numerology, setNumerology] = useState({ dob: '', lifePath: null });
-  const [awaitingDOB, setAwaitingDOB] = useState(false);
-  const [awaitingComprehension, setAwaitingComprehension] = useState(false);
+  // dynamic-confetti
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const m = await import('canvas-confetti');
+        if (alive) _confetti = m.default || m;
+      } catch {}
+    })();
+    return () => { alive = false; };
+  }, []);
 
-  // recap → human style
-  function pushHumanGreeting(){
-    const fn = get().firstName || 'Friend';
-    pushThread({ role:'assistant', content: `hey ${fn} — great to see you here 👋` });
-    setS(get());
-  }
-  function pushHumanRecap(){
-    const st = get();
-    const fn = st.firstName || 'Friend';
-    const wish  = st.currentWish?.wish  || 'your goal';
-    const block = st.currentWish?.block || 'what gets in the way';
-    const micro = st.currentWish?.micro || null;
-
-    const line = `I’m hearing your goal is “${wish}” — and the main snag is “${block}”.` +
-                 (micro ? ` Tiny next step you picked: “${micro}”.` : '');
-    pushThread({ role:'assistant', content: line });
-    setS(get());
-  }
-  function pushReadyCheck(){
-    pushThread({ role:'assistant', content: `Ready to get this moving? 💫` });
-    setS(get());
-    setShowReadyCTA(true);
-  }
-
-  function startFirstExercise(){
-    const st = get();
-    const goal = st.currentWish?.wish || 'your goal';
-    const msg = [
-      `Awesome — quick 2-min reset to lock in momentum.`,
-      ``,
-      `🧠 2-Min Focus Reset`,
-      `1) Sit tall. Close your eyes.`,
-      `2) Inhale for 4… hold 2… exhale for 6. Do 6 breaths.`,
-      `3) On each exhale, picture the tiniest step toward “${goal}”.`,
-      ``,
-      `Type **done** when you finish.`
-    ].join('\n');
-    pushThread({ role:'assistant', content: msg });
-    setS(get());
-  }
-
-  async function finishExerciseAndWrap(){
-    await saveProgressToProfile({
-      supabase,
-      step: 'exercise_done',
-      details: { when: new Date().toISOString() }
-    });
-
-    // points + fast confetti
-    addPoints(50);
-    fireConfettiSnappy();
-
-    pushThread({
-      role:'assistant',
-      content: `✨ Beautiful. That’s a real win locked in.\n\nLet’s do one more quick thing together — it’s fun.`
-    });
-    setS(get());
-
-    // move to numerology ask
-    setChatScriptPhase('numerologyAskDOB');
-    setTimeout(() => askDOB(), 650);
-  }
-
-  function addPoints(amount){
-    setPointsBurst(p => p + amount);
-    try {
-      const cur = parseInt(localStorage.getItem('mg_points') || '0', 10);
-      localStorage.setItem('mg_points', String(cur + amount));
-    } catch {}
-    saveProgressToProfile({
-      supabase,
-      step: 'win_points',
-      details: { amount, at: new Date().toISOString() }
-    });
-    setTimeout(() => setPointsBurst(0), 1200);
-  }
-
-  function askDOB(){
-    const fn = get().firstName || 'Friend';
-    pushThread({ role:'assistant', content: `Quick Date-of-Birth Numerology for you, ${fn}. What’s your birthday? (MM/DD/YYYY)` });
-    setS(get());
-    setAwaitingDOB(true);
-  }
-
-  function showNumerology(dobStr){
-    const info = lifePathFromDOB(dobStr);
-    if (!info){
-      pushThread({ role:'assistant', content: `Hmm, I couldn’t read that date. Try like **04/12/1992**.` });
-      setS(get());
-      setAwaitingDOB(true);
-      return;
-    }
-    const meaning = humanLifePathMeaning(info.lifePath);
-    setNumerology({ dob: dobStr, lifePath: info.lifePath });
-
-    // Give info only (no question yet), then show buttons after a small pause
-    const msg = [
-      `Your Life Path number is **${info.lifePath}**.`,
-      `${meaning}`,
-      ``,
-      `This is your baseline “tone” for how you move toward goals.`
-    ].join('\n');
-    pushThread({ role:'assistant', content: msg });
-    setS(get());
-
-    setChatScriptPhase('numerologyShow');
-    setAwaitingDOB(false);
-
-    // after a beat, ask if it made sense (with buttons)
-    setTimeout(() => {
-      pushThread({ role:'assistant', content: `Did that make sense?` });
-      setS(get());
-      setAwaitingComprehension(true);
-    }, 900);
-  }
-
-  function simplifyNumerology(){
-    const n = numerology.lifePath;
-    const simple = `Your number is **${n}**. Think of it like your default gear.\n` +
-      `• If it’s a **1** → you move best by deciding fast.\n` +
-      `• **2** → you move best with a partner/support.\n` +
-      `• **3** → you talk/brain-dump and then act.\n` +
-      `• **4** → small daily blocks stack-up.\n` +
-      `• **5** → change scenery, then act.\n` +
-      `• **6** → tie it to caring for someone/yourself.\n` +
-      `• **7** → get quiet for a minute first.\n` +
-      `• **8** → pick the lever that scales.\n` +
-      `• **9** → link it to purpose.\n` +
-      `• **11/22/33** → trust your “ping” and build from it.`;
-    pushThread({ role:'assistant', content: simple });
-    setS(get());
-
-    // placeholder end for now — you’ll extend here later
-    setTimeout(() => {
-      pushThread({ role:'assistant', content: `Got you. We’ll build on this next time. 🌙` });
-      setS(get());
-      setAwaitingComprehension(false);
-      setChatScriptPhase('free');
-    }, 900);
-  }
-
-  // -------- boot (name/profile), confirm bar, etc. --------
+  // boot + name hydrate
   useEffect(() => {
     const cur = get();
     if (!cur.vibe) { router.replace('/vibe'); return; }
@@ -382,18 +165,10 @@ export default function ChatPage(){
         const { data: { session } } = await supabase.auth.getSession();
         const user = session?.user;
         if (user) {
-          const { data: p } = await supabase
-            .from('profiles')
-            .select('first_name, full_name')
-            .eq('id', user.id)
-            .maybeSingle();
-
-          const { data: up } = await supabase
-            .from('user_profile')
-            .select('first_name, full_name')
-            .eq('user_id', user.id)
-            .maybeSingle();
-
+          const { data: p } = await supabase.from('profiles')
+            .select('first_name, full_name').eq('id', user.id).maybeSingle();
+          const { data: up } = await supabase.from('user_profile')
+            .select('first_name, full_name').eq('user_id', user.id).maybeSingle();
           const best = pickFirstName({
             first_name: p?.first_name || up?.first_name,
             full_name: p?.full_name || up?.full_name,
@@ -411,27 +186,25 @@ export default function ChatPage(){
     })();
   }, [router]);
 
+  // derive confirm variant (used by SoftConfirmBar before chat)
   useEffect(() => {
     try {
-      const a = {
-        goal: S?.currentWish?.wish || S?.prompt_spec?.prompt || null,
-        blocker: S?.currentWish?.block || null
-      };
+      const a = { goal: S?.currentWish?.wish || S?.prompt_spec?.prompt || null, blocker: S?.currentWish?.block || null };
       const p = parseAnswers(a);
-      const score = scoreConfidence(p);
       setParsed(p);
+      const score = scoreConfidence(p);
       setConfirmVariant(variantFromScore(score));
     } catch {}
   }, [S?.currentWish, S?.prompt_spec]);
 
-  // keep scroll pinned
+  // keep scroll pinned during chat
   useEffect(() => {
     const el = listRef.current;
     if (el && stage === 'chat') el.scrollTop = el.scrollHeight;
-  }, [S.thread, uiOffer, stage]);
+  }, [S.thread, uiOffer, stage, showReadyCTA, pointsBurst]);
 
-  // central API
-  async function callGenie({ text }) {
+  // backend call
+  async function callGenie({ text, systemHint=null }) {
     const stateNow = get();
     const payload = {
       userName: stateNow.firstName || null,
@@ -441,6 +214,7 @@ export default function ChatPage(){
         micro: stateNow.currentWish?.micro || null,
         vibe: stateNow.vibe || null,
         prompt_spec: stateNow.prompt_spec?.prompt || null,
+        systemHint, // <- optional steering for exercise 2
       },
       messages: toPlainMessages(stateNow.thread || []),
       text
@@ -448,16 +222,116 @@ export default function ChatPage(){
     setLastChatPayload(payload);
 
     const resp = await fetch('/api/chat', {
-      method:'POST',
-      headers:{ 'Content-Type':'application/json' },
-      body: JSON.stringify(payload)
+      method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify(payload)
     });
     if (!resp.ok) throw new Error('Genie API error');
     const data = await resp.json();
     return data?.reply || 'I’m here.';
   }
 
-  // main send
+  /* -------------------------- scripted helpers -------------------------- */
+
+  function pushBubble(line){ pushThread({ role:'assistant', content: line }); setS(get()); }
+
+  function autoIntroSequence(){
+    const st = get();
+    const fn = st.firstName || 'Friend';
+    const wish  = st.currentWish?.wish  || 'your goal';
+    const block = st.currentWish?.block || 'what gets in the way';
+    const micro = st.currentWish?.micro || null;
+
+    // 1) greet
+    pushBubble(`Hey ${fn} — great to see you here.`);
+    // 2) one-line recap
+    setTimeout(() => {
+      const recap = `I see your goal is “${wish}”, the snag is “${block}”, and your next tiny step is ${micro ? `“${micro}”` : 'something we’ll set now'}.`;
+      pushBubble(recap);
+    }, 700);
+    // 3) CTA bubble + button
+    setTimeout(() => {
+      pushBubble(`Ready to start manifesting?`);
+      setShowReadyCTA(true);
+    }, 1300);
+  }
+
+  function startExercise1(){
+    setShowReadyCTA(false);
+    setPhase('exercise1');
+    const st = get();
+    const goal = st.currentWish?.wish || 'your goal';
+    const msg = [
+      `Great — let’s get you a quick win now.`,
+      ``,
+      `🧠 2-Min Focus Reset`,
+      `1) Sit tall. Close your eyes.`,
+      `2) Inhale for 4… hold 2… exhale for 6. Do 6 breaths.`,
+      `3) On each exhale, picture taking the tiniest step toward “${goal}”.`,
+      ``,
+      `Type **done** when you finish.`
+    ].join('\n');
+    pushBubble(msg);
+  }
+
+  async function awardPoints(amount = 50){
+    setPointsBurst(p => p + amount);
+    try {
+      const cur = parseInt(localStorage.getItem('mg_points') || '0', 10);
+      localStorage.setItem('mg_points', String(cur + amount));
+    } catch {}
+    await saveProgressToProfile({ supabase, step: 'win_points', details: { amount, at: new Date().toISOString() } });
+    setTimeout(() => setPointsBurst(0), 1600);
+  }
+
+  async function finishExercise1ThenStart2(){
+    await saveProgressToProfile({ supabase, step: 'exercise_done', details: { when: new Date().toISOString() } });
+    bigConfettiShow();
+    awardPoints(50);
+
+    pushBubble(`✨ Nice work. That small win wires momentum.`);
+    setTimeout(() => {
+      pushBubble(`Let’s do one more quick alignment to lock this in.`);
+    }, 600);
+
+    // move to exercise 2 (ask DOB)
+    setTimeout(() => {
+      setPhase('exercise2_dob');
+      pushBubble(`Tell me your date of birth (MM/DD/YYYY). I’ll map the numerology to “${get().currentWish?.wish || 'your goal'}” and give you 3 aligned moves.`);
+    }, 1200);
+  }
+
+  function isDOB(s=''){
+    return /\b(0?[1-9]|1[0-2])[\/\-\.](0?[1-9]|[12][0-9]|3[01])[\/\-\.](19|20)\d{2}\b/.test(s.trim());
+  }
+
+  async function runExercise2WithDOB(dob){
+    setPhase('exercise2_work');
+    // steer Genie with a system hint — your /api/chat should consider this key if present
+    const wish = get().currentWish?.wish || 'my goal';
+    const systemHint =
+`You are a supportive manifestation coach. Use basic numerology with DOB: ${dob}.
+Context user's primary goal: "${wish}".
+1) Derive life path or core numerology quickly (no long tables).
+2) Explain 1-2 relevant traits in plain language (2-3 sentences).
+3) Give exactly 3 specific, doable actions for the next 24 hours, aligned to goal + numerology.
+Keep it upbeat, concise, and practical.`;
+
+    const reply = await callGenie({ text: 'Please analyze and advise.', systemHint });
+    pushBubble(reply);
+
+    // close day + bonus pop
+    await saveProgressToProfile({ supabase, step: 'exercise2_done', details: { dob, at: new Date().toISOString() } });
+    awardPoints(75);
+    bigConfettiShow();
+
+    // daily wrap
+    setTimeout(() => {
+      pushBubble(`That’s a strong finish for today. Come back tomorrow for your next dose — or chat freely with me now.`);
+      setPhase('free');
+    }, 600);
+  }
+
+  /* ---------------------------- send handler ---------------------------- */
+
   async function send(){
     const text = input.trim();
     if (!text || thinking) return;
@@ -468,53 +342,32 @@ export default function ChatPage(){
     setS(get());
 
     try {
-      // handle DOB capture
-      if (awaitingDOB && chatScriptPhase === 'numerologyAskDOB') {
-        showNumerology(text);
-        setThinking(false);
-        return;
-      }
-
-      // comprehension buttons handled via handlers below; but if user typed "yes/no" manually:
-      if (awaitingComprehension && chatScriptPhase === 'numerologyShow') {
-        const t = text.toLowerCase();
-        if (/\by(es)?\b/.test(t)) {
-          pushThread({ role:'assistant', content: `Perfect. We’ll stack onto this next session. 🌟` });
-          setS(get());
-          setAwaitingComprehension(false);
-          setChatScriptPhase('free');
-          setThinking(false);
-          return;
-        }
-        if (/\bno\b/.test(t)) {
-          simplifyNumerology();
-          setThinking(false);
-          return;
-        }
-      }
-
-      // exercise “done”
-      if (chatScriptPhase === 'exercise') {
+      if (phase === 'exercise1') {
         if (/^done\b/i.test(text)) {
-          setChatScriptPhase('postWin');
-          await finishExerciseAndWrap();
+          await finishExercise1ThenStart2();
           setThinking(false);
           return;
         } else {
-          pushThread({
-            role:'assistant',
-            content: `All good — take your 6 slow breaths and type **done** when you’re finished. 🧘‍♂️`
-          });
-          setS(get());
+          pushBubble(`No rush. Do the 2-min reset, then type **done** when finished.`);
           setThinking(false);
           return;
         }
       }
 
-      // free chat fallback
-      const combined = S?.prompt_spec?.prompt
-        ? `${S.prompt_spec.prompt}\n\nUser: ${text}`
-        : text;
+      if (phase === 'exercise2_dob') {
+        if (isDOB(text)) {
+          await runExercise2WithDOB(text);
+          setThinking(false);
+          return;
+        } else {
+          pushBubble(`Got it. Please send DOB like **MM/DD/YYYY** (e.g., 08/14/1990).`);
+          setThinking(false);
+          return;
+        }
+      }
+
+      // FREE CHAT
+      const combined = S?.prompt_spec?.prompt ? `${S.prompt_spec.prompt}\n\nUser: ${text}` : text;
 
       try {
         const { goal, belief } = detectBeliefFrom(combined);
@@ -533,11 +386,9 @@ export default function ChatPage(){
       } catch {}
 
       const reply = await callGenie({ text: combined });
-      pushThread({ role:'assistant', content: reply });
-      setS(get());
+      pushBubble(reply);
     } catch {
-      pushThread({ role:'assistant', content: 'The lamp flickered. Try again in a moment.' });
-      setS(get());
+      pushBubble('The lamp flickered. Try again in a moment.');
     } finally {
       setThinking(false);
     }
@@ -547,7 +398,8 @@ export default function ChatPage(){
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
   }
 
-  // staged handlers
+  /* -------------------------- staged handlers --------------------------- */
+
   function onLooksRight() {
     const plan = prescribe(parsed || {});
     setFirstRx(plan);
@@ -568,48 +420,25 @@ export default function ChatPage(){
     onLooksRight();
   }
 
-  // CTA actions inside chat
-  function onReadyClick(){
-    setShowReadyCTA(false);
-    setChatScriptPhase('exercise');
-    setTimeout(() => startFirstExercise(), 300);
-  }
-  function onComprehensionYes(){
-    // placeholder ending for now (per your note)
-    pushThread({ role:'assistant', content: `Love it. We’ll pick up from here next time. 🔮` });
-    setS(get());
-    setAwaitingComprehension(false);
-    setChatScriptPhase('free');
-  }
-  function onComprehensionNo(){
-    simplifyNumerology();
-  }
-
-  // overlay tap → enter chat with paced messages & button
+  // overlay tap → enter chat (intro bubbles with pacing)
   async function dismissOverlay(){
-    // fresh thread
-    set({ thread: [] });
+    set({ thread: [] }); // fresh thread
+    await markWizardDoneToday();
 
-    // stamp wizard done for today
-    markWizardDoneToday();
-
-    // enter chat immediately
     setStage('chat');
     setOverlayVisible(false);
 
-    // greet → recap → ready button (paced)
-    setChatScriptPhase('readyGate');
-    setTimeout(() => { pushHumanGreeting(); }, 200);
-    setTimeout(() => { pushHumanRecap(); }, 900);
-    setTimeout(() => { pushReadyCheck(); }, 1600);
+    // run the three intro bubbles with delays, then show CTA
+    setPhase('intro');
+    autoIntroSequence();
 
     setTimeout(() => {
       const el = listRef.current;
       if (el) el.scrollTop = el.scrollHeight;
-    }, 1800);
+    }, 1600);
   }
 
-  // overlay styles + points pop
+  /* ------------------------------- styles ------------------------------- */
   const overlayStyles = `
 @keyframes popIn { 0% { transform: scale(.7); opacity: 0 } 60% { transform: scale(1.08); opacity:1 } 100% { transform: scale(1) } }
 @keyframes floaty { 0% { transform: translateY(0) } 50% { transform: translateY(-6px) } 100% { transform: translateY(0) } }
@@ -621,11 +450,12 @@ export default function ChatPage(){
 }
 `;
 
+  /* -------------------------------- UI --------------------------------- */
   return (
     <>
       <style dangerouslySetInnerHTML={{__html: overlayStyles}} />
 
-      {/* ---- DEBUG PILL + PANEL ---- */}
+      {/* Debug pill */}
       <div style={{ display:'flex', justifyContent:'center', margin:'10px 0' }}>
         <button
           onClick={() => setDebugOn(v => !v)}
@@ -677,40 +507,35 @@ export default function ChatPage(){
               <div style={{ fontSize:12, opacity:.8, marginBottom:6 }}>firstName</div>
               <pre style={{ margin:0, fontSize:12, whiteSpace:'pre-wrap' }}>{pretty(S.firstName)}</pre>
             </div>
-
             <div style={{ background:'#0f172a', padding:10, borderRadius:8 }}>
               <div style={{ fontSize:12, opacity:.8, marginBottom:6 }}>vibe</div>
               <pre style={{ margin:0, fontSize:12, whiteSpace:'pre-wrap' }}>{pretty(S.vibe)}</pre>
             </div>
-
             <div style={{ background:'#0f172a', padding:10, borderRadius:8 }}>
               <div style={{ fontSize:12, opacity:.8, marginBottom:6 }}>currentWish</div>
               <pre style={{ margin:0, fontSize:12, whiteSpace:'pre-wrap' }}>{pretty(S.currentWish)}</pre>
             </div>
-
             <div style={{ background:'#0f172a', padding:10, borderRadius:8 }}>
               <div style={{ fontSize:12, opacity:.8, marginBottom:6 }}>prompt_spec</div>
               <pre style={{ margin:0, fontSize:12, whiteSpace:'pre-wrap' }}>{pretty(S.prompt_spec)}</pre>
             </div>
-
             <div style={{ gridColumn:'1 / span 2', background:'#0f172a', padding:10, borderRadius:8 }}>
               <div style={{ fontSize:12, opacity:.8, marginBottom:6 }}>lastChatPayload → /api/chat</div>
               <pre style={{ margin:0, fontSize:12, overflowX:'auto' }}>
                 {pretty(lastChatPayload ?? { info: "No chat call yet. Send a message to populate lastChatPayload." })}
               </pre>
             </div>
-
             <div style={{ gridColumn:'1 / span 2', background:'#0f172a', padding:10, borderRadius:8 }}>
               <div style={{ fontSize:12, opacity:.8, marginBottom:6 }}>softConfirm</div>
               <pre style={{ margin:0, fontSize:12, whiteSpace:'pre-wrap' }}>
-                {pretty({ parsed, confirmVariant, firstRx, stage, overlayVisible, chatScriptPhase })}
+                {pretty({ parsed, confirmVariant, firstRx, stage, overlayVisible, phase })}
               </pre>
             </div>
           </div>
         </div>
       )}
 
-      {/* ---- Main Card (staged) ---- */}
+      {/* ---- Main Card ---- */}
       <div style={{ maxWidth: 980, margin: '12px auto', padding: '0 10px', position:'relative' }}>
         {/* points burst */}
         {pointsBurst > 0 && (
@@ -719,7 +544,7 @@ export default function ChatPage(){
             transform:'translateX(-50%)', pointerEvents:'none',
             background:'rgba(255,214,0,0.95)', border:'1px solid rgba(0,0,0,0.12)',
             borderRadius:999, padding:'10px 16px', fontWeight:900,
-            animation:'pointsPop 1.1s ease-out both', zIndex:60
+            animation:'pointsPop 1.3s ease-out both', zIndex:60
           }}>
             +{pointsBurst}
           </div>
@@ -757,7 +582,7 @@ export default function ChatPage(){
               </>
             )}
 
-            {/* Stage: rx (prescription; button opens overlay) */}
+            {/* Stage: rx (prescription; button opens overlay to enter chat) */}
             {stage === 'rx' && firstRx && (
               <div id="first-prescription" style={{ marginBottom: 8 }}>
                 <PrescriptionCard
@@ -833,6 +658,7 @@ export default function ChatPage(){
 
                   {uiOffer ? (
                     <div style={{ marginTop: 8 }}>
+                      {/* reuse the card for offers */}
                       <PrescriptionCard
                         title={uiOffer.title}
                         why={uiOffer.why}
@@ -848,14 +674,14 @@ export default function ChatPage(){
                   )}
                 </div>
 
-                {/* Inline CTAs below the thread */}
-                {showReadyCTA && chatScriptPhase === 'readyGate' && (
-                  <div style={{ display:'flex', justifyContent:'center', marginTop:10 }}>
+                {/* “Yes, I’m ready” CTA (shown at end of intro sequence) */}
+                {showReadyCTA && (
+                  <div style={{ marginTop: 10, textAlign:'center' }}>
                     <button
-                      onClick={onReadyClick}
+                      onClick={startExercise1}
                       style={{
                         appearance:'none',
-                        padding:'10px 16px',
+                        padding:'12px 18px',
                         fontWeight:900,
                         border:0,
                         borderRadius:12,
@@ -870,29 +696,7 @@ export default function ChatPage(){
                   </div>
                 )}
 
-                {awaitingComprehension && chatScriptPhase === 'numerologyShow' && (
-                  <div style={{ display:'flex', gap:8, justifyContent:'center', marginTop:10 }}>
-                    <button
-                      onClick={onComprehensionYes}
-                      style={{
-                        padding:'10px 16px', borderRadius:12, border:0,
-                        background:'#22c55e', color:'#111', fontWeight:900, cursor:'pointer'
-                      }}
-                    >
-                      Yes
-                    </button>
-                    <button
-                      onClick={onComprehensionNo}
-                      style={{
-                        padding:'10px 16px', borderRadius:12, border:0,
-                        background:'#fbbf24', color:'#111', fontWeight:900, cursor:'pointer'
-                      }}
-                    >
-                      No
-                    </button>
-                  </div>
-                )}
-
+                {/* input row */}
                 <div style={{ display:'flex', gap:8, marginTop:10 }}>
                   <textarea
                     rows={1}
@@ -928,7 +732,7 @@ export default function ChatPage(){
         </div>
       </div>
 
-      {/* Emoji overlay — shows above current stage; tap to continue */}
+      {/* Overlay that launches the chat */}
       {overlayVisible && (
         <div
           onClick={dismissOverlay}
