@@ -411,17 +411,19 @@ Sounds like you’ve been carrying a lot. I’d love to hear—what’s been on 
             )}
 
             {/* Stage: rx (prescription only; single CTA INSIDE card) */}
-            {stage === 'rx' && firstRx && (
-              <div id="first-prescription" style={{ marginBottom: 8 }}>
-                <PrescriptionCard
-                  title={firstRx.firstMeditation}
-                  why={`Fastest unlock for your path (${firstRx.family} • ${firstRx.protocol}). Use once tonight. Return for next dose.`}
-                  ctaLabel="Listen To This »"
-                  onCta={onStartListening}  // uses preventDefault internally
-                  onClose={() => setFirstRx(null)}
-                />
-              </div>
-            )}
+{stage === 'rx' && firstRx && (
+  <div id="first-prescription" style={{ marginBottom: 8 }}>
+    <PrescriptionCard
+      title={firstRx.firstMeditation}
+      why={`Fastest unlock for your path (${firstRx.family} • ${firstRx.protocol}). Use once tonight. Return for next dose.`}
+      ctaLabel="Listen To This »"
+      onCta={onStartListening}       // ✅ overlay path
+      buyUrl={undefined}             // optional: ensures no legacy buy fallback
+      onClose={() => setFirstRx(null)}
+    />
+  </div>
+)}
+
 
             {/* Stage: chat */}
             {stage === 'chat' && (
@@ -477,17 +479,19 @@ Sounds like you’ve been carrying a lot. I’d love to hear—what’s been on 
                     )
                   })}
 
-                  {uiOffer ? (
-                    <div style={{ marginTop: 8 }}>
-                      <PrescriptionCard
-                        title={uiOffer.title}
-                        why={uiOffer.why}
-                        priceCents={uiOffer.priceCents}
-                        buyUrl={uiOffer.buyUrl || HM_LINK}
-                        onClose={() => setUiOffer(null)}
-                      />
-                    </div>
-                  ) : null}
+{uiOffer ? (
+  <div style={{ marginTop: 8 }}>
+    <PrescriptionCard
+      title={uiOffer.title}
+      why={uiOffer.why}
+      priceCents={uiOffer.priceCents}
+      buyUrl={uiOffer.buyUrl || HM_LINK}  // ✅ BUY mode
+      // ⛔️ do NOT pass onCta here
+      onClose={() => setUiOffer(null)}
+    />
+  </div>
+) : null}
+
 
                   {thinking && (
                     <div style={{ opacity:.7, fontStyle:'italic', marginTop:6 }}>Genie is thinking…</div>
