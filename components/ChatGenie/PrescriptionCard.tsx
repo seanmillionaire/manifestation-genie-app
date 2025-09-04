@@ -30,7 +30,7 @@ export default function PrescriptionCard({
   onUnlock,
   onClose,
   onCta,
-  ctaLabel = "Listen To This »",
+  ctaLabel = "Unlock Access Now »",
 }: Props): JSX.Element {
   const DUMMY_AUDIO =
     "https://cdnstreaming.myclickfunnels.com/audiofile/25873/file/original-3b1398f834c94cd9eeba088f4bcdba73/audiofile/25873/file/original-3b1398f834c94cd9eeba088f4bcdba73.flac";
@@ -40,17 +40,17 @@ export default function PrescriptionCard({
     try {
       if (buyUrl) {
         window.open(buyUrl, "_blank", "noopener,noreferrer");
-        onClose?.();
+       // onClose?.();
         return;
       }
       if (onUnlock) {
         await onUnlock();
-        onClose?.();
+      //  onClose?.();
         return;
       }
       alert("No checkout link configured.");
     } catch {
-      onClose?.();
+    //  onClose?.();
     }
   }
 
