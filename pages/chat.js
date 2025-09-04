@@ -92,7 +92,15 @@ const [uid, setUid] = useState(null);
 const [exerciseStarted, setExerciseStarted] = useState(false);
 
   // staged UI: we start in chat for free-flow
-  const [stage, setStage] = useState(FREE_FLOW ? 'chat' : 'confirm');
+// staged UI: we start in chat for free-flow
+const [stage, setStage] = useState(FREE_FLOW ? 'chat' : 'confirm');
+
+// 🔒 always start rails at soft-confirm on first render (prevents stale jumps)
+useEffect(() => {
+  if (!FREE_FLOW) setStage('confirm');
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, []);
+
   const [chatScriptPhase, setChatScriptPhase] = useState('free'); // kept for compatibility
   const [overlayVisible, setOverlayVisible] = useState(false);
 
@@ -173,18 +181,29 @@ if (user?.id) setUid(user.id);
   }, [router]);
 
   // derive confirm variant (not shown in free-flow, but keep logic)
-  useEffect(() => {
-    try {
-      const a = {
-        goal: S?.currentWish?.wish || S?.prompt_spec?.prompt || null,
-        blocker: S?.currentWish?.block || null
-      };
-      const p = parseAnswers(a);
-      setParsed(p);
-      const score = scoreConfidence(p);
-      setConfirmVariant(variantFromScore(score));
-    } catch {}
-  }, [S?.currentWish, S?.prompt_spec]);
+useEffect(() => {
+  try {
+    // ✅ robust fallbacks so SoftConfirmBar always has text
+    const goal =
+      S?.currentWish?.wish ||
+      S?.prompt_spec?.prompt ||
+      S?.vibe?.title ||
+      'your goal';
+
+    const blocker =
+      S?.currentWish?.block ||
+      S?.prompt_spec?.block ||
+      S?.vibe?.block ||
+      'what tends to get in the way';
+
+    const p = parseAnswers({ goal, blocker });
+    setParsed(p);
+
+    const score = scoreConfidence(p);
+    setConfirmVariant(variantFromScore(score));
+  } catch {}
+}, [S?.currentWish, S?.prompt_spec, S?.vibe]);
+
 
   // keep scroll pinned once chat is visible
   useEffect(() => {
