@@ -4,7 +4,7 @@ import '../styles/light-theme.css'
 import Head from 'next/head'
 import Link from 'next/link'
 import { useRouter } from 'next/router'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { setFirstName } from '../src/flowState'
 
 // If you DID set up the "@" alias, keep this line.
@@ -12,8 +12,8 @@ import { setFirstName } from '../src/flowState'
 import { loadAllIntoFlowState } from '../src/persist'
 import { hydrateFirstNameFromSupabase } from '../src/userName'
 
-// ✅ New: use Supabase auth helpers in the browser to know if user is logged in
-import { createBrowserSupabaseClient } from '@supabase/auth-helpers-nextjs'
+// ✅ Use your existing Supabase client
+import { supabase } from '../src/supabaseClient'
 
 const LOGO_SRC = 'https://storage.googleapis.com/mixo-sites/images/file-a7eebac5-6af9-4253-bc71-34c0d455a852.png'
 
@@ -30,7 +30,7 @@ function NavLink({ href, label, isActive }) {
       <a
         aria-current={isActive ? 'page' : undefined}
         style={{
-          padding: '10px 14px',        // ≥44px touch height incl. line-height
+          padding: '10px 14px',
           lineHeight: '24px',
           borderRadius: 10,
           fontWeight: isActive ? 800 : 600,
@@ -78,7 +78,6 @@ function LogoHeader({ currentPath, isAuthed }) {
           }}
         >
           {isAuthed ? (
-            // ✅ Logged in: show full app navigation
             navLinks.map(l => (
               <NavLink
                 key={l.href}
@@ -91,7 +90,6 @@ function LogoHeader({ currentPath, isAuthed }) {
               />
             ))
           ) : (
-            // 🚪 Logged out: show only Demo + Login
             <>
               <Link href="/demo" legacyBehavior>
                 <a
@@ -137,32 +135,26 @@ function LogoHeader({ currentPath, isAuthed }) {
 export default function App({ Component, pageProps }) {
   const router = useRouter()
 
-  // 🆕 Auth state for header
-  const [isAuthed, setIsAuthed] = useState(false)
-  const supabase = useMemo(() => createBrowserSupabaseClient(), [])
+  // ❗️Start as "unknown" so we avoid flashing the wrong menu
+  const [isAuthed, setIsAuthed] = useState(null)
 
-  // 🔑 Load saved data from Supabase → flowState (client-side only)
+  // Pull saved data (your original logic)
   useEffect(() => {
-    // Pull everything (firstName, vibe, wish, agreement) into the shared store
     loadAllIntoFlowState().then(() => {
       try {
         const cached = localStorage.getItem('mg_first_name');
-
-        // ✅ If we have a real cached name, push it into the global flow state
         if (cached && cached.trim() && cached !== 'Friend') {
           setFirstName(cached);
         } else {
-          // Otherwise, try Supabase to hydrate it
           hydrateFirstNameFromSupabase?.();
         }
       } catch {
-        // If localStorage is blocked, still try server
         hydrateFirstNameFromSupabase?.();
       }
     });
   }, []);
 
-  // 🆕 Determine logged-in/out for header
+  // ✅ Determine logged-in/out for header using your client
   useEffect(() => {
     let mounted = true;
 
@@ -180,7 +172,7 @@ export default function App({ Component, pageProps }) {
       mounted = false;
       sub?.subscription?.unsubscribe?.();
     };
-  }, [supabase]);
+  }, []);
 
   return (
     <>
@@ -208,7 +200,10 @@ export default function App({ Component, pageProps }) {
         `}</style>
       </Head>
       <div className="pageWrap">
-        <LogoHeader currentPath={router.pathname} isAuthed={isAuthed} />
+        {/* While auth is unknown, hide the nav to avoid a confusing flash */}
+        {isAuthed === null ? null : (
+          <LogoHeader currentPath={router.pathname} isAuthed={isAuthed} />
+        )}
         <main>
           <Component {...pageProps} />
         </main>
