@@ -189,6 +189,12 @@ export default function ChatPage(){
     if (!text || thinking) return;
     setInput('');
     setThinking(true);
+function onKey(e){
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    send();
+  }
+}
 
     // push user message
     pushThread({ role:'user', content: text });
