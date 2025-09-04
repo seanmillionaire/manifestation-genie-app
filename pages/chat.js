@@ -114,6 +114,17 @@ const onKey = (e) => {
     if (typeof window !== 'undefined') {
       const q = new URLSearchParams(window.location.search);
       if (q.get('debug') === '1') setDebugOn(true);
+      // quick dev reset: /chat?reset=1
+if (q.get('reset') === '1') {
+  try {
+    localStorage.removeItem('mg_exercise_day');
+    localStorage.removeItem('mg_offer_day');
+    sessionStorage.removeItem('mg_offer_shown_session');
+  } catch {}
+  // wipe only the thread so you don't lose your wish/vibe
+  set({ thread: [] });
+}
+
     }
   }, []);
 
