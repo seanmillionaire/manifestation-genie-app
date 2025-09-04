@@ -8,6 +8,14 @@
     "start": "next start",
     "lint": "next lint",
     "postinstall": "npm i -D typescript @types/react @types/react-dom @types/node || true"
+    },
+  "overrides": {             // npm >=8
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
+  },
+  "resolutions": {           // if you're using yarn / pnpm, keep this too
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
   },
   "dependencies": {
     "next": "14.2.5",
