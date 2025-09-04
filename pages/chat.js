@@ -349,7 +349,7 @@ async function finishExerciseAndWrap(){
 
           pushThread({
             role:'assistant',
-            content: `Got it. Tell me your goal and sticking point in one line, like:\n“Goal: … | Block: …”`
+            content: `Okay! Tell me what you want to do and what's getting in your way. Write it like this: 'What I want: ... | What's stopping me: ...'`
           });
           setS(get());
           return;
