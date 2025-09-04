@@ -10,6 +10,31 @@ import SoftConfirmBar from "../components/Confirm/SoftConfirmBar";
 import { parseAnswers, scoreConfidence, variantFromScore } from "../src/features/confirm/decision";
 import { prescribe } from "../src/engine/prescribe";
 
+// Safe, client-only confetti loader
+let _confetti = null;
+
+function fireConfettiBurst() {
+  try {
+    if (!_confetti || typeof window === 'undefined') return;
+
+    const duration = 1500;
+    const end = Date.now() + duration;
+
+    (function frame() {
+      _confetti({
+        particleCount: 18,
+        startVelocity: 36,
+        spread: 360,
+        gravity: 0.9,
+        ticks: 180,
+        scalar: 1.1,
+        origin: { x: Math.random(), y: Math.random() * 0.2 + 0.1 }
+      });
+      if (Date.now() < end) requestAnimationFrame(frame);
+    })();
+  } catch {}
+}
+
 /* ----------------------- helpers (pure / top-level) ----------------------- */
 
 // Loose “yes” detector (kept for completeness; not used in initial flow now)
@@ -251,11 +276,12 @@ export default function ChatPage(){
     awardPoints(50);
 
     const msg = [
-      `✨ Nice work. That small reset wires momentum.`,
+      `✨ Nice work. That small win wires momentum.`,
       ``,
       `You can come back tomorrow for your next dose…`,
       `or tap the button below if you wish to go further.`
     ].join('\n');
+fireConfettiBurst();
 
     pushThread({ role:'assistant', content: msg });
     setS(get());
@@ -267,6 +293,19 @@ export default function ChatPage(){
     set({ phase: 'exercise1', exerciseSeed: Date.now() });
     router.push('/flow');
   }
+// Lazy-load confetti only on the client; never break SSR/builds
+useEffect(() => {
+  let alive = true;
+  (async () => {
+    try {
+      const m = await import('canvas-confetti');
+      if (alive) _confetti = m.default || m;
+    } catch {
+      // no-op: confetti just won't fire if it can't load
+    }
+  })();
+  return () => { alive = false; };
+}, []);
 
   // auto-enable debug via ?debug=1
   useEffect(() => {
