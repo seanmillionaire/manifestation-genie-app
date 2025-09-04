@@ -132,6 +132,43 @@ export default function ChatPage(){
   const [debugOn, setDebugOn] = useState(false);
   const [lastChatPayload, setLastChatPayload] = useState(null);
   const listRef = useRef(null);
+// --- script helpers INSIDE ChatPage so setS(get()) re-renders ---
+
+function startFirstExercise(){
+  const st = get();
+  const goal = st.currentWish?.wish || 'your goal';
+  const msg = [
+    `Great — let’s get you a quick win now.`,
+    ``,
+    `🧠 2-Min Focus Reset`,
+    `1) Sit tall. Close your eyes.`,
+    `2) Inhale for 4… hold 2… exhale for 6. Do 6 breaths.`,
+    `3) On each exhale, picture taking the tiniest step toward “${goal}”.`,
+    ``,
+    `Type **done** when you finish.`
+  ].join('\n');
+
+  pushThread({ role:'assistant', content: msg });
+  setS(get()); // force re-render so the message appears
+}
+
+async function finishExerciseAndWrap(){
+  await saveProgressToProfile({
+    supabase,
+    step: 'exercise_done',
+    details: { when: new Date().toISOString() }
+  });
+
+  const msg = [
+    `✨ Nice work. That small reset wires momentum.`,
+    ``,
+    `You can come back tomorrow for your next dose…`,
+    `or keep going now — ask me anything and we’ll go deeper.`
+  ].join('\n');
+
+  pushThread({ role:'assistant', content: msg });
+  setS(get()); // re-render
+}
 
   // staged UI: 'confirm' → 'rx' → 'chat'
   const [stage, setStage] = useState('confirm');
