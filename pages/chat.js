@@ -378,14 +378,18 @@ if (chatScriptPhase === 'confirm') {
     return;
   }
 
-  // gentle nudge (first or second time)
-  pushThread({
-    role: 'assistant',
-    content: 'Got it. Tell me your goal and sticking point in one line, like:\n“Goal: … | Block: …”\n(or just say **yes** to begin).'
-  });
+  // --- Friendlier fallback wording ---
+  const friendlyFallbacks = [
+    `I might have missed that — could you remind me your main goal and what tends to get in the way?`,
+    `Ok, let’s reset. Just tell me your goal and the block in a simple line.`,
+    `Hmm, not sure I caught that. What’s your goal, and what feels like the obstacle right now?`
+  ];
+  const choice = friendlyFallbacks[Math.floor(Math.random() * friendlyFallbacks.length)];
+
+  pushThread({ role: 'assistant', content: choice });
   setS(get());
   return;
-}
+
 
 
       // ----- PHASE: exercise -----
