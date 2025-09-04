@@ -9,7 +9,9 @@ import TweakChips from "../components/Confirm/TweakChips";
 import SoftConfirmBar from "../components/Confirm/SoftConfirmBar";
 import { parseAnswers, scoreConfidence, variantFromScore } from "../src/features/confirm/decision";
 import { prescribe } from "../src/engine/prescribe";
- 
+ // 🔓 Turn on free-flow mode (no confirm/exercise rails)
+const FREE_FLOW = true;
+
 // ---------- chat day-1 script helpers ----------
 // strict confirm matcher
 function isYes(s = '') {
@@ -171,10 +173,10 @@ async function finishExerciseAndWrap(){
 }
 
   // staged UI: 'confirm' → 'rx' → 'chat'
-  const [stage, setStage] = useState('confirm');
+const [stage, setStage] = useState(FREE_FLOW ? 'chat' : 'confirm');
 
   // chatScriptPhase: 'confirm' → 'exercise' → 'win' → 'free'
-  const [chatScriptPhase, setChatScriptPhase] = useState('free');
+const [chatScriptPhase, setChatScriptPhase] = useState('free');
 
   // overlay separate from stage; covers current stage
   const [overlayVisible, setOverlayVisible] = useState(false);
@@ -311,50 +313,46 @@ async function finishExerciseAndWrap(){
     return data?.reply || 'I’m here.';
   }
 
-  async function send(){
-    const text = input.trim();
-    if (!text || thinking) return;
-    setInput('');
-    setThinking(true);
+async function send(){
+  const text = input.trim();
+  if (!text || thinking) return;
+  setInput('');
+  setThinking(true);
 
-    pushThread({ role:'user', content: text });
-    setS(get());
+  // push user message
+  pushThread({ role:'user', content: text });
+  setS(get());
 
+  try {
+    // (optional) product offer detect stays, using the plain text
     try {
-      // --- PHASED SCRIPT HANDOFFS ---
-      if (chatScriptPhase === 'confirm') {
-        if (isYes(text)) {
-          await saveProgressToProfile({
-            supabase,
-            step: 'confirmed',
-            details: {
-              wish: S?.currentWish?.wish || null,
-              block: S?.currentWish?.block || null,
-              micro: S?.currentWish?.micro || null
-            }
-          });
-          setChatScriptPhase('exercise');
-          startFirstExercise();
-          setS(get());        // <- force re-render so the exercise message shows
-          return;
-        } else {
-          const stateNow = get();
-          const nextWish = parseInlineUpdate(text, stateNow);
+      const { goal, belief } = detectBeliefFrom(text);
+      const rec = recommendProduct({ goal, belief });
+      if (rec && shouldShowOfferNow()) {
+        setUiOffer({
+          title: rec.title,
+          why: belief
+            ? `Limiting belief detected: “${belief}.” Tonight’s session dissolves that pattern so your next action feels natural.`
+            : `Based on your goal, this short trance helps you move without overthinking.`,
+          priceCents: rec.price,
+          buyUrl: HM_LINK
+        });
+        markOfferShown();
+      }
+    } catch {}
 
-          if (nextWish) {
-            set({ currentWish: nextWish });
-            pushRecapMessage();
-            return;
-          }
+    // 🚀 pure free-flow call (no templating / no prompt_spec prepend)
+    const reply = await callGenie({ text });
+    pushThread({ role:'assistant', content: reply });
+    setS(get());
+  } catch {
+    pushThread({ role:'assistant', content: 'The lamp flickered. Try again in a moment.' });
+    setS(get());
+  } finally {
+    setThinking(false);
+  }
+}
 
-          pushThread({
-            role:'assistant',
-            content: `Okay! Tell me what you want to do and what's getting in your way. Write it like this: 'What I want: ... | What's stopping me: ...'`
-          });
-          setS(get());
-          return;
-        }
-      } // <-- close confirm block
 
       if (chatScriptPhase === 'exercise') {
         if (/^done\b/i.test(text)) {
@@ -431,28 +429,18 @@ async function finishExerciseAndWrap(){
     onLooksRight();
   }
 
-  function dismissOverlay(){
-    // Clear any old thread so we don't load previous convo
-    set({ thread: [] });
+function dismissOverlay(){
+  // In free-flow we don't reset thread or push scripted recap
+  setStage('chat');
+  setOverlayVisible(false);
+  setChatScriptPhase('free');
 
-    // ✅ Mark the wizard as completed for today
-    markWizardDoneToday();
+  setTimeout(() => {
+    const el = listRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, 0);
+}
 
-    // First message in chat: recap → wait for yes
-    pushRecapMessage();
-
-    // flip stages
-    setStage('chat');
-    setOverlayVisible(false);
-
-    // enter first script phase
-    setChatScriptPhase('confirm');
-
-    setTimeout(() => {
-      const el = listRef.current;
-      if (el) el.scrollTop = el.scrollHeight;
-    }, 0);
-  }
 
   // ------- overlay styles -------
   const overlayStyles = `
