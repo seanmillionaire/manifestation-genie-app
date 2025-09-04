@@ -1,4 +1,4 @@
-// /pages/chat.js — staged flow: Confirm → Prescription → Chat (with emoji overlay gate)
+// /pages/chat.js — staged flow: Confirm → Prescription → (overlay) → Chat
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
 import { get, set, newId, pushThread, toPlainMessages } from '../src/flowState';
@@ -63,12 +63,12 @@ export default function ChatPage(){
   const [lastChatPayload, setLastChatPayload] = useState(null);
   const listRef = useRef(null);
 
-  // ✅ staged UI: 'confirm' → 'rx' → 'chat'
+  // staged UI: 'confirm' → 'rx' → 'chat'
   const [stage, setStage] = useState('confirm');
-  // overlay is now independent of stage; when true it sits above the chat
+  // overlay separate from stage; covers current stage
   const [overlayVisible, setOverlayVisible] = useState(false);
 
-  // ✅ soft-confirm state
+  // soft-confirm state
   const [confirmVariant, setConfirmVariant] = useState(null); // "high" | "mid" | "low" | null
   const [parsed, setParsed] = useState({ outcome: null, block: null, state: null });
   const [firstRx, setFirstRx] = useState(null); // { family, protocol, firstMeditation } | null
@@ -263,13 +263,11 @@ Sounds like you’ve been carrying a lot. I’d love to hear—what’s been on 
     onLooksRight();
   }
 
-  // 🔊 User taps "Listen" under the prescription
+  // 🔊 Listen button (under Rx card)
   function onStartListening(){
-    // 1) move to chat stage (so the console is mounted)
-    setStage('chat');
-    // 2) show the overlay ABOVE the chat; one tap will hide it
+    // DO NOT flip to chat yet — keep Rx showing
+    // Just bring up overlay; chat will mount after tap
     setOverlayVisible(true);
-    // focus for a11y (non-blocking)
     setTimeout(() => {
       const ov = document.getElementById('genie-overlay-tap');
       if (ov) ov.focus();
@@ -277,15 +275,16 @@ Sounds like you’ve been carrying a lot. I’d love to hear—what’s been on 
   }
 
   function dismissOverlay(){
+    // Now reveal chat (console stays mounted; no vanish)
+    setStage('chat');
     setOverlayVisible(false);
-    // small scroll pin after reveal
     setTimeout(() => {
       const el = listRef.current;
       if (el) el.scrollTop = el.scrollHeight;
     }, 0);
   }
 
-  // ------- overlay styles (inline keyframes to keep this file self-contained) -------
+  // ------- overlay styles -------
   const overlayStyles = `
 @keyframes popIn { 0% { transform: scale(.7); opacity: 0 } 60% { transform: scale(1.08); opacity:1 } 100% { transform: scale(1) } }
 @keyframes floaty { 0% { transform: translateY(0) } 50% { transform: translateY(-6px) } 100% { transform: translateY(0) } }
@@ -416,19 +415,34 @@ Sounds like you’ve been carrying a lot. I’d love to hear—what’s been on 
 
             {/* Stage: rx (prescription only; wait for Listen) */}
             {stage === 'rx' && firstRx && (
-              <div id="first-prescription" style={{ marginBottom: 8 }}>
-                <PrescriptionCard
-                  title={firstRx.firstMeditation}
-                  why={`Fastest unlock for your path (${firstRx.family} • ${firstRx.protocol}). Use once tonight. Return for next dose.`}
-                  // If your component supports CTA props, this wires the Listen button:
-                  ctaLabel="Listen To This »"
-                  onCta={onStartListening}
-                  onClose={() => setFirstRx(null)}
-                />
-              </div>
+              <>
+                <div id="first-prescription" style={{ marginBottom: 8 }}>
+                  <PrescriptionCard
+                    title={firstRx.firstMeditation}
+                    why={`Fastest unlock for your path (${firstRx.family} • ${firstRx.protocol}). Use once tonight. Return for next dose.`}
+                    onClose={() => setFirstRx(null)}
+                  />
+                </div>
+                <div style={{ display:'flex', justifyContent:'center' }}>
+                  <button
+                    type="button"
+                    onClick={onStartListening}
+                    style={{
+                      padding:'10px 16px',
+                      borderRadius:12,
+                      border:0,
+                      background:'#ffd600',
+                      fontWeight:900,
+                      cursor:'pointer'
+                    }}
+                  >
+                    Listen To This »
+                  </button>
+                </div>
+              </>
             )}
 
-            {/* Stage: chat (mounted; overlay may still be up) */}
+            {/* Stage: chat */}
             {stage === 'chat' && (
               <>
                 <div
@@ -534,7 +548,7 @@ Sounds like you’ve been carrying a lot. I’d love to hear—what’s been on 
         </div>
       </div>
 
-      {/* Emoji overlay — shows ABOVE chat after tapping Listen; one tap to unlock */}
+      {/* Emoji overlay — shows above current stage; tap to continue */}
       {overlayVisible && (
         <div
           onClick={dismissOverlay}
