@@ -189,6 +189,12 @@ export default function ChatPage(){
     if (!text || thinking) return;
     setInput('');
     setThinking(true);
+
+
+    // push user message
+    pushThread({ role:'user', content: text });
+    setS(get());
+
 // ✅ top-level inside ChatPage, not nested
 function onKey(e){
   if (e.key === 'Enter' && !e.shiftKey) {
@@ -196,12 +202,7 @@ function onKey(e){
     send();
   }
 }
-
-
-    // push user message
-    pushThread({ role:'user', content: text });
-    setS(get());
-
+    
     try {
       // optional offer logic
       try {
