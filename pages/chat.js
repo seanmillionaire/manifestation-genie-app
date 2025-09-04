@@ -1,4 +1,4 @@
-// /pages/chat.js — Confirm → Prescription → (overlay) → Chat
+// /pages/chat.js — staged flow: Confirm → Prescription → (overlay) → Chat
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
 import { get, set, newId, pushThread, toPlainMessages } from '../src/flowState';
@@ -34,7 +34,7 @@ function pickFirstName(src){
   return '';
 }
 
-// ---------- offer gating ----------
+// ---------- offer gating (once per day + once per session) ----------
 const HM_LINK = "https://hypnoticmeditations.ai/b/l0kmb";
 function todayKey(){ return new Date().toISOString().slice(0,10); }
 function shouldShowOfferNow(){
@@ -65,13 +65,13 @@ export default function ChatPage(){
 
   // staged UI: 'confirm' → 'rx' → 'chat'
   const [stage, setStage] = useState('confirm');
-  // overlay separate from stage
+  // overlay separate from stage; covers current stage
   const [overlayVisible, setOverlayVisible] = useState(false);
 
   // soft-confirm state
-  const [confirmVariant, setConfirmVariant] = useState(null);
+  const [confirmVariant, setConfirmVariant] = useState(null); // "high" | "mid" | "low" | null
   const [parsed, setParsed] = useState({ outcome: null, block: null, state: null });
-  const [firstRx, setFirstRx] = useState(null);
+  const [firstRx, setFirstRx] = useState(null); // { family, protocol, firstMeditation } | null
   const [showTweaks, setShowTweaks] = useState(false);
 
   // auto-enable debug via ?debug=1
@@ -82,7 +82,7 @@ export default function ChatPage(){
     }
   }, []);
 
-  // boot + greet + pull name + keep design
+  // boot + greet + pull name
   useEffect(() => {
     const cur = get();
     if (!cur.vibe) { router.replace('/vibe'); return; }
@@ -263,16 +263,19 @@ Sounds like you’ve been carrying a lot. I’d love to hear—what’s been on 
     onLooksRight();
   }
 
-  // 🔊 Listen button (INSIDE the card). Keep RX visible; show overlay; chat after tap.
-  function onStartListening(e){
-    if (e?.preventDefault) e.preventDefault();
+  // 🔊 Listen button (under Rx card)
+  function onStartListening(){
+    // DO NOT flip to chat yet — keep Rx showing
+    // Just bring up overlay; chat will mount after tap
     setOverlayVisible(true);
     setTimeout(() => {
       const ov = document.getElementById('genie-overlay-tap');
       if (ov) ov.focus();
     }, 100);
   }
+
   function dismissOverlay(){
+    // Now reveal chat (console stays mounted; no vanish)
     setStage('chat');
     setOverlayVisible(false);
     setTimeout(() => {
@@ -410,22 +413,34 @@ Sounds like you’ve been carrying a lot. I’d love to hear—what’s been on 
               </>
             )}
 
-            {/* Stage: rx (prescription only; single CTA INSIDE card) */}
-{/* Stage: rx (FREE prescription; one CTA that triggers Genie overlay) */}
-{stage === 'rx' && firstRx && (
-  <div id="first-prescription" style={{ marginBottom: 8 }}>
-    <PrescriptionCard
-      mode="rx"                                 // ← explicit
-      title={firstRx.firstMeditation}
-      why={`Fastest unlock for your path (${firstRx.family} • ${firstRx.protocol}). Use once tonight. Return for next dose.`}
-      ctaLabel="Listen To This »"
-      onCta={onStartListening}                  // ← shows overlay (no navigation)
-      buyUrl={undefined}                        // ← ensure no buy fallback here
-      onClose={() => setFirstRx(null)}
-    />
-  </div>
-)}
-
+            {/* Stage: rx (prescription only; wait for Listen) */}
+            {stage === 'rx' && firstRx && (
+              <>
+                <div id="first-prescription" style={{ marginBottom: 8 }}>
+                  <PrescriptionCard
+                    title={firstRx.firstMeditation}
+                    why={`Fastest unlock for your path (${firstRx.family} • ${firstRx.protocol}). Use once tonight. Return for next dose.`}
+                    onClose={() => setFirstRx(null)}
+                  />
+                </div>
+                <div style={{ display:'flex', justifyContent:'center' }}>
+                  <button
+                    type="button"
+                    onClick={onStartListening}
+                    style={{
+                      padding:'10px 16px',
+                      borderRadius:12,
+                      border:0,
+                      background:'#ffd600',
+                      fontWeight:900,
+                      cursor:'pointer'
+                    }}
+                  >
+                    Listen To This »
+                  </button>
+                </div>
+              </>
+            )}
 
             {/* Stage: chat */}
             {stage === 'chat' && (
@@ -481,21 +496,17 @@ Sounds like you’ve been carrying a lot. I’d love to hear—what’s been on 
                     )
                   })}
 
-{/* Inside chat area: Upsell card must OPEN BUY LINK, not overlay */}
-{uiOffer ? (
-  <div style={{ marginTop: 8 }}>
-    <PrescriptionCard
-      mode="buy"                                // ← explicit
-      title={uiOffer.title}
-      why={uiOffer.why}
-      buyUrl={uiOffer.buyUrl || HM_LINK}       // ← opens in new tab
-      ctaLabel="Unlock Session »"
-      // ⛔️ Do NOT pass onCta here
-      onClose={() => setUiOffer(null)}
-    />
-  </div>
-) : null}
-
+                  {uiOffer ? (
+                    <div style={{ marginTop: 8 }}>
+                      <PrescriptionCard
+                        title={uiOffer.title}
+                        why={uiOffer.why}
+                        priceCents={uiOffer.priceCents}
+                        buyUrl={uiOffer.buyUrl || HM_LINK}
+                        onClose={() => setUiOffer(null)}
+                      />
+                    </div>
+                  ) : null}
 
                   {thinking && (
                     <div style={{ opacity:.7, fontStyle:'italic', marginTop:6 }}>Genie is thinking…</div>
