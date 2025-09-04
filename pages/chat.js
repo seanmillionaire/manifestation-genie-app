@@ -411,18 +411,21 @@ Sounds like you’ve been carrying a lot. I’d love to hear—what’s been on 
             )}
 
             {/* Stage: rx (prescription only; single CTA INSIDE card) */}
-            {stage === 'rx' && firstRx && (
-              <div id="first-prescription" style={{ marginBottom: 8 }}>
-                <PrescriptionCard
-                  title={firstRx.firstMeditation}
-                  why={`Fastest unlock for your path (${firstRx.family} • ${firstRx.protocol}). Use once tonight. Return for next dose.`}
-                  ctaLabel="Listen To This »"
-                  onCta={onStartListening}     // ✅ overlay path (FREE Rx)
-                  buyUrl={undefined}            // ensure no buy fallback here
-                  onClose={() => setFirstRx(null)}
-                />
-              </div>
-            )}
+{/* Stage: rx (FREE prescription; one CTA that triggers Genie overlay) */}
+{stage === 'rx' && firstRx && (
+  <div id="first-prescription" style={{ marginBottom: 8 }}>
+    <PrescriptionCard
+      mode="rx"                                 // ← explicit
+      title={firstRx.firstMeditation}
+      why={`Fastest unlock for your path (${firstRx.family} • ${firstRx.protocol}). Use once tonight. Return for next dose.`}
+      ctaLabel="Listen To This »"
+      onCta={onStartListening}                  // ← shows overlay (no navigation)
+      buyUrl={undefined}                        // ← ensure no buy fallback here
+      onClose={() => setFirstRx(null)}
+    />
+  </div>
+)}
+
 
             {/* Stage: chat */}
             {stage === 'chat' && (
@@ -478,19 +481,21 @@ Sounds like you’ve been carrying a lot. I’d love to hear—what’s been on 
                     )
                   })}
 
-                  {/* Upsell card stays BUY-only (no onCta) */}
-                  {uiOffer ? (
-                    <div style={{ marginTop: 8 }}>
-                      <PrescriptionCard
-                        title={uiOffer.title}
-                        why={uiOffer.why}
-                        priceCents={uiOffer.priceCents}
-                        buyUrl={uiOffer.buyUrl || HM_LINK}  // ✅ open link
-                        ctaLabel="Unlock Session »"
-                        onClose={() => setUiOffer(null)}
-                      />
-                    </div>
-                  ) : null}
+{/* Inside chat area: Upsell card must OPEN BUY LINK, not overlay */}
+{uiOffer ? (
+  <div style={{ marginTop: 8 }}>
+    <PrescriptionCard
+      mode="buy"                                // ← explicit
+      title={uiOffer.title}
+      why={uiOffer.why}
+      buyUrl={uiOffer.buyUrl || HM_LINK}       // ← opens in new tab
+      ctaLabel="Unlock Session »"
+      // ⛔️ Do NOT pass onCta here
+      onClose={() => setUiOffer(null)}
+    />
+  </div>
+) : null}
+
 
                   {thinking && (
                     <div style={{ opacity:.7, fontStyle:'italic', marginTop:6 }}>Genie is thinking…</div>
