@@ -20,7 +20,7 @@ function isYesLoose(raw = '') {
 
   // direct matches
   const DIRECT = [
-    'yes','y','yep','yeah','ok','okay','sure','ready',
+    'yes','y','yep','yeah','ok','okay','sure','ready', 'looks good', 'yes sir', 'ypu', 'yup,
     'looks right','correct',"that's right",'sounds right','let’s go',"let's go"
   ];
   if (DIRECT.includes(t)) return true;
