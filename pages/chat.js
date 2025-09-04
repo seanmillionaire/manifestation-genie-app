@@ -11,7 +11,6 @@ import SoftConfirmBar from "../components/Confirm/SoftConfirmBar";
 import { parseAnswers, scoreConfidence, variantFromScore } from "../src/features/confirm/decision";
 import { prescribe } from "../src/engine/prescribe";
 
-
 // 🔓 Free-flow mode (no confirm/exercise rails)
 const FREE_FLOW = true;
 
@@ -21,11 +20,6 @@ function nl2br(s=''){ return s.replace(/\n/g, '<br/>'); }
 function pretty(o){ try { return JSON.stringify(o, null, 2); } catch { return String(o); } }
 
 function todayKey(){ return new Date().toISOString().slice(0,10); }
-function isNiceWorkMessage(s='') {
-  return /nice work/i.test(s) || /you can come back tomorrow/i.test(s);
-}
-const EXERCISE_DONE_KEY = 'mg_exercise_day';
-
 const HM_LINK = "https://hypnoticmeditations.ai/b/l0kmb";
 
 function shouldShowOfferNow(){
@@ -88,8 +82,6 @@ export default function ChatPage(){
   const [debugOn, setDebugOn] = useState(false);
   const [lastChatPayload, setLastChatPayload] = useState(null);
   const listRef = useRef(null);
-const [uid, setUid] = useState(null);
-const [exerciseStarted, setExerciseStarted] = useState(false);
 
   // staged UI: we start in chat for free-flow
   const [stage, setStage] = useState(FREE_FLOW ? 'chat' : 'confirm');
@@ -114,17 +106,6 @@ const onKey = (e) => {
     if (typeof window !== 'undefined') {
       const q = new URLSearchParams(window.location.search);
       if (q.get('debug') === '1') setDebugOn(true);
-      // quick dev reset: /chat?reset=1
-if (q.get('reset') === '1') {
-  try {
-    localStorage.removeItem('mg_exercise_day');
-    localStorage.removeItem('mg_offer_day');
-    sessionStorage.removeItem('mg_offer_shown_session');
-  } catch {}
-  // wipe only the thread so you don't lose your wish/vibe
-  set({ thread: [] });
-}
-
     }
   }, []);
 
@@ -166,7 +147,6 @@ if (q.get('reset') === '1') {
             name: user.user_metadata?.name,
             display_name: user.user_metadata?.full_name
           }) || lsName;
-if (user?.id) setUid(user.id);
 
           if (best && best !== 'Friend') {
             set({ firstName: best });
@@ -175,11 +155,6 @@ if (user?.id) setUid(user.id);
         }
       } catch {}
       setS(get());
-      try {
-  const doneToday = localStorage.getItem(EXERCISE_DONE_KEY) === todayKey();
-  if (doneToday) setExerciseStarted(true);
-} catch {}
-
     })();
   }, [router]);
 
@@ -214,44 +189,7 @@ if (user?.id) setUid(user.id);
     const data = await resp.json();
     return data?.reply || 'I’m here.';
   }
-async function startExerciseOne(){
-  // client-side “one per day” guard (nice UX)
-  try {
-    if (localStorage.getItem(EXERCISE_DONE_KEY) === todayKey()) {
-      pushThread({ role:'assistant', content: "🚫 You’ve already completed today’s exercise. Come back tomorrow!" });
-      setS(get());
-      return;
-    }
-  } catch {}
 
-  // Build context (we’ll pass wish so the exercise can mention it)
-  const stateNow = get();
-  const wish = stateNow?.currentWish?.wish || null;
-
-  try {
-    const resp = await fetch('/api/exercise', {
-      method:'POST',
-      headers:{ 'Content-Type':'application/json' },
-      body: JSON.stringify({
-        exerciseId: 1,
-        userId: uid || null,
-        wish
-      })
-    });
-    const data = await resp.json();
-
-    // Show exercise in chat
-    pushThread({ role: 'assistant', content: data?.text || "Let’s begin." });
-    setS(get());
-
-    // Mark as done locally so the button hides today
-    try { localStorage.setItem(EXERCISE_DONE_KEY, todayKey()); } catch {}
-    setExerciseStarted(true);
-  } catch (e){
-    pushThread({ role:'assistant', content: "Hmm, the lamp flickered. Try again in a moment." });
-    setS(get());
-  }
-}
   // ✅ Free-flow send (saves lastChatPayload)
   async function send(){
     const text = input.trim();
@@ -281,7 +219,6 @@ async function startExerciseOne(){
           markOfferShown();
         }
       } catch {}
-
 
 // build payload from latest state (includes the message we just pushed)
 const stateNow = get();
@@ -560,24 +497,6 @@ if (typeof window !== 'undefined') {
                           }}
                           dangerouslySetInnerHTML={{ __html: nl2br(escapeHTML(m.content || '')) }}
                         />
-                                {/* Show "Let's Go" under the Nice work message (only if not started today) */}
-      {isAI && isNiceWorkMessage(m.content || '') && !exerciseStarted && (
-        <div style={{ marginTop: 6 }}>
-          <button
-            onClick={startExerciseOne}
-            aria-label="Start Exercise One"
-            style={{
-              minHeight: 44, padding:'12px 16px', borderRadius:12,
-              border:'1px solid rgba(0,0,0,0.12)',
-              background:'#111827', color:'#fff', fontWeight:800,
-              cursor:'pointer'
-            }}
-          >
-            Let’s Go →
-          </button>
-        </div>
-      )}
-
                       </div>
                     )
                   })}
