@@ -3,27 +3,40 @@ import React from "react";
 type Props = {
   title: string;
   why?: string;
+  /** Optional price info (not shown in CTA – kept for future use) */
   priceCents?: number;
-  buyUrl?: string;              // external store URL
-  // legacy (kept for compatibility)
-  previewUrl?: string;          // ignored (we always use dummy audio)
-  onUnlock?: () => void;        // legacy fallback
-  onClose?: () => void;         // notify parent to hide card
+
+  /** Legacy commerce props (kept for backward-compat, unused when onCta is provided) */
+  buyUrl?: string;
+  previewUrl?: string;
+  onUnlock?: () => void;
+
+  /** Close/hide the card */
+  onClose?: () => void;
+
+  /** 👇 New: parent-provided CTA handler (e.g., show Genie overlay in /pages/chat.js) */
+  onCta?: (e?: React.MouseEvent<HTMLButtonElement>) => void;
+
+  /** Optional CTA label */
+  ctaLabel?: string;
 };
 
 export default function PrescriptionCard({
   title,
   why,
-  priceCents = 1200, // not shown in CTA text (kept for future use)
+  priceCents = 1200,
   buyUrl = "https://hypnoticmeditations.ai/b/l0kmb",
   previewUrl, // unused
   onUnlock,
   onClose,
+  onCta,
+  ctaLabel = "Listen To This »",
 }: Props): JSX.Element {
   const DUMMY_AUDIO =
     "https://cdnstreaming.myclickfunnels.com/audiofile/25873/file/original-3b1398f834c94cd9eeba088f4bcdba73/audiofile/25873/file/original-3b1398f834c94cd9eeba088f4bcdba73.flac";
 
-  async function handleUnlock() {
+  /** Fallback: only used if onCta is NOT provided */
+  async function legacyUnlock() {
     try {
       if (buyUrl) {
         window.open(buyUrl, "_blank", "noopener,noreferrer");
@@ -39,6 +52,20 @@ export default function PrescriptionCard({
     } catch {
       onClose?.();
     }
+  }
+
+  function handleClick(e: React.MouseEvent<HTMLButtonElement>) {
+    // Prevent any default navigation bubbling from parent wrappers
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (onCta) {
+      // ✅ New path: delegate to parent (chat.js) to show Genie overlay + stage to chat
+      onCta(e);
+      return;
+    }
+    // Legacy fallback (commerce)
+    legacyUnlock();
   }
 
   return (
@@ -75,7 +102,7 @@ export default function PrescriptionCard({
       </div>
 
       <button
-        onClick={handleUnlock}
+        onClick={handleClick}
         style={{
           display: "inline-block",
           background: "#ffd600",
@@ -88,9 +115,9 @@ export default function PrescriptionCard({
           minWidth: 44,
           boxShadow: "0 2px 0 rgba(0,0,0,0.06)",
         }}
-        aria-label="Listen To This"
+        aria-label={ctaLabel}
       >
-        Listen To This »
+        {ctaLabel}
       </button>
     </div>
   );
