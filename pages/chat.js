@@ -211,18 +211,30 @@ useEffect(() => {
     if (el && stage === 'chat') el.scrollTop = el.scrollHeight;
   }, [S.thread, uiOffer, stage]);
 
+// when rails complete and Chat opens, restore the recap auto-reply
+useEffect(() => {
+  if (!FREE_FLOW && stage === 'chat') {
+    seedRecapIfNeeded();
+  }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [stage, FREE_FLOW, parsed?.outcome, parsed?.block]);
+
+  
 // 🧞 auto-greet only after rails complete → when chat opens with empty thread
 useEffect(() => {
   const thread = S?.thread || [];
   const noMessages = thread.length === 0;
-  if (!FREE_FLOW && stage === 'chat' && noMessages) {
+
+  // only greet if we are NOT in recap mode
+  if (!FREE_FLOW && stage === 'chat' && noMessages && chatScriptPhase !== 'recap') {
     pushThread({
       role: 'assistant',
       content: "✨ I’m here. Ready to lock in your plan? Tell me the tiniest next step you’ll take."
     });
     setS(get());
   }
-}, [stage, FREE_FLOW, S?.thread]);
+}, [stage, FREE_FLOW, S?.thread, chatScriptPhase]);
+
 
   
   // ---- central API (clean wrapper) ----
@@ -382,6 +394,31 @@ if (typeof window !== 'undefined') {
       if (el) el.scrollTop = el.scrollHeight;
     }, 0);
   }
+// --- recap seeding (restores previous build behavior) ---
+function seedRecapIfNeeded() {
+  if (FREE_FLOW) return;
+
+  const stateNow = get();
+  const thread = stateNow.thread || [];
+  if (thread.length > 0) return; // only seed if chat is empty
+
+  const outcome =
+    (parsed?.outcome || stateNow.currentWish?.wish || stateNow.prompt_spec?.prompt || 'your goal').trim();
+
+  const block =
+    (parsed?.block || stateNow.currentWish?.block || stateNow.prompt_spec?.block || '').trim();
+
+  const line1 = block
+    ? `I have you aiming for “${outcome}” and the main snag is “${block}”.`
+    : `I have you aiming for “${outcome}”.`;
+
+  const msg = `${line1}\n\nDid I capture that right?`;
+
+  // seed assistant recap
+  pushThread({ role: 'assistant', content: msg });
+  setS(get());
+  setChatScriptPhase('recap');
+}
 
   // ------- overlay styles -------
   const overlayStyles = `
