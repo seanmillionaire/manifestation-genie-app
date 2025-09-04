@@ -34,7 +34,7 @@ function pickFirstName(src){
   return '';
 }
 
-// ---------- offer gating (once per day + once per session) ----------
+// ---------- offer gating ----------
 const HM_LINK = "https://hypnoticmeditations.ai/b/l0kmb";
 function todayKey(){ return new Date().toISOString().slice(0,10); }
 function shouldShowOfferNow(){
@@ -69,9 +69,9 @@ export default function ChatPage(){
   const [overlayVisible, setOverlayVisible] = useState(false);
 
   // soft-confirm state
-  const [confirmVariant, setConfirmVariant] = useState(null); // "high" | "mid" | "low" | null
+  const [confirmVariant, setConfirmVariant] = useState(null);
   const [parsed, setParsed] = useState({ outcome: null, block: null, state: null });
-  const [firstRx, setFirstRx] = useState(null); // { family, protocol, firstMeditation } | null
+  const [firstRx, setFirstRx] = useState(null);
   const [showTweaks, setShowTweaks] = useState(false);
 
   // auto-enable debug via ?debug=1
@@ -82,7 +82,7 @@ export default function ChatPage(){
     }
   }, []);
 
-  // boot + greet + pull name
+  // boot + greet + pull name + keep design
   useEffect(() => {
     const cur = get();
     if (!cur.vibe) { router.replace('/vibe'); return; }
@@ -411,17 +411,18 @@ Sounds like you’ve been carrying a lot. I’d love to hear—what’s been on 
             )}
 
             {/* Stage: rx (prescription only; single CTA INSIDE card) */}
-{stage === 'rx' && firstRx && (
-  <div id="first-prescription" style={{ marginBottom: 8 }}>
-<PrescriptionCard
-  title={firstRx.firstMeditation}
-  why={`Fastest unlock for your path (${firstRx.family} • ${firstRx.protocol}). Use once tonight. Return for next dose.`}
-  onCta={onStartListening}   // <- this shows the Genie overlay, then unlocks chat on tap
-  onClose={() => setFirstRx(null)}
-/>
-  </div>
-)}
-
+            {stage === 'rx' && firstRx && (
+              <div id="first-prescription" style={{ marginBottom: 8 }}>
+                <PrescriptionCard
+                  title={firstRx.firstMeditation}
+                  why={`Fastest unlock for your path (${firstRx.family} • ${firstRx.protocol}). Use once tonight. Return for next dose.`}
+                  ctaLabel="Listen To This »"
+                  onCta={onStartListening}     // ✅ overlay path (FREE Rx)
+                  buyUrl={undefined}            // ensure no buy fallback here
+                  onClose={() => setFirstRx(null)}
+                />
+              </div>
+            )}
 
             {/* Stage: chat */}
             {stage === 'chat' && (
@@ -477,19 +478,19 @@ Sounds like you’ve been carrying a lot. I’d love to hear—what’s been on 
                     )
                   })}
 
-{uiOffer ? (
-  <div style={{ marginTop: 8 }}>
-    <PrescriptionCard
-      title={uiOffer.title}
-      why={uiOffer.why}
-      priceCents={uiOffer.priceCents}
-      buyUrl={uiOffer.buyUrl || HM_LINK}  // ✅ BUY mode
-      // ⛔️ do NOT pass onCta here
-      onClose={() => setUiOffer(null)}
-    />
-  </div>
-) : null}
-
+                  {/* Upsell card stays BUY-only (no onCta) */}
+                  {uiOffer ? (
+                    <div style={{ marginTop: 8 }}>
+                      <PrescriptionCard
+                        title={uiOffer.title}
+                        why={uiOffer.why}
+                        priceCents={uiOffer.priceCents}
+                        buyUrl={uiOffer.buyUrl || HM_LINK}  // ✅ open link
+                        ctaLabel="Unlock Session »"
+                        onClose={() => setUiOffer(null)}
+                      />
+                    </div>
+                  ) : null}
 
                   {thinking && (
                     <div style={{ opacity:.7, fontStyle:'italic', marginTop:6 }}>Genie is thinking…</div>
