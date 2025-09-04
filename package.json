@@ -9,30 +9,26 @@
     "lint": "next lint",
     "postinstall": "npm i -D typescript @types/react @types/react-dom @types/node || true"
   },
-  "engines": {
-    "node": ">=18"
-  },
-  "overrides": {
-    "react": "18.3.1",
-    "react-dom": "18.3.1"
-  },
   "dependencies": {
-    "next": "14.2.5",
-    "react": "18.3.1",
-    "react-dom": "18.3.1",
-    "@supabase/supabase-js": "^2.45.0",
-    "@supabase/auth-helpers-react": "^0.5.0",
     "@supabase/auth-helpers-nextjs": "^0.10.0",
-    "openai": "^4.0.0",
+    "@supabase/auth-helpers-react": "^0.5.0",
+    "@supabase/supabase-js": "^2.45.0",
+    "canvas-confetti": "^1.9.2",
     "clsx": "^2.1.1",
-    "canvas-confetti": "^1.9.2"
+    "next": "14.2.5",
+    "openai": "^4.0.0",
+    "react": "18.2.0",
+    "react-dom": "18.2.0"
   },
   "devDependencies": {
-    "typescript": "^5.5.0",
+    "@types/node": "^20.11.0",
     "@types/react": "^18.2.0",
     "@types/react-dom": "^18.2.0",
-    "@types/node": "^20.11.0",
     "eslint": "^8.57.0",
-    "eslint-config-next": "14.2.5"
+    "eslint-config-next": "14.2.5",
+    "typescript": "^5.5.0"
+  },
+  "engines": {
+    "node": ">=18"
   }
 }
