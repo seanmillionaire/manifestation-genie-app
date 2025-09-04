@@ -287,20 +287,18 @@ const [chatScriptPhase, setChatScriptPhase] = useState('free');
   }, [S.thread, uiOffer, stage]);
 
   // central API
-  async function callGenie({ text }) {
-    const stateNow = get();
-    const payload = {
-      userName: stateNow.firstName || null,
-      context: {
-        wish: stateNow.currentWish?.wish || null,
-        block: stateNow.currentWish?.block || null,
-        micro: stateNow.currentWish?.micro || null,
-        vibe: stateNow.vibe || null,
-        prompt_spec: stateNow.prompt_spec?.prompt || null,
-      },
-      messages: toPlainMessages(stateNow.thread || []),
-      text
-    };
+// central API
+async function callGenie({ payload }) {
+  const resp = await fetch('/api/chat', {
+    method:'POST',
+    headers:{ 'Content-Type':'application/json' },
+    body: JSON.stringify(payload)
+  });
+  if (!resp.ok) throw new Error('Genie API error');
+  const data = await resp.json();
+  return data?.reply || 'I’m here.';
+}
+
     setLastChatPayload(payload);
 
     const resp = await fetch('/api/chat', {
