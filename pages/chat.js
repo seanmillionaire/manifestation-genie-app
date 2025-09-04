@@ -189,12 +189,14 @@ export default function ChatPage(){
     if (!text || thinking) return;
     setInput('');
     setThinking(true);
+// ✅ top-level inside ChatPage, not nested
 function onKey(e){
   if (e.key === 'Enter' && !e.shiftKey) {
     e.preventDefault();
     send();
   }
 }
+
 
     // push user message
     pushThread({ role:'user', content: text });
