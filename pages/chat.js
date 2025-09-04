@@ -6,15 +6,14 @@ import { supabase } from '../src/supabaseClient';
 import PrescriptionCard from "../components/ChatGenie/PrescriptionCard";
 import { detectBeliefFrom, recommendProduct } from "../src/engine/recommendProduct";
 import TweakChips from "../components/Confirm/TweakChips";
-
 import SoftConfirmBar from "../components/Confirm/SoftConfirmBar";
 import { parseAnswers, scoreConfidence, variantFromScore } from "../src/features/confirm/decision";
 import { prescribe } from "../src/engine/prescribe";
+
 // ---------- chat day-1 script helpers ----------
-// replaces the old isYes
+// strict confirm matcher
 function isYes(s = '') {
   const n = s.trim().toLowerCase();
-  // accept only exact confirmations (ignore trailing punctuation/spaces)
   const clean = n.replace(/[.!?\s]+$/g, '');
   const ACCEPT = [
     'yes','y','yep','yeah','ok','okay','sure',
@@ -28,24 +27,56 @@ async function saveProgressToProfile({ supabase, step, details }) {
     const { data: { session } } = await supabase.auth.getSession();
     const user = session?.user;
     if (!user) return;
-
-    // simple, forgiving upsert – adjust table/columns later if you want
     await supabase
       .from('user_progress')
       .upsert({
         user_id: user.id,
         day_key: new Date().toISOString().slice(0,10),
-        step,                   // 'confirmed', 'exercise_done', etc.
-        details,                // free-form JSON
+        step,
+        details,
         updated_at: new Date().toISOString()
       }, { onConflict: 'user_id,day_key' });
   } catch {}
+}
+
+// Parse "Goal: xxx | Block: yyy" (order free; partials allowed)
+function parseInlineUpdate(text, stateNow) {
+  if (!text) return null;
+
+  if (/^\s*(you know already|same|no change)\s*$/i.test(text)) {
+    return { ...stateNow.currentWish };
+  }
+
+  const goalMatch  = /goal\s*[:=\-]\s*([^|]+?)(?=$|\|)/i.exec(text);
+  const blockMatch = /block(?:er)?\s*[:=\-]\s*([^|]+?)(?=$|\|)/i.exec(text);
+  const microMatch = /micro\s*[:=\-]\s*([^|]+?)(?=$|\|)/i.exec(text);
+
+  if (!goalMatch && !blockMatch && !microMatch) {
+    const g2 = /(?:^|\s)goal\s+is\s+(.+)/i.exec(text);
+    const b2 = /(?:^|\s)block(?:er)?\s+is\s+(.+)/i.exec(text);
+    const m2 = /(?:^|\s)micro\s+is\s+(.+)/i.exec(text);
+    if (!g2 && !b2 && !m2) return null;
+    return {
+      ...stateNow.currentWish,
+      wish:  g2 ? g2[1].trim() : (stateNow.currentWish?.wish || null),
+      block: b2 ? b2[1].trim() : (stateNow.currentWish?.block || null),
+      micro: m2 ? m2[1].trim() : (stateNow.currentWish?.micro || null),
+    };
+  }
+
+  return {
+    ...stateNow.currentWish,
+    wish:  goalMatch  ? goalMatch[1].trim()  : (stateNow.currentWish?.wish || null),
+    block: blockMatch ? blockMatch[1].trim() : (stateNow.currentWish?.block || null),
+    micro: microMatch ? microMatch[1].trim() : (stateNow.currentWish?.micro || null),
+  };
 }
 
 // ---------- tiny helpers ----------
 function escapeHTML(s=''){return s.replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
 function nl2br(s=''){ return s.replace(/\n/g, '<br/>'); }
 function pretty(o){ try { return JSON.stringify(o, null, 2); } catch { return String(o); } }
+
 function startFirstExercise(){
   const st = get();
   const goal = st.currentWish?.wish || 'your goal';
@@ -61,11 +92,10 @@ function startFirstExercise(){
   ].join('\n');
 
   pushThread({ role:'assistant', content: msg });
-  setS(get());
+  set(get()); // write-through for external listeners
 }
 
 async function finishExerciseAndWrap(){
-  // record progress
   await saveProgressToProfile({
     supabase,
     step: 'exercise_done',
@@ -80,7 +110,7 @@ async function finishExerciseAndWrap(){
   ].join('\n');
 
   pushThread({ role:'assistant', content: msg });
-  setS(get());
+  set(get());
 }
 
 function pickFirstName(src){
@@ -103,8 +133,6 @@ function pickFirstName(src){
 
 // ---------- offer gating (once per day + once per session) ----------
 const HM_LINK = "https://hypnoticmeditations.ai/b/l0kmb";
-
-
 function todayKey(){ return new Date().toISOString().slice(0,10); }
 function shouldShowOfferNow(){
   try {
@@ -121,10 +149,9 @@ function markOfferShown(){
     localStorage.setItem('mg_offer_day', todayKey());
   } catch {}
 }
-function markWizardDoneToday(){
+async function markWizardDoneToday(){
   try { localStorage.setItem('mg_wizard_day', todayKey()); } catch {}
-  // also record in DB (so it survives other devices)
-  saveProgressToProfile({
+  await saveProgressToProfile({
     supabase,
     step: 'wizard_done',
     details: { at: new Date().toISOString() }
@@ -140,21 +167,43 @@ export default function ChatPage(){
   const [debugOn, setDebugOn] = useState(false);
   const [lastChatPayload, setLastChatPayload] = useState(null);
   const listRef = useRef(null);
-// staged UI: 'confirm' → 'rx' → 'chat'
-const [stage, setStage] = useState('confirm');
 
-// NEW: chatScriptPhase drives the first minutes of chat
-// 'confirm' → 'exercise' → 'win' → 'free'
-const [chatScriptPhase, setChatScriptPhase] = useState('free');
+  // staged UI: 'confirm' → 'rx' → 'chat'
+  const [stage, setStage] = useState('confirm');
+
+  // chatScriptPhase: 'confirm' → 'exercise' → 'win' → 'free'
+  const [chatScriptPhase, setChatScriptPhase] = useState('free');
 
   // overlay separate from stage; covers current stage
   const [overlayVisible, setOverlayVisible] = useState(false);
 
   // soft-confirm state
-  const [confirmVariant, setConfirmVariant] = useState(null); // "high" | "mid" | "low" | null
+  const [confirmVariant, setConfirmVariant] = useState(null);
   const [parsed, setParsed] = useState({ outcome: null, block: null, state: null });
-  const [firstRx, setFirstRx] = useState(null); // { family, protocol, firstMeditation } | null
+  const [firstRx, setFirstRx] = useState(null);
   const [showTweaks, setShowTweaks] = useState(false);
+
+  // helper lives inside so it can use setS/get()
+  function pushRecapMessage() {
+    const st = get();
+    const fn = st.firstName || 'Friend';
+    const wish = st.currentWish?.wish || 'your main goal';
+    const block = st.currentWish?.block || 'what tends to get in the way';
+    const micro = st.currentWish?.micro || null;
+
+    const recapLines = [
+      `🌟 The lamp glows softly… I’m here, ${fn}.`,
+      `Here’s what I heard:`,
+      `• Your Goal: ${wish}`,
+      `• Current block: ${block}`,
+      micro ? `• Small next step you will take: ${micro}` : null,
+      ``,
+      `Does that look right? (Reply “yes” to begin, or tell me what to adjust.)`
+    ].filter(Boolean).join('\n');
+
+    pushThread({ role:'assistant', content: recapLines });
+    setS(get());
+  }
 
   // auto-enable debug via ?debug=1
   useEffect(() => {
@@ -164,7 +213,7 @@ const [chatScriptPhase, setChatScriptPhase] = useState('free');
     }
   }, []);
 
-  // boot + greet + pull name
+  // boot + greet + pull name (no intro push; recap happens after overlay)
   useEffect(() => {
     const cur = get();
     if (!cur.vibe) { router.replace('/vibe'); return; }
@@ -209,9 +258,6 @@ const [chatScriptPhase, setChatScriptPhase] = useState('free');
           }
         }
       } catch {}
-
-      const after = get();
-
       setS(get());
     })();
   }, [router]);
@@ -263,93 +309,97 @@ const [chatScriptPhase, setChatScriptPhase] = useState('free');
     return data?.reply || 'I’m here.';
   }
 
-async function send(){
-  const text = input.trim();
-  if (!text || thinking) return;
-  setInput('');
-  setThinking(true);
+  async function send(){
+    const text = input.trim();
+    if (!text || thinking) return;
+    setInput('');
+    setThinking(true);
 
-  pushThread({ role:'user', content: text });
-  setS(get());
+    pushThread({ role:'user', content: text });
+    setS(get());
 
-  try {
-    // --- PHASED SCRIPT HANDOFFS ---
-    if (chatScriptPhase === 'confirm') {
-      if (isYes(text)) {
-        // mark confirmation & move to exercise
-        await saveProgressToProfile({
-          supabase,
-          step: 'confirmed',
-          details: {
-            wish: S?.currentWish?.wish || null,
-            block: S?.currentWish?.block || null,
-            micro: S?.currentWish?.micro || null
-          }
-        });
-        setChatScriptPhase('exercise');
-        startFirstExercise();
-        return;
-      } else {
-        // user wants changes – reflect back and ask again
-        pushThread({
-          role:'assistant',
-          content: `Got it. Tell me your goal and what's blocking you?`
-        });
-        setS(get());
-        return;//
-      }
-    }
-
-    if (chatScriptPhase === 'exercise') {
-      if (/^done\b/i.test(text)) {
-        setChatScriptPhase('win');
-        await finishExerciseAndWrap();
-        // After wrap, open free chat
-        setChatScriptPhase('free');
-        return;
-      } else {
-        pushThread({
-          role:'assistant',
-          content: `No rush. Do the 2-min reset, then type **done** when finished.`
-        });
-        setS(get());
-        return;
-      }
-    }
-
-    // --- FREE CHAT (existing behavior) ---
-    const combined = S?.prompt_spec?.prompt
-      ? `${S.prompt_spec.prompt}\n\nUser: ${text}`
-      : text;
-
-    // still allow your product nudges here
     try {
-      const { goal, belief } = detectBeliefFrom(combined);
-      const rec = recommendProduct({ goal, belief });
-      if (rec && shouldShowOfferNow()) {
-        setUiOffer({
-          title: rec.title,
-          why: belief
-            ? `Limiting belief detected: “${belief}.” Tonight’s session dissolves that pattern so your next action feels natural.`
-            : `Based on your goal, this short trance helps you move without overthinking.`,
-          priceCents: rec.price,
-          buyUrl: HM_LINK
-        });
-        markOfferShown();
+      // --- PHASED SCRIPT HANDOFFS ---
+      if (chatScriptPhase === 'confirm') {
+        if (isYes(text)) {
+          await saveProgressToProfile({
+            supabase,
+            step: 'confirmed',
+            details: {
+              wish: S?.currentWish?.wish || null,
+              block: S?.currentWish?.block || null,
+              micro: S?.currentWish?.micro || null
+            }
+          });
+          setChatScriptPhase('exercise');
+          startFirstExercise();
+          return;
+        } else {
+          const stateNow = get();
+          const nextWish = parseInlineUpdate(text, stateNow);
+
+          if (nextWish) {
+            set({ currentWish: nextWish });
+            pushRecapMessage();
+            return;
+          }
+
+          pushThread({
+            role:'assistant',
+            content: `Got it. Tell me your goal and sticking point in one line, like:\n“Goal: … | Block: …”`
+          });
+          setS(get());
+          return;
+        }
+      } // <-- close confirm block
+
+      if (chatScriptPhase === 'exercise') {
+        if (/^done\b/i.test(text)) {
+          setChatScriptPhase('win');
+          await finishExerciseAndWrap();
+          setChatScriptPhase('free');
+          return;
+        } else {
+          pushThread({
+            role:'assistant',
+            content: `No rush. Do the 2-min reset, then type **done** when finished.`
+          });
+          setS(get());
+          return;
+        }
       }
-    } catch {}
 
-    const reply = await callGenie({ text: combined });
-    pushThread({ role:'assistant', content: reply });
-    setS(get());
-  } catch {
-    pushThread({ role:'assistant', content: 'The lamp flickered. Try again in a moment.' });
-    setS(get());
-  } finally {
-    setThinking(false);
+      // --- FREE CHAT (existing behavior) ---
+      const combined = S?.prompt_spec?.prompt
+        ? `${S.prompt_spec.prompt}\n\nUser: ${text}`
+        : text;
+
+      try {
+        const { goal, belief } = detectBeliefFrom(combined);
+        const rec = recommendProduct({ goal, belief });
+        if (rec && shouldShowOfferNow()) {
+          setUiOffer({
+            title: rec.title,
+            why: belief
+              ? `Limiting belief detected: “${belief}.” Tonight’s session dissolves that pattern so your next action feels natural.`
+              : `Based on your goal, this short trance helps you move without overthinking.`,
+            priceCents: rec.price,
+            buyUrl: HM_LINK
+          });
+          markOfferShown();
+        }
+      } catch {}
+
+      const reply = await callGenie({ text: combined });
+      pushThread({ role:'assistant', content: reply });
+      setS(get());
+    } catch {
+      pushThread({ role:'assistant', content: 'The lamp flickered. Try again in a moment.' });
+      setS(get());
+    } finally {
+      setThinking(false);
+    }
   }
-}
-
 
   function onKey(e){
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -361,7 +411,7 @@ async function send(){
   function onLooksRight() {
     const plan = prescribe(parsed || {});
     setFirstRx(plan);
-    setStage('rx'); // show prescription and wait
+    setStage('rx');
     setTimeout(() => {
       const el = document.getElementById("first-prescription");
       if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -378,56 +428,28 @@ async function send(){
     onLooksRight();
   }
 
-  // 🔊 Listen button (under Rx card)
-  function onStartListening(){
-    // DO NOT flip to chat yet — keep Rx showing
-    // Just bring up overlay; chat will mount after tap
-    setOverlayVisible(true);
+  function dismissOverlay(){
+    // Clear any old thread so we don't load previous convo
+    set({ thread: [] });
+
+    // ✅ Mark the wizard as completed for today
+    markWizardDoneToday();
+
+    // First message in chat: recap → wait for yes
+    pushRecapMessage();
+
+    // flip stages
+    setStage('chat');
+    setOverlayVisible(false);
+
+    // enter first script phase
+    setChatScriptPhase('confirm');
+
     setTimeout(() => {
-      const ov = document.getElementById('genie-overlay-tap');
-      if (ov) ov.focus();
-    }, 100);
+      const el = listRef.current;
+      if (el) el.scrollTop = el.scrollHeight;
+    }, 0);
   }
-
-function dismissOverlay(){
-  // Clear any old thread so we don't load previous convo
-  set({ thread: [] });
-  // ✅ Mark the wizard as completed for today
- markWizardDoneToday();
-  
-  // Build a friendly recap of the user's inputs
-  const stateNow = get();
-  const fn = stateNow.firstName || 'Friend';
-  const wish = stateNow.currentWish?.wish || 'your main goal';
-  const block = stateNow.currentWish?.block || 'what tends to get in the way';
-  const micro = stateNow.currentWish?.micro || null;
-
-  const recapLines = [
-    `🌟 The lamp glows softly… I’m here, ${fn}.`,
-    `Here’s what I heard:`,
-    `• Your Goal: ${wish}`,
-    `• Current block: ${block}`,
-    micro ? `• Small next step you will take: ${micro}` : null,
-    ``,
-    `Does that look right? (Reply “yes” to begin, or tell me what to adjust.)`
-  ].filter(Boolean).join('\n');
-
-  pushThread({ role:'assistant', content: recapLines });
-  setS(get());
-
-  // flip stages
-  setStage('chat');
-  setOverlayVisible(false);
-
-  // enter first script phase
-  setChatScriptPhase('confirm');
-
-  setTimeout(() => {
-    const el = listRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, 0);
-}
-
 
   // ------- overlay styles -------
   const overlayStyles = `
@@ -558,34 +580,27 @@ function dismissOverlay(){
               </>
             )}
 
-            {/* Stage: rx (prescription only; wait for Listen) */}
-        {/* Stage: rx (prescription only; button does everything) */}
-{stage === 'rx' && firstRx && (
-  <>
-    <div id="first-prescription" style={{ marginBottom: 8 }}>
-      <PrescriptionCard
-        title={firstRx.firstMeditation}
-        why={`Fastest unlock for your path (${firstRx.family} • ${firstRx.protocol}). Use once tonight. Return for next dose.`}
-        onClose={() => setFirstRx(null)}
-        ctaLabel="Listen To This »"
-        onCta={() => {
-          // 1) open correct link in a new tab
-          window.open(HM_LINK, "_blank", "noopener,noreferrer");
-          // 2) pop up the genie waiting overlay
-          setOverlayVisible(true);
-          setTimeout(() => {
-            const ov = document.getElementById("genie-overlay-tap");
-            if (ov) ov.focus();
-          }, 100);
-          // 3) chat will load after user taps overlay (handled by dismissOverlay)
-        }}
-      />
-    </div>
-
-    {/* removed the duplicate center "Listen To This »" button */}
-  </>
-)}
-
+            {/* Stage: rx (prescription only; the card button opens overlay) */}
+            {stage === 'rx' && firstRx && (
+              <>
+                <div id="first-prescription" style={{ marginBottom: 8 }}>
+                  <PrescriptionCard
+                    title={firstRx.firstMeditation}
+                    why={`Fastest unlock for your path (${firstRx.family} • ${firstRx.protocol}). Use once tonight. Return for next dose.`}
+                    onClose={() => setFirstRx(null)}
+                    ctaLabel="Listen To This »"
+                    onCta={() => {
+                      window.open(HM_LINK, "_blank", "noopener,noreferrer");
+                      setOverlayVisible(true);
+                      setTimeout(() => {
+                        const ov = document.getElementById("genie-overlay-tap");
+                        if (ov) ov.focus();
+                      }, 100);
+                    }}
+                  />
+                </div>
+              </>
+            )}
 
             {/* Stage: chat */}
             {stage === 'chat' && (
