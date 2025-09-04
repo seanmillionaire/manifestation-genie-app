@@ -384,7 +384,7 @@ function dismissOverlay(){
   // Clear any old thread so we don't load previous convo
   set({ thread: [] });
   // ✅ Mark the wizard as completed for today
-  markWizardDone();
+ markWizardDoneToday();
   
   // Build a friendly recap of the user's inputs
   const stateNow = get();
