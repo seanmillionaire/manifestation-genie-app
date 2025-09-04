@@ -94,6 +94,8 @@ function pickFirstName(src){
 
 // ---------- offer gating (once per day + once per session) ----------
 const HM_LINK = "https://hypnoticmeditations.ai/b/l0kmb";
+
+
 function todayKey(){ return new Date().toISOString().slice(0,10); }
 function shouldShowOfferNow(){
   try {
@@ -109,6 +111,15 @@ function markOfferShown(){
     sessionStorage.setItem('mg_offer_shown_session', '1');
     localStorage.setItem('mg_offer_day', todayKey());
   } catch {}
+}
+function markWizardDoneToday(){
+  try { localStorage.setItem('mg_wizard_day', todayKey()); } catch {}
+  // also record in DB (so it survives other devices)
+  saveProgressToProfile({
+    supabase,
+    step: 'wizard_done',
+    details: { at: new Date().toISOString() }
+  });
 }
 
 export default function ChatPage(){
@@ -372,7 +383,9 @@ async function send(){
 function dismissOverlay(){
   // Clear any old thread so we don't load previous convo
   set({ thread: [] });
-
+  // ✅ Mark the wizard as completed for today
+  markWizardDone();
+  
   // Build a friendly recap of the user's inputs
   const stateNow = get();
   const fn = stateNow.firstName || 'Friend';
