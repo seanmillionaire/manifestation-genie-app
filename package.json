@@ -8,25 +8,24 @@
     "start": "next start",
     "lint": "next lint",
     "postinstall": "npm i -D typescript @types/react @types/react-dom @types/node || true"
-    },
-  "overrides": {             // npm >=8
-    "react": "18.3.1",
-    "react-dom": "18.3.1"
   },
-  "resolutions": {           // if you're using yarn / pnpm, keep this too
+  "engines": {
+    "node": ">=18"
+  },
+  "overrides": {
     "react": "18.3.1",
     "react-dom": "18.3.1"
   },
   "dependencies": {
     "next": "14.2.5",
-        "canvas-confetti": "^1.9.2",
     "react": "18.3.1",
     "react-dom": "18.3.1",
     "@supabase/supabase-js": "^2.45.0",
     "@supabase/auth-helpers-react": "^0.5.0",
     "@supabase/auth-helpers-nextjs": "^0.10.0",
     "openai": "^4.0.0",
-    "clsx": "^2.1.1"
+    "clsx": "^2.1.1",
+    "canvas-confetti": "^1.9.2"
   },
   "devDependencies": {
     "typescript": "^5.5.0",
@@ -35,8 +34,5 @@
     "@types/node": "^20.11.0",
     "eslint": "^8.57.0",
     "eslint-config-next": "14.2.5"
-  },
-  "engines": {
-    "node": ">=18"
   }
 }
