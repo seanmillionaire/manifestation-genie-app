@@ -1,5 +1,4 @@
-// /pages/chat.js — Free-flow chat, compiles clean, saves lastChatPayload
-
+// /pages/chat.js — staged flow: Confirm → Prescription → (overlay) → Chat
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
 import { get, set, newId, pushThread, toPlainMessages } from '../src/flowState';
@@ -11,37 +10,17 @@ import SoftConfirmBar from "../components/Confirm/SoftConfirmBar";
 import { parseAnswers, scoreConfidence, variantFromScore } from "../src/features/confirm/decision";
 import { prescribe } from "../src/engine/prescribe";
 
+/* ----------------------- helpers (pure / top-level) ----------------------- */
 
-// 🔓 Free-flow mode (no confirm/exercise rails)
-const FREE_FLOW = false;
-
-// ---------- utils ----------
-function escapeHTML(s=''){return s.replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
-function nl2br(s=''){ return s.replace(/\n/g, '<br/>'); }
-function pretty(o){ try { return JSON.stringify(o, null, 2); } catch { return String(o); } }
-
-function todayKey(){ return new Date().toISOString().slice(0,10); }
-function isNiceWorkMessage(s='') {
-  return /nice work/i.test(s) || /you can come back tomorrow/i.test(s);
-}
-const EXERCISE_DONE_KEY = 'mg_exercise_day';
-
-const HM_LINK = "https://hypnoticmeditations.ai/b/l0kmb";
-
-function shouldShowOfferNow(){
-  try {
-    if (typeof window === 'undefined') return false;
-    const shownSession = sessionStorage.getItem('mg_offer_shown_session') === '1';
-    const shownDay = localStorage.getItem('mg_offer_day') === todayKey();
-    return !(shownSession || shownDay);
-  } catch { return true; }
-}
-function markOfferShown(){
-  try {
-    if (typeof window === 'undefined') return;
-    sessionStorage.setItem('mg_offer_shown_session', '1');
-    localStorage.setItem('mg_offer_day', todayKey());
-  } catch {}
+// strict confirm matcher (single-word yes/es, trimmed)
+function isYes(s = '') {
+  const n = s.trim().toLowerCase();
+  const clean = n.replace(/[.!?\s]+$/g, '');
+  const ACCEPT = [
+    'yes','y','yep','yeah','ok','okay','sure',
+    'looks right','correct',"that's right",'sounds right','ready'
+  ];
+  return ACCEPT.includes(clean);
 }
 
 async function saveProgressToProfile({ supabase, step, details }) {
@@ -61,14 +40,44 @@ async function saveProgressToProfile({ supabase, step, details }) {
   } catch {}
 }
 
+// Parse "Goal: xxx | Block: yyy" (order free; partials allowed)
+function parseInlineUpdate(text, stateNow) {
+  if (!text) return null;
+  if (/^\s*(you know already|same|no change)\s*$/i.test(text)) {
+    return { ...stateNow.currentWish };
+  }
+  const goalMatch  = /goal\s*[:=\-]\s*([^|]+?)(?=$|\|)/i.exec(text);
+  const blockMatch = /block(?:er)?\s*[:=\-]\s*([^|]+?)(?=$|\|)/i.exec(text);
+  const microMatch = /micro\s*[:=\-]\s*([^|]+?)(?=$|\|)/i.exec(text);
+
+  if (!goalMatch && !blockMatch && !microMatch) {
+    const g2 = /(?:^|\s)goal\s+is\s+(.+)/i.exec(text);
+    const b2 = /(?:^|\s)block(?:er)?\s+is\s+(.+)/i.exec(text);
+    const m2 = /(?:^|\s)micro\s+is\s+(.+)/i.exec(text);
+    if (!g2 && !b2 && !m2) return null;
+    return {
+      ...stateNow.currentWish,
+      wish:  g2 ? g2[1].trim() : (stateNow.currentWish?.wish || null),
+      block: b2 ? b2[1].trim() : (stateNow.currentWish?.block || null),
+      micro: m2 ? m2[1].trim() : (stateNow.currentWish?.micro || null),
+    };
+  }
+  return {
+    ...stateNow.currentWish,
+    wish:  goalMatch  ? goalMatch[1].trim()  : (stateNow.currentWish?.wish || null),
+    block: blockMatch ? blockMatch[1].trim() : (stateNow.currentWish?.block || null),
+    micro: microMatch ? microMatch[1].trim() : (stateNow.currentWish?.micro || null),
+  };
+}
+
+// tiny utils
+function escapeHTML(s=''){return s.replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
+function nl2br(s=''){ return s.replace(/\n/g, '<br/>'); }
+function pretty(o){ try { return JSON.stringify(o, null, 2); } catch { return String(o); } }
 function pickFirstName(src){
   const first = (v)=> v ? String(v).trim().split(/\s+/)[0] : '';
-  const cands = [
-    src?.first_name, src?.firstName,
-    src?.display_name, src?.displayName,
-    src?.name,
-    src?.full_name, src?.fullName
-  ].map(first).filter(Boolean);
+  const cands = [src?.first_name, src?.firstName, src?.display_name, src?.displayName, src?.name, src?.full_name, src?.fullName]
+    .map(first).filter(Boolean);
   for (const c of cands){
     const t = c.trim();
     if (!t) continue;
@@ -79,6 +88,34 @@ function pickFirstName(src){
   return '';
 }
 
+// offer gating
+const HM_LINK = "https://hypnoticmeditations.ai/b/l0kmb";
+function todayKey(){ return new Date().toISOString().slice(0,10); }
+function shouldShowOfferNow(){
+  try {
+    if (typeof window === 'undefined') return false;
+    const shownSession = sessionStorage.getItem('mg_offer_shown_session') === '1';
+    const shownDay = localStorage.getItem('mg_offer_day') === todayKey();
+    return !(shownSession || shownDay);
+  } catch { return true; }
+}
+function markOfferShown(){
+  try { if (typeof window !== 'undefined') {
+    sessionStorage.setItem('mg_offer_shown_session', '1');
+    localStorage.setItem('mg_offer_day', todayKey());
+  }} catch {}
+}
+async function markWizardDoneToday(){
+  try { localStorage.setItem('mg_wizard_day', todayKey()); } catch {}
+  await saveProgressToProfile({
+    supabase,
+    step: 'wizard_done',
+    details: { at: new Date().toISOString() }
+  });
+}
+
+/* ------------------------------ component ------------------------------ */
+
 export default function ChatPage(){
   const router = useRouter();
   const [S, setS] = useState(get());
@@ -88,34 +125,76 @@ export default function ChatPage(){
   const [debugOn, setDebugOn] = useState(false);
   const [lastChatPayload, setLastChatPayload] = useState(null);
   const listRef = useRef(null);
-const [uid, setUid] = useState(null);
-const [exerciseStarted, setExerciseStarted] = useState(false);
 
-  // staged UI: we start in chat for free-flow
-// staged UI: we start in chat for free-flow
-const [stage, setStage] = useState(FREE_FLOW ? 'chat' : 'confirm');
+  // staged UI: 'confirm' → 'rx' → 'chat'
+  const [stage, setStage] = useState('confirm');
 
-// 🔒 always start rails at soft-confirm on first render (prevents stale jumps)
-useEffect(() => {
-  if (!FREE_FLOW) setStage('confirm');
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-}, []);
+  // chatScriptPhase: 'confirm' → 'exercise' → 'win' → 'free'
+  const [chatScriptPhase, setChatScriptPhase] = useState('free');
 
-  const [chatScriptPhase, setChatScriptPhase] = useState('free'); // kept for compatibility
+  // overlay separate from stage; covers current stage
   const [overlayVisible, setOverlayVisible] = useState(false);
 
-  // soft-confirm state (hidden when FREE_FLOW)
+  // soft-confirm state
   const [confirmVariant, setConfirmVariant] = useState(null);
   const [parsed, setParsed] = useState({ outcome: null, block: null, state: null });
   const [firstRx, setFirstRx] = useState(null);
   const [showTweaks, setShowTweaks] = useState(false);
-// Enter sends; Shift+Enter = newline
-const onKey = (e) => {
-  if (e.key === 'Enter' && !e.shiftKey) {
-    e.preventDefault();
-    send();
+
+  // recap message (inside component so it can call setS)
+  function pushRecapMessage() {
+    const st = get();
+    const fn = st.firstName || 'Friend';
+    const wish = st.currentWish?.wish || 'your main goal';
+    const block = st.currentWish?.block || 'what tends to get in the way';
+    const micro = st.currentWish?.micro || null;
+
+    const recapLines = [
+      `🌟 The lamp glows softly… I’m here, ${fn}.`,
+      `Here’s what I heard:`,
+      `• Your Goal: ${wish}`,
+      `• Current block: ${block}`,
+      micro ? `• Small next step you will take: ${micro}` : null,
+      ``,
+      `Does that look right? (Reply “yes” to begin, or tell me what to adjust.)`
+    ].filter(Boolean).join('\n');
+
+    pushThread({ role:'assistant', content: recapLines });
+    setS(get());
   }
-};
+
+  // script helpers (INSIDE to re-render)
+  function startFirstExercise(){
+    const st = get();
+    const goal = st.currentWish?.wish || 'your goal';
+    const msg = [
+      `Great — let’s get you a quick win now.`,
+      ``,
+      `🧠 2-Min Focus Reset`,
+      `1) Sit tall. Close your eyes.`,
+      `2) Inhale for 4… hold 2… exhale for 6. Do 6 breaths.`,
+      `3) On each exhale, picture taking the tiniest step toward “${goal}”.`,
+      ``,
+      `Type **done** when you finish.`
+    ].join('\n');
+    pushThread({ role:'assistant', content: msg });
+    setS(get());
+  }
+  async function finishExerciseAndWrap(){
+    await saveProgressToProfile({
+      supabase,
+      step: 'exercise_done',
+      details: { when: new Date().toISOString() }
+    });
+    const msg = [
+      `✨ Nice work. That small reset wires momentum.`,
+      ``,
+      `You can come back tomorrow for your next dose…`,
+      `or keep going now — ask me anything and we’ll go deeper.`
+    ].join('\n');
+    pushThread({ role:'assistant', content: msg });
+    setS(get());
+  }
 
   // auto-enable debug via ?debug=1
   useEffect(() => {
@@ -125,7 +204,7 @@ const onKey = (e) => {
     }
   }, []);
 
-  // boot + greet + pull name
+  // boot + greet + pull name (no intro push; recap happens after overlay)
   useEffect(() => {
     const cur = get();
     if (!cur.vibe) { router.replace('/vibe'); return; }
@@ -163,7 +242,6 @@ const onKey = (e) => {
             name: user.user_metadata?.name,
             display_name: user.user_metadata?.full_name
           }) || lsName;
-if (user?.id) setUid(user.id);
 
           if (best && best !== 'Friend') {
             set({ firstName: best });
@@ -172,38 +250,22 @@ if (user?.id) setUid(user.id);
         }
       } catch {}
       setS(get());
-      try {
-  const doneToday = localStorage.getItem(EXERCISE_DONE_KEY) === todayKey();
-  if (doneToday) setExerciseStarted(true);
-} catch {}
-
     })();
   }, [router]);
 
-  // derive confirm variant (not shown in free-flow, but keep logic)
-useEffect(() => {
-  try {
-    // ✅ robust fallbacks so SoftConfirmBar always has text
-    const goal =
-      S?.currentWish?.wish ||
-      S?.prompt_spec?.prompt ||
-      S?.vibe?.title ||
-      'your goal';
-
-    const blocker =
-      S?.currentWish?.block ||
-      S?.prompt_spec?.block ||
-      S?.vibe?.block ||
-      'what tends to get in the way';
-
-    const p = parseAnswers({ goal, blocker });
-    setParsed(p);
-
-    const score = scoreConfidence(p);
-    setConfirmVariant(variantFromScore(score));
-  } catch {}
-}, [S?.currentWish, S?.prompt_spec, S?.vibe]);
-
+  // derive confirm variant
+  useEffect(() => {
+    try {
+      const a = {
+        goal: S?.currentWish?.wish || S?.prompt_spec?.prompt || null,
+        blocker: S?.currentWish?.block || null
+      };
+      const p = parseAnswers(a);
+      const score = scoreConfidence(p);
+      setParsed(p);
+      setConfirmVariant(variantFromScore(score));
+    } catch {}
+  }, [S?.currentWish, S?.prompt_spec]);
 
   // keep scroll pinned once chat is visible
   useEffect(() => {
@@ -211,34 +273,23 @@ useEffect(() => {
     if (el && stage === 'chat') el.scrollTop = el.scrollHeight;
   }, [S.thread, uiOffer, stage]);
 
-// when rails complete and Chat opens, restore the recap auto-reply
-useEffect(() => {
-  if (!FREE_FLOW && stage === 'chat') {
-    seedRecapIfNeeded();
-  }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-}, [stage, FREE_FLOW, parsed?.outcome, parsed?.block]);
+  // central API to your backend
+  async function callGenie({ text }) {
+    const stateNow = get();
+    const payload = {
+      userName: stateNow.firstName || null,
+      context: {
+        wish: stateNow.currentWish?.wish || null,
+        block: stateNow.currentWish?.block || null,
+        micro: stateNow.currentWish?.micro || null,
+        vibe: stateNow.vibe || null,
+        prompt_spec: stateNow.prompt_spec?.prompt || null,
+      },
+      messages: toPlainMessages(stateNow.thread || []),
+      text
+    };
+    setLastChatPayload(payload);
 
-  
-// 🧞 auto-greet only after rails complete → when chat opens with empty thread
-useEffect(() => {
-  const thread = S?.thread || [];
-  const noMessages = thread.length === 0;
-
-  // only greet if we are NOT in recap mode
-  if (!FREE_FLOW && stage === 'chat' && noMessages && chatScriptPhase !== 'recap') {
-    pushThread({
-      role: 'assistant',
-      content: "✨ I’m here. Ready to lock in your plan? Tell me the tiniest next step you’ll take."
-    });
-    setS(get());
-  }
-}, [stage, FREE_FLOW, S?.thread, chatScriptPhase]);
-
-
-  
-  // ---- central API (clean wrapper) ----
-  async function callGenie({ payload }) {
     const resp = await fetch('/api/chat', {
       method:'POST',
       headers:{ 'Content-Type':'application/json' },
@@ -248,60 +299,75 @@ useEffect(() => {
     const data = await resp.json();
     return data?.reply || 'I’m here.';
   }
-async function startExerciseOne(){
-  // client-side “one per day” guard (nice UX)
-  try {
-    if (localStorage.getItem(EXERCISE_DONE_KEY) === todayKey()) {
-      pushThread({ role:'assistant', content: "🚫 You’ve already completed today’s exercise. Come back tomorrow!" });
-      setS(get());
-      return;
-    }
-  } catch {}
 
-  // Build context (we’ll pass wish so the exercise can mention it)
-  const stateNow = get();
-  const wish = stateNow?.currentWish?.wish || null;
-
-  try {
-    const resp = await fetch('/api/exercise', {
-      method:'POST',
-      headers:{ 'Content-Type':'application/json' },
-      body: JSON.stringify({
-        exerciseId: 1,
-        userId: uid || null,
-        wish
-      })
-    });
-    const data = await resp.json();
-
-    // Show exercise in chat
-    pushThread({ role: 'assistant', content: data?.text || "Let’s begin." });
-    setS(get());
-
-    // Mark as done locally so the button hides today
-    try { localStorage.setItem(EXERCISE_DONE_KEY, todayKey()); } catch {}
-    setExerciseStarted(true);
-  } catch (e){
-    pushThread({ role:'assistant', content: "Hmm, the lamp flickered. Try again in a moment." });
-    setS(get());
-  }
-}
-  // ✅ Free-flow send (saves lastChatPayload)
+  // send handler with phased script
   async function send(){
     const text = input.trim();
     if (!text || thinking) return;
     setInput('');
     setThinking(true);
 
-
-    // push user message
     pushThread({ role:'user', content: text });
     setS(get());
-    
+
     try {
-      // optional offer logic
+      // ----- PHASE: confirm -----
+      if (chatScriptPhase === 'confirm') {
+        if (isYes(text)) {
+          await saveProgressToProfile({
+            supabase,
+            step: 'confirmed',
+            details: {
+              wish: S?.currentWish?.wish || null,
+              block: S?.currentWish?.block || null,
+              micro: S?.currentWish?.micro || null
+            }
+          });
+          setChatScriptPhase('exercise');
+          startFirstExercise();
+          setS(get());
+          return;
+        } else {
+          const stateNow = get();
+          const nextWish = parseInlineUpdate(text, stateNow);
+          if (nextWish) {
+            set({ currentWish: nextWish });
+            pushRecapMessage();
+            return;
+          }
+          pushThread({
+            role:'assistant',
+            content: `Got it. Tell me your goal and sticking point in one line, like:\n“Goal: … | Block: …”`
+          });
+          setS(get());
+          return;
+        }
+      }
+
+      // ----- PHASE: exercise -----
+      if (chatScriptPhase === 'exercise') {
+        if (/^done\b/i.test(text)) {
+          setChatScriptPhase('win');
+          await finishExerciseAndWrap();
+          setChatScriptPhase('free');
+          return;
+        } else {
+          pushThread({
+            role:'assistant',
+            content: `No rush. Do the 2-min reset, then type **done** when finished.`
+          });
+          setS(get());
+          return;
+        }
+      }
+
+      // ----- FREE CHAT -----
+      const combined = S?.prompt_spec?.prompt
+        ? `${S.prompt_spec.prompt}\n\nUser: ${text}`
+        : text;
+
       try {
-        const { goal, belief } = detectBeliefFrom(text);
+        const { goal, belief } = detectBeliefFrom(combined);
         const rec = recommendProduct({ goal, belief });
         if (rec && shouldShowOfferNow()) {
           setUiOffer({
@@ -316,44 +382,7 @@ async function startExerciseOne(){
         }
       } catch {}
 
-
-// build payload from latest state (includes the message we just pushed)
-const stateNow = get();
-const payload = {
-  userName: stateNow.firstName || null,
-  context: {
-    wish: stateNow.currentWish?.wish || null,
-    block: stateNow.currentWish?.block || null,
-    micro: stateNow.currentWish?.micro || null,
-    vibe: stateNow.vibe || null,
-    prompt_spec: stateNow.prompt_spec?.prompt || null,
-  },
-  messages: toPlainMessages(stateNow.thread || []),
-  text
-};
-
-// update debug state + window helper
-setLastChatPayload(payload);
-if (typeof window !== 'undefined') {
-  window.__lastChatPayload = payload;
-  console.log('[Genie] lastChatPayload set:', payload);
-}
-
-// call API
-const reply = await callGenie({ payload });
-
-
-// show in debug panel immediately
-setLastChatPayload(payload);
-
-// also expose for quick dev inspection
-if (typeof window !== 'undefined') {
-  window.__lastChatPayload = payload;
-  console.log('[Genie] lastChatPayload set:', payload);
-}
-
-
-      // render reply
+      const reply = await callGenie({ text: combined });
       pushThread({ role:'assistant', content: reply });
       setS(get());
     } catch {
@@ -364,8 +393,13 @@ if (typeof window !== 'undefined') {
     }
   }
 
+  function onKey(e){
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault(); send();
+    }
+  }
 
-  // script-only handlers (kept but UI hidden when FREE_FLOW)
+  // -------- staged handlers --------
   function onLooksRight() {
     const plan = prescribe(parsed || {});
     setFirstRx(plan);
@@ -385,42 +419,30 @@ if (typeof window !== 'undefined') {
     setShowTweaks(false);
     onLooksRight();
   }
+
+  // overlay tap → enter chat
   function dismissOverlay(){
+    // reset any old thread so we don't load a previous convo
+    set({ thread: [] });
+
+    // stamp wizard done for today
+    markWizardDoneToday();
+
+    // first message is the recap; then wait for "yes"
+    pushRecapMessage();
+
+    // flip UI
     setStage('chat');
     setOverlayVisible(false);
-    setChatScriptPhase('free');
+    setChatScriptPhase('confirm');
+
     setTimeout(() => {
       const el = listRef.current;
       if (el) el.scrollTop = el.scrollHeight;
     }, 0);
   }
-// --- recap seeding (restores previous build behavior) ---
-function seedRecapIfNeeded() {
-  if (FREE_FLOW) return;
 
-  const stateNow = get();
-  const thread = stateNow.thread || [];
-  if (thread.length > 0) return; // only seed if chat is empty
-
-  const outcome =
-    (parsed?.outcome || stateNow.currentWish?.wish || stateNow.prompt_spec?.prompt || 'your goal').trim();
-
-  const block =
-    (parsed?.block || stateNow.currentWish?.block || stateNow.prompt_spec?.block || '').trim();
-
-  const line1 = block
-    ? `I have you aiming for “${outcome}” and the main snag is “${block}”.`
-    : `I have you aiming for “${outcome}”.`;
-
-  const msg = `${line1}\n\nDid I capture that right?`;
-
-  // seed assistant recap
-  pushThread({ role: 'assistant', content: msg });
-  setS(get());
-  setChatScriptPhase('recap');
-}
-
-  // ------- overlay styles -------
+  // overlay styles
   const overlayStyles = `
 @keyframes popIn { 0% { transform: scale(.7); opacity: 0 } 60% { transform: scale(1.08); opacity:1 } 100% { transform: scale(1) } }
 @keyframes floaty { 0% { transform: translateY(0) } 50% { transform: translateY(-6px) } 100% { transform: translateY(0) } }
@@ -482,40 +504,35 @@ function seedRecapIfNeeded() {
               <div style={{ fontSize:12, opacity:.8, marginBottom:6 }}>firstName</div>
               <pre style={{ margin:0, fontSize:12, whiteSpace:'pre-wrap' }}>{pretty(S.firstName)}</pre>
             </div>
-
             <div style={{ background:'#0f172a', padding:10, borderRadius:8 }}>
               <div style={{ fontSize:12, opacity:.8, marginBottom:6 }}>vibe</div>
               <pre style={{ margin:0, fontSize:12, whiteSpace:'pre-wrap' }}>{pretty(S.vibe)}</pre>
             </div>
-
             <div style={{ background:'#0f172a', padding:10, borderRadius:8 }}>
               <div style={{ fontSize:12, opacity:.8, marginBottom:6 }}>currentWish</div>
               <pre style={{ margin:0, fontSize:12, whiteSpace:'pre-wrap' }}>{pretty(S.currentWish)}</pre>
             </div>
-
             <div style={{ background:'#0f172a', padding:10, borderRadius:8 }}>
               <div style={{ fontSize:12, opacity:.8, marginBottom:6 }}>prompt_spec</div>
               <pre style={{ margin:0, fontSize:12, whiteSpace:'pre-wrap' }}>{pretty(S.prompt_spec)}</pre>
             </div>
-
             <div style={{ gridColumn:'1 / span 2', background:'#0f172a', padding:10, borderRadius:8 }}>
               <div style={{ fontSize:12, opacity:.8, marginBottom:6 }}>lastChatPayload → /api/chat</div>
               <pre style={{ margin:0, fontSize:12, overflowX:'auto' }}>
                 {pretty(lastChatPayload ?? { info: "No chat call yet. Send a message to populate lastChatPayload." })}
               </pre>
             </div>
-
             <div style={{ gridColumn:'1 / span 2', background:'#0f172a', padding:10, borderRadius:8 }}>
               <div style={{ fontSize:12, opacity:.8, marginBottom:6 }}>softConfirm</div>
               <pre style={{ margin:0, fontSize:12, whiteSpace:'pre-wrap' }}>
-                {pretty({ parsed, confirmVariant, firstRx, stage, overlayVisible })}
+                {pretty({ parsed, confirmVariant, firstRx, stage, overlayVisible, chatScriptPhase })}
               </pre>
             </div>
           </div>
         </div>
       )}
 
-      {/* ---- Main Card ---- */}
+      {/* ---- Main Card (staged) ---- */}
       <div style={{ maxWidth: 980, margin: '12px auto', padding: '0 10px' }}>
         <div style={{ display:'grid', gridTemplateColumns:'1fr', gap:10 }}>
           <div style={{ background:'#fff', border:'1px solid rgba(0,0,0,0.08)', borderRadius:16, padding:10 }}>
@@ -523,8 +540,8 @@ function seedRecapIfNeeded() {
               <div style={{ fontWeight:900, fontSize:18 }}>Genie Chat</div>
             </div>
 
-            {/* Stage: confirm (hidden in free-flow) */}
-            {!FREE_FLOW && stage === 'confirm' && (
+            {/* Stage: confirm */}
+            {stage === 'confirm' && (
               <>
                 {showTweaks && (
                   <div style={{ marginBottom: 8 }}>
@@ -549,8 +566,8 @@ function seedRecapIfNeeded() {
               </>
             )}
 
-            {/* Stage: rx (hidden in free-flow) */}
-            {!FREE_FLOW && stage === 'rx' && firstRx && (
+            {/* Stage: rx (prescription only; the card button opens overlay) */}
+            {stage === 'rx' && firstRx && (
               <div id="first-prescription" style={{ marginBottom: 8 }}>
                 <PrescriptionCard
                   title={firstRx.firstMeditation}
@@ -619,24 +636,6 @@ function seedRecapIfNeeded() {
                           }}
                           dangerouslySetInnerHTML={{ __html: nl2br(escapeHTML(m.content || '')) }}
                         />
-                                {/* Show "Let's Go" under the Nice work message (only if not started today) */}
-      {isAI && isNiceWorkMessage(m.content || '') && !exerciseStarted && (
-        <div style={{ marginTop: 6 }}>
-          <button
-            onClick={startExerciseOne}
-            aria-label="Start Exercise One"
-            style={{
-              minHeight: 44, padding:'12px 16px', borderRadius:12,
-              border:'1px solid rgba(0,0,0,0.12)',
-              background:'#111827', color:'#fff', fontWeight:800,
-              cursor:'pointer'
-            }}
-          >
-            Let’s Go →
-          </button>
-        </div>
-      )}
-
                       </div>
                     )
                   })}
