@@ -93,6 +93,13 @@ export default function ChatPage(){
   const [parsed, setParsed] = useState({ outcome: null, block: null, state: null });
   const [firstRx, setFirstRx] = useState(null);
   const [showTweaks, setShowTweaks] = useState(false);
+// Enter sends; Shift+Enter = newline
+const onKey = (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    send();
+  }
+};
 
   // auto-enable debug via ?debug=1
   useEffect(() => {
@@ -182,13 +189,7 @@ export default function ChatPage(){
     const data = await resp.json();
     return data?.reply || 'I’m here.';
   }
-  // 🔑 key handler (component scope so JSX can see it)
-  function onKey(e){
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      send();
-    }
-  }
+
   // ✅ Free-flow send (saves lastChatPayload)
   async function send(){
     const text = input.trim();
@@ -219,26 +220,41 @@ export default function ChatPage(){
         }
       } catch {}
 
-      // build payload from latest state (includes the message we just pushed)
-      const stateNow = get();
-      const payload = {
-        userName: stateNow.firstName || null,
-        context: {
-          wish: stateNow.currentWish?.wish || null,
-          block: stateNow.currentWish?.block || null,
-          micro: stateNow.currentWish?.micro || null,
-          vibe: stateNow.vibe || null,
-          prompt_spec: stateNow.prompt_spec?.prompt || null,
-        },
-        messages: toPlainMessages(stateNow.thread || []),
-        text
-      };
+// build payload from latest state (includes the message we just pushed)
+const stateNow = get();
+const payload = {
+  userName: stateNow.firstName || null,
+  context: {
+    wish: stateNow.currentWish?.wish || null,
+    block: stateNow.currentWish?.block || null,
+    micro: stateNow.currentWish?.micro || null,
+    vibe: stateNow.vibe || null,
+    prompt_spec: stateNow.prompt_spec?.prompt || null,
+  },
+  messages: toPlainMessages(stateNow.thread || []),
+  text
+};
 
-      // show in debug panel immediately
-      setLastChatPayload(payload);
+// update debug state + window helper
+setLastChatPayload(payload);
+if (typeof window !== 'undefined') {
+  window.__lastChatPayload = payload;
+  console.log('[Genie] lastChatPayload set:', payload);
+}
 
-      // call API
-      const reply = await callGenie({ payload });
+// call API
+const reply = await callGenie({ payload });
+
+
+// show in debug panel immediately
+setLastChatPayload(payload);
+
+// also expose for quick dev inspection
+if (typeof window !== 'undefined') {
+  window.__lastChatPayload = payload;
+  console.log('[Genie] lastChatPayload set:', payload);
+}
+
 
       // render reply
       pushThread({ role:'assistant', content: reply });
