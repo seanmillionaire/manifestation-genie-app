@@ -47,7 +47,7 @@ const SoftConfirmBar: React.FC<Props> = ({
           <p className="text-[15px] leading-snug text-slate-900 dark:text-slate-100">
             I read your notes: you want to <strong>“{o}”</strong>, but{" "}
             <strong>“{b}”</strong> keeps holding you back. <br></br>If that’s right, I’ll prescribe
-            your first step.
+            your first step. Confirm below.
           </p>
 
           {/* spaced buttons */}
