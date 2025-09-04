@@ -293,7 +293,7 @@ async function send(){
         // user wants changes – reflect back and ask again
         pushThread({
           role:'assistant',
-          content: `Got it. Tell me your goal and sticking point in one line, like:\n“Goal: … | Block: …”`
+          content: `Got it. Tell me your goal and what's blocking you?`
         });
         setS(get());
         return;//
