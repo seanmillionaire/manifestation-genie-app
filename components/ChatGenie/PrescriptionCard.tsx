@@ -3,21 +3,20 @@ import React from "react";
 type Props = {
   title: string;
   why?: string;
-  /** Optional price info (not shown in CTA – kept for future use) */
   priceCents?: number;
 
-  /** Legacy commerce props (kept for backward-compat, unused when onCta is provided) */
+  /** BUY mode (upsell): open this URL if onCta is not provided */
   buyUrl?: string;
+
+  /** legacy (kept for compatibility; ignored when onCta is present) */
   previewUrl?: string;
   onUnlock?: () => void;
 
-  /** Close/hide the card */
+  /** close/hide the card */
   onClose?: () => void;
 
-  /** 👇 New: parent-provided CTA handler (e.g., show Genie overlay in /pages/chat.js) */
+  /** RX mode (free): when provided, this is called instead of navigating */
   onCta?: (e?: React.MouseEvent<HTMLButtonElement>) => void;
-
-  /** Optional CTA label */
   ctaLabel?: string;
 };
 
@@ -25,9 +24,9 @@ export default function PrescriptionCard({
   title,
   why,
   priceCents = 1200,
-  buyUrl = "https://hypnoticmeditations.ai/b/l0kmb",
+  buyUrl,
   previewUrl, // unused
-  onUnlock,
+  onUnlock,   // legacy
   onClose,
   onCta,
   ctaLabel = "Listen To This »",
@@ -35,7 +34,6 @@ export default function PrescriptionCard({
   const DUMMY_AUDIO =
     "https://cdnstreaming.myclickfunnels.com/audiofile/25873/file/original-3b1398f834c94cd9eeba088f4bcdba73/audiofile/25873/file/original-3b1398f834c94cd9eeba088f4bcdba73.flac";
 
-  /** Fallback: only used if onCta is NOT provided */
   async function legacyUnlock() {
     try {
       if (buyUrl) {
@@ -55,16 +53,15 @@ export default function PrescriptionCard({
   }
 
   function handleClick(e: React.MouseEvent<HTMLButtonElement>) {
-    // Prevent any default navigation bubbling from parent wrappers
     e.preventDefault();
     e.stopPropagation();
 
     if (onCta) {
-      // ✅ New path: delegate to parent (chat.js) to show Genie overlay + stage to chat
+      // ✅ RX (free) path → parent controls overlay/chat
       onCta(e);
       return;
     }
-    // Legacy fallback (commerce)
+    // ✅ Upsell path → open buyUrl (or legacy handler)
     legacyUnlock();
   }
 
