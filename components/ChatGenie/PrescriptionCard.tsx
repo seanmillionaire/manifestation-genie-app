@@ -1,68 +1,81 @@
 import React from "react";
 
+type Mode = "rx" | "buy";
+
 type Props = {
+  /** REQUIRED: explicitly choose behavior */
+  mode: Mode;
+
   title: string;
   why?: string;
-  priceCents?: number;
 
-  /** BUY mode (upsell): open this URL if onCta is not provided */
+  /** BUY mode only */
   buyUrl?: string;
 
-  /** legacy (kept for compatibility; ignored when onCta is present) */
+  /** RX mode only */
+  onCta?: (e?: React.MouseEvent<HTMLButtonElement>) => void;
+  ctaLabel?: string;
+
+  /** legacy (kept for compatibility, used only in buy fallback) */
   previewUrl?: string;
   onUnlock?: () => void;
 
   /** close/hide the card */
   onClose?: () => void;
 
-  /** RX mode (free): when provided, this is called instead of navigating */
-  onCta?: (e?: React.MouseEvent<HTMLButtonElement>) => void;
-  ctaLabel?: string;
+  /** not shown now, kept for future */
+  priceCents?: number;
 };
 
 export default function PrescriptionCard({
+  mode,
   title,
   why,
-  priceCents = 1200,
   buyUrl,
+  onCta,
+  ctaLabel = mode === "buy" ? "Unlock Session »" : "Listen To This »",
   previewUrl, // unused
   onUnlock,   // legacy
   onClose,
-  onCta,
-  ctaLabel = "Listen To This »",
+  priceCents = 1200,
 }: Props): JSX.Element {
   const DUMMY_AUDIO =
     "https://cdnstreaming.myclickfunnels.com/audiofile/25873/file/original-3b1398f834c94cd9eeba088f4bcdba73/audiofile/25873/file/original-3b1398f834c94cd9eeba088f4bcdba73.flac";
 
-  async function legacyUnlock() {
-    try {
-      if (buyUrl) {
-        window.open(buyUrl, "_blank", "noopener,noreferrer");
-        onClose?.();
-        return;
-      }
-      if (onUnlock) {
-        await onUnlock();
-        onClose?.();
-        return;
-      }
-      alert("No checkout link configured.");
-    } catch {
+  function openBuy() {
+    const url = buyUrl?.trim();
+    if (url) {
+      window.open(url, "_blank", "noopener,noreferrer");
       onClose?.();
+      return;
     }
+    // legacy escape hatch
+    if (onUnlock) {
+      Promise.resolve(onUnlock()).finally(() => onClose?.());
+      return;
+    }
+    alert("No checkout link configured.");
+    onClose?.();
   }
 
   function handleClick(e: React.MouseEvent<HTMLButtonElement>) {
     e.preventDefault();
     e.stopPropagation();
 
-    if (onCta) {
-      // ✅ RX (free) path → parent controls overlay/chat
-      onCta(e);
+    // 🔒 Hard guard by mode
+    if (mode === "buy") {
+      openBuy();
       return;
     }
-    // ✅ Upsell path → open buyUrl (or legacy handler)
-    legacyUnlock();
+
+    if (mode === "rx") {
+      if (onCta) {
+        onCta(e); // parent (chat.js) shows Genie overlay
+        return;
+      }
+      // If dev forgot to pass onCta for rx, do nothing visible
+      console.warn("[PrescriptionCard] mode='rx' but no onCta provided.");
+    }
   }
 
   return (
