@@ -10,11 +10,69 @@ import TweakChips from "../components/Confirm/TweakChips";
 import SoftConfirmBar from "../components/Confirm/SoftConfirmBar";
 import { parseAnswers, scoreConfidence, variantFromScore } from "../src/features/confirm/decision";
 import { prescribe } from "../src/engine/prescribe";
+// ---------- chat day-1 script helpers ----------
+const YES_WORDS = ['yes','yep','yeah','y','ok','okay','sure','looks right','correct','that\'s right','sounds right','ready'];
+function isYes(s=''){ return YES_WORDS.some(w => s.toLowerCase().includes(w)); }
+
+async function saveProgressToProfile({ supabase, step, details }) {
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    const user = session?.user;
+    if (!user) return;
+
+    // simple, forgiving upsert – adjust table/columns later if you want
+    await supabase
+      .from('user_progress')
+      .upsert({
+        user_id: user.id,
+        day_key: new Date().toISOString().slice(0,10),
+        step,                   // 'confirmed', 'exercise_done', etc.
+        details,                // free-form JSON
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'user_id,day_key' });
+  } catch {}
+}
 
 // ---------- tiny helpers ----------
 function escapeHTML(s=''){return s.replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
 function nl2br(s=''){ return s.replace(/\n/g, '<br/>'); }
 function pretty(o){ try { return JSON.stringify(o, null, 2); } catch { return String(o); } }
+function startFirstExercise(){
+  const st = get();
+  const goal = st.currentWish?.wish || 'your goal';
+  const msg = [
+    `Great — let’s get you a quick win now.`,
+    ``,
+    `🧠 2-Min Focus Reset`,
+    `1) Sit tall. Close your eyes.`,
+    `2) Inhale for 4… hold 2… exhale for 6. Do 6 breaths.`,
+    `3) On each exhale, picture taking the tiniest step toward “${goal}”.`,
+    ``,
+    `Type **done** when you finish.`
+  ].join('\n');
+
+  pushThread({ role:'assistant', content: msg });
+  setS(get());
+}
+
+async function finishExerciseAndWrap(){
+  // record progress
+  await saveProgressToProfile({
+    supabase,
+    step: 'exercise_done',
+    details: { when: new Date().toISOString() }
+  });
+
+  const msg = [
+    `✨ Nice work. That small reset wires momentum.`,
+    ``,
+    `You can come back tomorrow for your next dose…`,
+    `or keep going now — ask me anything and we’ll go deeper.`
+  ].join('\n');
+
+  pushThread({ role:'assistant', content: msg });
+  setS(get());
+}
 
 function pickFirstName(src){
   const first = (v)=> v ? String(v).trim().split(/\s+/)[0] : '';
@@ -62,9 +120,13 @@ export default function ChatPage(){
   const [debugOn, setDebugOn] = useState(false);
   const [lastChatPayload, setLastChatPayload] = useState(null);
   const listRef = useRef(null);
+// staged UI: 'confirm' → 'rx' → 'chat'
+const [stage, setStage] = useState('confirm');
 
-  // staged UI: 'confirm' → 'rx' → 'chat'
-  const [stage, setStage] = useState('confirm');
+// NEW: chatScriptPhase drives the first minutes of chat
+// 'confirm' → 'exercise' → 'win' → 'free'
+const [chatScriptPhase, setChatScriptPhase] = useState('free');
+
   // overlay separate from stage; covers current stage
   const [overlayVisible, setOverlayVisible] = useState(false);
 
@@ -129,21 +191,7 @@ export default function ChatPage(){
       } catch {}
 
       const after = get();
-      const intro = `🌟 The lamp glows softly… I’m here, ${after.firstName || 'Friend'}.
-Sounds like you’ve been carrying a lot. I’d love to hear—what’s been on your mind most lately?`;
 
-      if (!after.thread || after.thread.length === 0) {
-        pushThread({ role: 'assistant', content: intro });
-      } else {
-        const t0 = after.thread[0];
-        const looksOld =
-          t0?.role === 'assistant' &&
-          /what do you want to manifest|how do you feel about that|\bwhat'?s the snag\b/i.test(t0.content || '');
-        if (looksOld) {
-          const updated = [{ ...t0, content: intro }, ...after.thread.slice(1)];
-          set({ thread: updated });
-        }
-      }
       setS(get());
     })();
   }, [router]);
@@ -195,22 +243,69 @@ Sounds like you’ve been carrying a lot. I’d love to hear—what’s been on 
     return data?.reply || 'I’m here.';
   }
 
-  async function send(){
-    const text = input.trim();
-    if (!text || thinking) return;
-    setInput('');
-    setThinking(true);
+async function send(){
+  const text = input.trim();
+  if (!text || thinking) return;
+  setInput('');
+  setThinking(true);
 
-    pushThread({ role:'user', content: text });
-    setS(get());
+  pushThread({ role:'user', content: text });
+  setS(get());
 
+  try {
+    // --- PHASED SCRIPT HANDOFFS ---
+    if (chatScriptPhase === 'confirm') {
+      if (isYes(text)) {
+        // mark confirmation & move to exercise
+        await saveProgressToProfile({
+          supabase,
+          step: 'confirmed',
+          details: {
+            wish: S?.currentWish?.wish || null,
+            block: S?.currentWish?.block || null,
+            micro: S?.currentWish?.micro || null
+          }
+        });
+        setChatScriptPhase('exercise');
+        startFirstExercise();
+        return;
+      } else {
+        // user wants changes – reflect back and ask again
+        pushThread({
+          role:'assistant',
+          content: `Got it. Tell me your goal and sticking point in one line, like:\n“Goal: … | Block: …”`
+        });
+        setS(get());
+        return;
+      }
+    }
+
+    if (chatScriptPhase === 'exercise') {
+      if (/^done\b/i.test(text)) {
+        setChatScriptPhase('win');
+        await finishExerciseAndWrap();
+        // After wrap, open free chat
+        setChatScriptPhase('free');
+        return;
+      } else {
+        pushThread({
+          role:'assistant',
+          content: `No rush. Do the 2-min reset, then type **done** when finished.`
+        });
+        setS(get());
+        return;
+      }
+    }
+
+    // --- FREE CHAT (existing behavior) ---
+    const combined = S?.prompt_spec?.prompt
+      ? `${S.prompt_spec.prompt}\n\nUser: ${text}`
+      : text;
+
+    // still allow your product nudges here
     try {
-      const combined = S?.prompt_spec?.prompt
-        ? `${S.prompt_spec.prompt}\n\nUser: ${text}`
-        : text;
       const { goal, belief } = detectBeliefFrom(combined);
       const rec = recommendProduct({ goal, belief });
-
       if (rec && shouldShowOfferNow()) {
         setUiOffer({
           title: rec.title,
@@ -224,17 +319,17 @@ Sounds like you’ve been carrying a lot. I’d love to hear—what’s been on 
       }
     } catch {}
 
-    try {
-      const reply = await callGenie({ text });
-      pushThread({ role:'assistant', content: reply });
-      setS(get());
-    } catch {
-      pushThread({ role:'assistant', content: 'The lamp flickered. Try again in a moment.' });
-      setS(get());
-    } finally {
-      setThinking(false);
-    }
+    const reply = await callGenie({ text: combined });
+    pushThread({ role:'assistant', content: reply });
+    setS(get());
+  } catch {
+    pushThread({ role:'assistant', content: 'The lamp flickered. Try again in a moment.' });
+    setS(get());
+  } finally {
+    setThinking(false);
   }
+}
+
 
   function onKey(e){
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -274,15 +369,43 @@ Sounds like you’ve been carrying a lot. I’d love to hear—what’s been on 
     }, 100);
   }
 
-  function dismissOverlay(){
-    // Now reveal chat (console stays mounted; no vanish)
-    setStage('chat');
-    setOverlayVisible(false);
-    setTimeout(() => {
-      const el = listRef.current;
-      if (el) el.scrollTop = el.scrollHeight;
-    }, 0);
-  }
+function dismissOverlay(){
+  // Clear any old thread so we don't load previous convo
+  set({ thread: [] });
+
+  // Build a friendly recap of the user's inputs
+  const stateNow = get();
+  const fn = stateNow.firstName || 'Friend';
+  const wish = stateNow.currentWish?.wish || 'your main goal';
+  const block = stateNow.currentWish?.block || 'what tends to get in the way';
+  const micro = stateNow.currentWish?.micro || null;
+
+  const recapLines = [
+    `🌟 The lamp glows softly… I’m here, ${fn}.`,
+    `Here’s what I heard:`,
+    `• Goal: ${wish}`,
+    `• Sticking point: ${block}`,
+    micro ? `• Small next step you named: ${micro}` : null,
+    ``,
+    `Does that look right? (Reply “yes” to begin, or tell me what to adjust.)`
+  ].filter(Boolean).join('\n');
+
+  pushThread({ role:'assistant', content: recapLines });
+  setS(get());
+
+  // flip stages
+  setStage('chat');
+  setOverlayVisible(false);
+
+  // enter first script phase
+  setChatScriptPhase('confirm');
+
+  setTimeout(() => {
+    const el = listRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, 0);
+}
+
 
   // ------- overlay styles -------
   const overlayStyles = `
