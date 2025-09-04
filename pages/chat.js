@@ -1,4 +1,5 @@
-// /pages/chat.js — staged flow: Confirm → Prescription → (overlay) → Chat
+// /pages/chat.js — Free-flow chat, compiles clean, saves lastChatPayload
+
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
 import { get, set, newId, pushThread, toPlainMessages } from '../src/flowState';
@@ -9,19 +10,32 @@ import TweakChips from "../components/Confirm/TweakChips";
 import SoftConfirmBar from "../components/Confirm/SoftConfirmBar";
 import { parseAnswers, scoreConfidence, variantFromScore } from "../src/features/confirm/decision";
 import { prescribe } from "../src/engine/prescribe";
- // 🔓 Turn on free-flow mode (no confirm/exercise rails)
+
+// 🔓 Free-flow mode (no confirm/exercise rails)
 const FREE_FLOW = true;
 
-// ---------- chat day-1 script helpers ----------
-// strict confirm matcher
-function isYes(s = '') {
-  const n = s.trim().toLowerCase();
-  const clean = n.replace(/[.!?\s]+$/g, '');
-  const ACCEPT = [
-    'yes','y','yep','yeah','ok','okay','sure',
-    'looks right','correct',"that's right",'sounds right','ready'
-  ];
-  return ACCEPT.includes(clean);
+// ---------- utils ----------
+function escapeHTML(s=''){return s.replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
+function nl2br(s=''){ return s.replace(/\n/g, '<br/>'); }
+function pretty(o){ try { return JSON.stringify(o, null, 2); } catch { return String(o); } }
+
+function todayKey(){ return new Date().toISOString().slice(0,10); }
+const HM_LINK = "https://hypnoticmeditations.ai/b/l0kmb";
+
+function shouldShowOfferNow(){
+  try {
+    if (typeof window === 'undefined') return false;
+    const shownSession = sessionStorage.getItem('mg_offer_shown_session') === '1';
+    const shownDay = localStorage.getItem('mg_offer_day') === todayKey();
+    return !(shownSession || shownDay);
+  } catch { return true; }
+}
+function markOfferShown(){
+  try {
+    if (typeof window === 'undefined') return;
+    sessionStorage.setItem('mg_offer_shown_session', '1');
+    localStorage.setItem('mg_offer_day', todayKey());
+  } catch {}
 }
 
 async function saveProgressToProfile({ supabase, step, details }) {
@@ -41,45 +55,6 @@ async function saveProgressToProfile({ supabase, step, details }) {
   } catch {}
 }
 
-// Parse "Goal: xxx | Block: yyy" (order free; partials allowed)
-function parseInlineUpdate(text, stateNow) {
-  if (!text) return null;
-
-  if (/^\s*(you know already|same|no change)\s*$/i.test(text)) {
-    return { ...stateNow.currentWish };
-  }
-
-  const goalMatch  = /goal\s*[:=\-]\s*([^|]+?)(?=$|\|)/i.exec(text);
-  const blockMatch = /block(?:er)?\s*[:=\-]\s*([^|]+?)(?=$|\|)/i.exec(text);
-  const microMatch = /micro\s*[:=\-]\s*([^|]+?)(?=$|\|)/i.exec(text);
-
-  if (!goalMatch && !blockMatch && !microMatch) {
-    const g2 = /(?:^|\s)goal\s+is\s+(.+)/i.exec(text);
-    const b2 = /(?:^|\s)block(?:er)?\s+is\s+(.+)/i.exec(text);
-    const m2 = /(?:^|\s)micro\s+is\s+(.+)/i.exec(text);
-    if (!g2 && !b2 && !m2) return null;
-    return {
-      ...stateNow.currentWish,
-      wish:  g2 ? g2[1].trim() : (stateNow.currentWish?.wish || null),
-      block: b2 ? b2[1].trim() : (stateNow.currentWish?.block || null),
-      micro: m2 ? m2[1].trim() : (stateNow.currentWish?.micro || null),
-    };
-  }
-
-  return {
-    ...stateNow.currentWish,
-    wish:  goalMatch  ? goalMatch[1].trim()  : (stateNow.currentWish?.wish || null),
-    block: blockMatch ? blockMatch[1].trim() : (stateNow.currentWish?.block || null),
-    micro: microMatch ? microMatch[1].trim() : (stateNow.currentWish?.micro || null),
-  };
-}
-
-// ---------- tiny helpers ----------
-function escapeHTML(s=''){return s.replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
-function nl2br(s=''){ return s.replace(/\n/g, '<br/>'); }
-function pretty(o){ try { return JSON.stringify(o, null, 2); } catch { return String(o); } }
-
-
 function pickFirstName(src){
   const first = (v)=> v ? String(v).trim().split(/\s+/)[0] : '';
   const cands = [
@@ -98,33 +73,6 @@ function pickFirstName(src){
   return '';
 }
 
-// ---------- offer gating (once per day + once per session) ----------
-const HM_LINK = "https://hypnoticmeditations.ai/b/l0kmb";
-function todayKey(){ return new Date().toISOString().slice(0,10); }
-function shouldShowOfferNow(){
-  try {
-    if (typeof window === 'undefined') return false;
-    const shownSession = sessionStorage.getItem('mg_offer_shown_session') === '1';
-    const shownDay = localStorage.getItem('mg_offer_day') === todayKey();
-    return !(shownSession || shownDay);
-  } catch { return true; }
-}
-function markOfferShown(){
-  try {
-    if (typeof window === 'undefined') return;
-    sessionStorage.setItem('mg_offer_shown_session', '1');
-    localStorage.setItem('mg_offer_day', todayKey());
-  } catch {}
-}
-async function markWizardDoneToday(){
-  try { localStorage.setItem('mg_wizard_day', todayKey()); } catch {}
-  await saveProgressToProfile({
-    supabase,
-    step: 'wizard_done',
-    details: { at: new Date().toISOString() }
-  });
-}
-
 export default function ChatPage(){
   const router = useRouter();
   const [S, setS] = useState(get());
@@ -134,80 +82,17 @@ export default function ChatPage(){
   const [debugOn, setDebugOn] = useState(false);
   const [lastChatPayload, setLastChatPayload] = useState(null);
   const listRef = useRef(null);
-// --- script helpers INSIDE ChatPage so setS(get()) re-renders ---
 
-function startFirstExercise(){
-  const st = get();
-  const goal = st.currentWish?.wish || 'your goal';
-  const msg = [
-    `Great — let’s get you a quick win now.`,
-    ``,
-    `🧠 2-Min Focus Reset`,
-    `1) Sit tall. Close your eyes.`,
-    `2) Inhale for 4… hold 2… exhale for 6. Do 6 breaths.`,
-    `3) On each exhale, picture taking the tiniest step toward “${goal}”.`,
-    ``,
-    `Type **done** when you finish.`
-  ].join('\n');
-
-  pushThread({ role:'assistant', content: msg });
-  setS(get()); // force re-render so the message appears
-}
-
-async function finishExerciseAndWrap(){
-  await saveProgressToProfile({
-    supabase,
-    step: 'exercise_done',
-    details: { when: new Date().toISOString() }
-  });
-
-  const msg = [
-    `✨ Nice work. That small reset wires momentum.`,
-    ``,
-    `You can come back tomorrow for your next dose…`,
-    `or keep going now — ask me anything and we’ll go deeper.`
-  ].join('\n');
-
-  pushThread({ role:'assistant', content: msg });
-  setS(get()); // re-render
-}
-
-  // staged UI: 'confirm' → 'rx' → 'chat'
-const [stage, setStage] = useState(FREE_FLOW ? 'chat' : 'confirm');
-
-  // chatScriptPhase: 'confirm' → 'exercise' → 'win' → 'free'
-const [chatScriptPhase, setChatScriptPhase] = useState('free');
-
-  // overlay separate from stage; covers current stage
+  // staged UI: we start in chat for free-flow
+  const [stage, setStage] = useState(FREE_FLOW ? 'chat' : 'confirm');
+  const [chatScriptPhase, setChatScriptPhase] = useState('free'); // kept for compatibility
   const [overlayVisible, setOverlayVisible] = useState(false);
 
-  // soft-confirm state
+  // soft-confirm state (hidden when FREE_FLOW)
   const [confirmVariant, setConfirmVariant] = useState(null);
   const [parsed, setParsed] = useState({ outcome: null, block: null, state: null });
   const [firstRx, setFirstRx] = useState(null);
   const [showTweaks, setShowTweaks] = useState(false);
-
-  // helper lives inside so it can use setS/get()
-  function pushRecapMessage() {
-    const st = get();
-    const fn = st.firstName || 'Friend';
-    const wish = st.currentWish?.wish || 'your main goal';
-    const block = st.currentWish?.block || 'what tends to get in the way';
-    const micro = st.currentWish?.micro || null;
-
-    const recapLines = [
-      `🌟 The lamp glows softly… I’m here, ${fn}.`,
-      `Here’s what I heard:`,
-      `• Your Goal: ${wish}`,
-      `• Current block: ${block}`,
-      micro ? `• Small next step you will take: ${micro}` : null,
-      ``,
-      `Does that look right? (Reply “yes” to begin, or tell me what to adjust.)`
-    ].filter(Boolean).join('\n');
-
-    pushThread({ role:'assistant', content: recapLines });
-    setS(get());
-  }
 
   // auto-enable debug via ?debug=1
   useEffect(() => {
@@ -217,7 +102,7 @@ const [chatScriptPhase, setChatScriptPhase] = useState('free');
     }
   }, []);
 
-  // boot + greet + pull name (no intro push; recap happens after overlay)
+  // boot + greet + pull name
   useEffect(() => {
     const cur = get();
     if (!cur.vibe) { router.replace('/vibe'); return; }
@@ -266,7 +151,7 @@ const [chatScriptPhase, setChatScriptPhase] = useState('free');
     })();
   }, [router]);
 
-  // derive confirm variant
+  // derive confirm variant (not shown in free-flow, but keep logic)
   useEffect(() => {
     try {
       const a = {
@@ -286,21 +171,8 @@ const [chatScriptPhase, setChatScriptPhase] = useState('free');
     if (el && stage === 'chat') el.scrollTop = el.scrollHeight;
   }, [S.thread, uiOffer, stage]);
 
-  // central API
-// central API
-async function callGenie({ payload }) {
-  const resp = await fetch('/api/chat', {
-    method:'POST',
-    headers:{ 'Content-Type':'application/json' },
-    body: JSON.stringify(payload)
-  });
-  if (!resp.ok) throw new Error('Genie API error');
-  const data = await resp.json();
-  return data?.reply || 'I’m here.';
-}
-
-    setLastChatPayload(payload);
-
+  // ---- central API (clean wrapper) ----
+  async function callGenie({ payload }) {
     const resp = await fetch('/api/chat', {
       method:'POST',
       headers:{ 'Content-Type':'application/json' },
@@ -311,67 +183,66 @@ async function callGenie({ payload }) {
     return data?.reply || 'I’m here.';
   }
 
-async function send(){
-  const text = input.trim();
-  if (!text || thinking) return;
-  setInput('');
-  setThinking(true);
+  // ✅ Free-flow send (saves lastChatPayload)
+  async function send(){
+    const text = input.trim();
+    if (!text || thinking) return;
+    setInput('');
+    setThinking(true);
 
-  // 1) Push the user's message into the thread
-  pushThread({ role:'user', content: text });
-  setS(get());
+    // push user message
+    pushThread({ role:'user', content: text });
+    setS(get());
 
-  try {
-    // 2) (optional) offer logic on raw text
     try {
-      const { goal, belief } = detectBeliefFrom(text);
-      const rec = recommendProduct({ goal, belief });
-      if (rec && shouldShowOfferNow()) {
-        setUiOffer({
-          title: rec.title,
-          why: belief
-            ? `Limiting belief detected: “${belief}.” Tonight’s session dissolves that pattern so your next action feels natural.`
-            : `Based on your goal, this short trance helps you move without overthinking.`,
-          priceCents: rec.price,
-          buyUrl: HM_LINK
-        });
-        markOfferShown();
-      }
-    } catch {}
+      // optional offer logic
+      try {
+        const { goal, belief } = detectBeliefFrom(text);
+        const rec = recommendProduct({ goal, belief });
+        if (rec && shouldShowOfferNow()) {
+          setUiOffer({
+            title: rec.title,
+            why: belief
+              ? `Limiting belief detected: “${belief}.” Tonight’s session dissolves that pattern so your next action feels natural.`
+              : `Based on your goal, this short trance helps you move without overthinking.`,
+            priceCents: rec.price,
+            buyUrl: HM_LINK
+          });
+          markOfferShown();
+        }
+      } catch {}
 
-    // 3) Build payload from the updated state (includes the user msg we just pushed)
-    const stateNow = get();
-    const payload = {
-      userName: stateNow.firstName || null,
-      context: {
-        wish: stateNow.currentWish?.wish || null,
-        block: stateNow.currentWish?.block || null,
-        micro: stateNow.currentWish?.micro || null,
-        vibe: stateNow.vibe || null,
-        prompt_spec: stateNow.prompt_spec?.prompt || null,
-      },
-      messages: toPlainMessages(stateNow.thread || []),
-      text
-    };
+      // build payload from latest state (includes the message we just pushed)
+      const stateNow = get();
+      const payload = {
+        userName: stateNow.firstName || null,
+        context: {
+          wish: stateNow.currentWish?.wish || null,
+          block: stateNow.currentWish?.block || null,
+          micro: stateNow.currentWish?.micro || null,
+          vibe: stateNow.vibe || null,
+          prompt_spec: stateNow.prompt_spec?.prompt || null,
+        },
+        messages: toPlainMessages(stateNow.thread || []),
+        text
+      };
 
-    // 4) Save for the debug panel immediately
-    setLastChatPayload(payload);
+      // show in debug panel immediately
+      setLastChatPayload(payload);
 
-    // 5) Call API with exactly this payload
-    const reply = await callGenie({ payload });
+      // call API
+      const reply = await callGenie({ payload });
 
-    // 6) Render reply
-    pushThread({ role:'assistant', content: reply });
-    setS(get());
-  } catch (e) {
-    pushThread({ role:'assistant', content: 'The lamp flickered. Try again in a moment.' });
-    setS(get());
-    // Optional: console.error(e)
-  } finally {
-    setThinking(false);
+      // render reply
+      pushThread({ role:'assistant', content: reply });
+      setS(get());
+    } catch {
+      pushThread({ role:'assistant', content: 'The lamp flickered. Try again in a moment.' });
+      setS(get());
+    } finally {
+      setThinking(false);
+    }
   }
-}
-
 
   function onKey(e){
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -379,7 +250,7 @@ async function send(){
     }
   }
 
-  // -------- staged handlers --------
+  // script-only handlers (kept but UI hidden when FREE_FLOW)
   function onLooksRight() {
     const plan = prescribe(parsed || {});
     setFirstRx(plan);
@@ -399,19 +270,15 @@ async function send(){
     setShowTweaks(false);
     onLooksRight();
   }
-
-function dismissOverlay(){
-  // In free-flow we don't reset thread or push scripted recap
-  setStage('chat');
-  setOverlayVisible(false);
-  setChatScriptPhase('free');
-
-  setTimeout(() => {
-    const el = listRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, 0);
-}
-
+  function dismissOverlay(){
+    setStage('chat');
+    setOverlayVisible(false);
+    setChatScriptPhase('free');
+    setTimeout(() => {
+      const el = listRef.current;
+      if (el) el.scrollTop = el.scrollHeight;
+    }, 0);
+  }
 
   // ------- overlay styles -------
   const overlayStyles = `
@@ -508,7 +375,7 @@ function dismissOverlay(){
         </div>
       )}
 
-      {/* ---- Main Card (staged) ---- */}
+      {/* ---- Main Card ---- */}
       <div style={{ maxWidth: 980, margin: '12px auto', padding: '0 10px' }}>
         <div style={{ display:'grid', gridTemplateColumns:'1fr', gap:10 }}>
           <div style={{ background:'#fff', border:'1px solid rgba(0,0,0,0.08)', borderRadius:16, padding:10 }}>
@@ -516,8 +383,8 @@ function dismissOverlay(){
               <div style={{ fontWeight:900, fontSize:18 }}>Genie Chat</div>
             </div>
 
-            {/* Stage: confirm */}
-            {stage === 'confirm' && (
+            {/* Stage: confirm (hidden in free-flow) */}
+            {!FREE_FLOW && stage === 'confirm' && (
               <>
                 {showTweaks && (
                   <div style={{ marginBottom: 8 }}>
@@ -542,26 +409,24 @@ function dismissOverlay(){
               </>
             )}
 
-            {/* Stage: rx (prescription only; the card button opens overlay) */}
-            {stage === 'rx' && firstRx && (
-              <>
-                <div id="first-prescription" style={{ marginBottom: 8 }}>
-                  <PrescriptionCard
-                    title={firstRx.firstMeditation}
-                    why={`Fastest unlock for your path (${firstRx.family} • ${firstRx.protocol}). Use once tonight. Return for next dose.`}
-                    onClose={() => setFirstRx(null)}
-                    ctaLabel="Listen To This »"
-                    onCta={() => {
-                      window.open(HM_LINK, "_blank", "noopener,noreferrer");
-                      setOverlayVisible(true);
-                      setTimeout(() => {
-                        const ov = document.getElementById("genie-overlay-tap");
-                        if (ov) ov.focus();
-                      }, 100);
-                    }}
-                  />
-                </div>
-              </>
+            {/* Stage: rx (hidden in free-flow) */}
+            {!FREE_FLOW && stage === 'rx' && firstRx && (
+              <div id="first-prescription" style={{ marginBottom: 8 }}>
+                <PrescriptionCard
+                  title={firstRx.firstMeditation}
+                  why={`Fastest unlock for your path (${firstRx.family} • ${firstRx.protocol}). Use once tonight. Return for next dose.`}
+                  onClose={() => setFirstRx(null)}
+                  ctaLabel="Listen To This »"
+                  onCta={() => {
+                    window.open(HM_LINK, "_blank", "noopener,noreferrer");
+                    setOverlayVisible(true);
+                    setTimeout(() => {
+                      const ov = document.getElementById("genie-overlay-tap");
+                      if (ov) ov.focus();
+                    }, 100);
+                  }}
+                />
+              </div>
             )}
 
             {/* Stage: chat */}
