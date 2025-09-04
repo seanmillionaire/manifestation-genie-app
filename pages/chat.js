@@ -211,6 +211,20 @@ useEffect(() => {
     if (el && stage === 'chat') el.scrollTop = el.scrollHeight;
   }, [S.thread, uiOffer, stage]);
 
+// 🧞 auto-greet only after rails complete → when chat opens with empty thread
+useEffect(() => {
+  const thread = S?.thread || [];
+  const noMessages = thread.length === 0;
+  if (!FREE_FLOW && stage === 'chat' && noMessages) {
+    pushThread({
+      role: 'assistant',
+      content: "✨ I’m here. Ready to lock in your plan? Tell me the tiniest next step you’ll take."
+    });
+    setS(get());
+  }
+}, [stage, FREE_FLOW, S?.thread]);
+
+  
   // ---- central API (clean wrapper) ----
   async function callGenie({ payload }) {
     const resp = await fetch('/api/chat', {
