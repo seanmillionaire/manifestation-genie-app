@@ -383,9 +383,9 @@ function dismissOverlay(){
   const recapLines = [
     `🌟 The lamp glows softly… I’m here, ${fn}.`,
     `Here’s what I heard:`,
-    `• Goal: ${wish}`,
-    `• Sticking point: ${block}`,
-    micro ? `• Small next step you named: ${micro}` : null,
+    `• Your Goal: ${wish}`,
+    `• Current block: ${block}`,
+    micro ? `• Small next step you will take: ${micro}` : null,
     ``,
     `Does that look right? (Reply “yes” to begin, or tell me what to adjust.)`
   ].filter(Boolean).join('\n');
