@@ -9,7 +9,7 @@ import TweakChips from "../components/Confirm/TweakChips";
 import SoftConfirmBar from "../components/Confirm/SoftConfirmBar";
 import { parseAnswers, scoreConfidence, variantFromScore } from "../src/features/confirm/decision";
 import { prescribe } from "../src/engine/prescribe";
-
+ 
 // ---------- chat day-1 script helpers ----------
 // strict confirm matcher
 function isYes(s = '') {
