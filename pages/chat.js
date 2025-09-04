@@ -1,4 +1,4 @@
-// /pages/chat.js — staged flow: Confirm → Prescription → (overlay) → Chat
+// /pages/chat.js — staged flow: Rx → (overlay) → Chat (no confirm round 2)
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
 import { get, set, newId, pushThread, toPlainMessages } from '../src/flowState';
@@ -12,7 +12,7 @@ import { prescribe } from "../src/engine/prescribe";
 
 /* ----------------------- helpers (pure / top-level) ----------------------- */
 
-// Loose “yes” detector that feels human (kept for safety if we ever re-enter confirm)
+// Loose “yes” detector (kept for completeness; not used in initial flow now)
 function isYesLoose(raw = '') {
   const s = raw.trim().toLowerCase();
   if (!s) return false;
@@ -110,6 +110,14 @@ function markOfferShown(){
     localStorage.setItem('mg_offer_day', todayKey());
   }} catch {}
 }
+async function markWizardDoneToday(){
+  try { localStorage.setItem('mg_wizard_day', todayKey()); } catch {}
+  await saveProgressToProfile({
+    supabase,
+    step: 'wizard_done',
+    details: { at: new Date().toISOString() }
+  });
+}
 
 /* ------------------------------ component ------------------------------ */
 
@@ -122,47 +130,45 @@ export default function ChatPage(){
   const [debugOn, setDebugOn] = useState(false);
   const [lastChatPayload, setLastChatPayload] = useState(null);
   const listRef = useRef(null);
-  const confirmNudgesRef = useRef(0);
+  const confirmNudgesRef = useRef(0); // kept for free chat edge cases
 
-  // staged UI: 'confirm' → 'rx' → 'chat'
+  // UI: 'confirm' (kept only for soft bar) → 'rx' → 'chat'
   const [stage, setStage] = useState('confirm');
 
-  // chatScriptPhase: 'confirm' → 'exercise' → 'win' → 'free'
+  // chatScriptPhase: now goes 'exercise' → 'win' → 'free'
   const [chatScriptPhase, setChatScriptPhase] = useState('free');
 
   // overlay separate from stage; covers current stage
   const [overlayVisible, setOverlayVisible] = useState(false);
 
-  // dopamine burst + CTA after the win
-  const [showWinBurst, setShowWinBurst] = useState(false);
-  const [showLetsGo, setShowLetsGo] = useState(false);
-
-  // soft-confirm state (still used in the Rx stage)
+  // soft-confirm state
   const [confirmVariant, setConfirmVariant] = useState(null);
   const [parsed, setParsed] = useState({ outcome: null, block: null, state: null });
   const [firstRx, setFirstRx] = useState(null);
   const [showTweaks, setShowTweaks] = useState(false);
 
-  // ---------- nicely-human recap ----------
+  // dopamine UI
+  const [pointsBurst, setPointsBurst] = useState(0);
+  const [showWinCTA, setShowWinCTA] = useState(false);
+
+  // recap message (inside component so it can call setS)
   function pushHumanRecap() {
     const st = get();
     const fn = st.firstName || 'Friend';
-    const wish  = st.currentWish?.wish  || 'your main goal';
+    const wish  = st.currentWish?.wish  || 'your goal';
     const block = st.currentWish?.block || 'what gets in the way';
     const micro = st.currentWish?.micro || null;
 
-    const recap =
-      micro
-        ? `Hey ${fn} — I’m with you. Your goal is “${wish}”, the snag is “${block}”, and your next tiny step is “${micro}”.`
-        : `Hey ${fn} — I’m with you. Your goal is “${wish}” and the snag is “${block}”.`;
-
-    pushThread({ role:'assistant', content: recap });
+    const line = `Hey ${fn} — I’m with you. Your goal is “${wish}”, ` +
+      `the snag is “${block}”, and your next tiny step is ${micro ? `“${micro}”` : 'set together now'}.`;
+    pushThread({ role:'assistant', content: line });
+    setS(get());
+  }
+  function pushLetsStart(fn='Friend'){
     pushThread({ role:'assistant', content: `Alright ${fn}, let’s get started on manifesting this.` });
     setS(get());
   }
-
-  // script helpers
-  function startFirstExercise(){
+  function pushFirstExercise(){
     const st = get();
     const goal = st.currentWish?.wish || 'your goal';
     const msg = [
@@ -179,12 +185,70 @@ export default function ChatPage(){
     setS(get());
   }
 
+  async function heavyConfetti(){
+    try {
+      const confetti = (await import('canvas-confetti')).default;
+      const end = Date.now() + 1000;
+      const colors = ['#FFD600', '#22c55e', '#60a5fa', '#f472b6', '#fbbf24', '#34d399'];
+
+      (function frame(){
+        confetti({
+          particleCount: 5,
+          angle: 60,
+          spread: 75,
+          origin: { x: 0 },
+          colors
+        });
+        confetti({
+          particleCount: 5,
+          angle: 120,
+          spread: 75,
+          origin: { x: 1 },
+          colors
+        });
+        if (Date.now() < end) requestAnimationFrame(frame);
+      })();
+
+      // three big bursts
+      for (let i=0;i<3;i++){
+        confetti({
+          particleCount: 180,
+          startVelocity: 45,
+          spread: 360,
+          ticks: 120,
+          origin: { y: 0.6 }
+        });
+        // small pause
+        // eslint-disable-next-line no-await-in-loop
+        await new Promise(r=>setTimeout(r, 180));
+      }
+    } catch {}
+  }
+
+  async function awardPoints(amount = 50){
+    setPointsBurst(p => p + amount);
+    try {
+      const cur = parseInt(localStorage.getItem('mg_points') || '0', 10);
+      localStorage.setItem('mg_points', String(cur + amount));
+    } catch {}
+    await saveProgressToProfile({
+      supabase,
+      step: 'win_points',
+      details: { amount, at: new Date().toISOString() }
+    });
+    setTimeout(() => setPointsBurst(0), 1600);
+  }
+
   async function finishExerciseAndWrap(){
     await saveProgressToProfile({
       supabase,
       step: 'exercise_done',
       details: { when: new Date().toISOString() }
     });
+
+    // Dopamine: confetti + points
+    heavyConfetti();
+    awardPoints(50);
 
     const msg = [
       `✨ Nice work. That small reset wires momentum.`,
@@ -195,12 +259,13 @@ export default function ChatPage(){
 
     pushThread({ role:'assistant', content: msg });
     setS(get());
+    setShowWinCTA(true);
+  }
 
-    // dopamine burst + show CTA
-    setShowWinBurst(true);
-    setShowLetsGo(true);
-    // auto-hide confetti after a few seconds
-    setTimeout(()=>setShowWinBurst(false), 2200);
+  function triggerExerciseOne(){
+    // Hand off to your existing flow/exercise engine
+    set({ phase: 'exercise1', exerciseSeed: Date.now() });
+    router.push('/flow');
   }
 
   // auto-enable debug via ?debug=1
@@ -211,7 +276,7 @@ export default function ChatPage(){
     }
   }, []);
 
-  // boot + greet + pull name (no intro push; human recap happens after overlay)
+  // boot + greet + pull name (soft confirm happens BEFORE chat; chat skips it)
   useEffect(() => {
     const cur = get();
     if (!cur.vibe) { router.replace('/vibe'); return; }
@@ -260,7 +325,7 @@ export default function ChatPage(){
     })();
   }, [router]);
 
-  // derive confirm variant for the Rx stage
+  // derive confirm variant (still used by SoftConfirmBar before chat)
   useEffect(() => {
     try {
       const a = {
@@ -278,7 +343,7 @@ export default function ChatPage(){
   useEffect(() => {
     const el = listRef.current;
     if (el && stage === 'chat') el.scrollTop = el.scrollHeight;
-  }, [S.thread, uiOffer, stage, showLetsGo]);
+  }, [S.thread, uiOffer, stage, showWinCTA]);
 
   // central API to your backend
   async function callGenie({ text }) {
@@ -307,7 +372,7 @@ export default function ChatPage(){
     return data?.reply || 'I’m here.';
   }
 
-  // send handler with phased script
+  // send handler (now main scripted path is exercise → done)
   async function send(){
     const text = input.trim();
     if (!text || thinking) return;
@@ -318,50 +383,6 @@ export default function ChatPage(){
     setS(get());
 
     try {
-      // ----- PHASE: confirm (kept for edge routes; we normally skip to exercise) -----
-      if (chatScriptPhase === 'confirm') {
-        if (isYesLoose(text)) {
-          confirmNudgesRef.current = 0;
-          await saveProgressToProfile({
-            supabase,
-            step: 'confirmed',
-            details: {
-              wish: S?.currentWish?.wish || null,
-              block: S?.currentWish?.block || null,
-              micro: S?.currentWish?.micro || null
-            }
-          });
-          setChatScriptPhase('exercise');
-          startFirstExercise();
-          setS(get());
-          return;
-        }
-
-        const stateNow = get();
-        const nextWish = parseInlineUpdate(text, stateNow);
-        if (nextWish) {
-          set({ currentWish: nextWish });
-          // in edge case, still show a quick human recap
-          pushHumanRecap();
-          setChatScriptPhase('exercise');
-          startFirstExercise();
-          return;
-        }
-
-        confirmNudgesRef.current += 1;
-        if (confirmNudgesRef.current >= 2) {
-          confirmNudgesRef.current = 0;
-          setChatScriptPhase('exercise');
-          startFirstExercise();
-          setS(get());
-          return;
-        }
-
-        pushThread({ role: 'assistant', content: `Got it — ready when you are.` });
-        setS(get());
-        return;
-      }
-
       // ----- PHASE: exercise -----
       if (chatScriptPhase === 'exercise') {
         if (/^done\b/i.test(text)) {
@@ -438,46 +459,43 @@ export default function ChatPage(){
     onLooksRight();
   }
 
-  // overlay tap → enter chat (NO extra confirmation; jump straight to exercise)
+  // overlay tap → enter chat (now: greet → short line → exercise, with pacing)
   async function dismissOverlay(){
-    // reset any old thread
+    // reset any old thread so we don't load a previous convo
     set({ thread: [] });
 
-    // stamp wizard done for today (async; no await needed)
-    try {
-      await saveProgressToProfile({
-        supabase,
-        step: 'wizard_done',
-        details: { at: new Date().toISOString() }
-      });
-    } catch {}
+    // stamp wizard done for today
+    markWizardDoneToday();
 
-    // greet + human recap, then start exercise
-    pushHumanRecap();
-    setChatScriptPhase('exercise');
-    startFirstExercise();
-
-    // flip UI
+    // flip UI to chat now
     setStage('chat');
     setOverlayVisible(false);
+
+    // set phase to exercise immediately (no confirm round 2)
+    setChatScriptPhase('exercise');
+
+    // staggered intro messages
+    const fn = get().firstName || 'Friend';
+    pushHumanRecap();
+    setTimeout(() => { pushLetsStart(fn); }, 700);
+    setTimeout(() => { pushFirstExercise(); }, 1500);
 
     setTimeout(() => {
       const el = listRef.current;
       if (el) el.scrollTop = el.scrollHeight;
-    }, 0);
+    }, 1600);
   }
 
-  // overlay styles + confetti
+  // overlay styles + points pop
   const overlayStyles = `
 @keyframes popIn { 0% { transform: scale(.7); opacity: 0 } 60% { transform: scale(1.08); opacity:1 } 100% { transform: scale(1) } }
 @keyframes floaty { 0% { transform: translateY(0) } 50% { transform: translateY(-6px) } 100% { transform: translateY(0) } }
-@keyframes confettiFall { 0% { transform: translateY(-40vh) rotate(0deg); opacity: 0 } 10%{opacity:1} 100% { transform: translateY(60vh) rotate(720deg); opacity: 0 } }
-.mg-confetti { position: fixed; left: 50%; top: 10%; width: 0; height: 0; z-index: 60; pointer-events: none; }
-.mg-confetti i{ position:absolute; width:10px; height:16px; border-radius:2px; background:#ffd600; animation: confettiFall 1.6s ease-in forwards; }
-.mg-confetti i:nth-child(2){ left:-60px; background:#111; animation-duration:1.9s }
-.mg-confetti i:nth-child(3){ left:60px;  background:#f43f5e; animation-duration:1.7s }
-.mg-confetti i:nth-child(4){ left:-100px; background:#22c55e; animation-duration:1.8s }
-.mg-confetti i:nth-child(5){ left:100px;  background:#3b82f6; animation-duration:1.75s }
+@keyframes pointsPop {
+  0% { transform: translate(-50%, 10px) scale(.9); opacity: 0 }
+  20% { opacity: 1 }
+  60% { transform: translate(-50%, -22px) scale(1.04); opacity: 1 }
+  100% { transform: translate(-50%, -44px) scale(1); opacity: 0 }
+}
 `;
 
   return (
@@ -536,24 +554,29 @@ export default function ChatPage(){
               <div style={{ fontSize:12, opacity:.8, marginBottom:6 }}>firstName</div>
               <pre style={{ margin:0, fontSize:12, whiteSpace:'pre-wrap' }}>{pretty(S.firstName)}</pre>
             </div>
+
             <div style={{ background:'#0f172a', padding:10, borderRadius:8 }}>
               <div style={{ fontSize:12, opacity:.8, marginBottom:6 }}>vibe</div>
               <pre style={{ margin:0, fontSize:12, whiteSpace:'pre-wrap' }}>{pretty(S.vibe)}</pre>
             </div>
+
             <div style={{ background:'#0f172a', padding:10, borderRadius:8 }}>
               <div style={{ fontSize:12, opacity:.8, marginBottom:6 }}>currentWish</div>
               <pre style={{ margin:0, fontSize:12, whiteSpace:'pre-wrap' }}>{pretty(S.currentWish)}</pre>
             </div>
+
             <div style={{ background:'#0f172a', padding:10, borderRadius:8 }}>
               <div style={{ fontSize:12, opacity:.8, marginBottom:6 }}>prompt_spec</div>
               <pre style={{ margin:0, fontSize:12, whiteSpace:'pre-wrap' }}>{pretty(S.prompt_spec)}</pre>
             </div>
+
             <div style={{ gridColumn:'1 / span 2', background:'#0f172a', padding:10, borderRadius:8 }}>
               <div style={{ fontSize:12, opacity:.8, marginBottom:6 }}>lastChatPayload → /api/chat</div>
               <pre style={{ margin:0, fontSize:12, overflowX:'auto' }}>
                 {pretty(lastChatPayload ?? { info: "No chat call yet. Send a message to populate lastChatPayload." })}
               </pre>
             </div>
+
             <div style={{ gridColumn:'1 / span 2', background:'#0f172a', padding:10, borderRadius:8 }}>
               <div style={{ fontSize:12, opacity:.8, marginBottom:6 }}>softConfirm</div>
               <pre style={{ margin:0, fontSize:12, whiteSpace:'pre-wrap' }}>
@@ -565,21 +588,27 @@ export default function ChatPage(){
       )}
 
       {/* ---- Main Card (staged) ---- */}
-      <div style={{ maxWidth: 980, margin: '12px auto', padding: '0 10px' }}>
-        <div style={{ display:'grid', gridTemplateColumns:'1fr', gap:10 }}>
-          <div style={{ background:'#fff', border:'1px solid rgba(0,0,0,0.08)', borderRadius:16, padding:10, position:'relative' }}>
-            {/* confetti */}
-            {showWinBurst && (
-              <div className="mg-confetti" aria-hidden>
-                <i style={{left:-20}}/><i/><i/><i/><i/>
-              </div>
-            )}
+      <div style={{ maxWidth: 980, margin: '12px auto', padding: '0 10px', position:'relative' }}>
+        {/* points burst */}
+        {pointsBurst > 0 && (
+          <div style={{
+            position:'fixed', left:'50%', bottom: 96,
+            transform:'translateX(-50%)', pointerEvents:'none',
+            background:'rgba(255,214,0,0.95)', border:'1px solid rgba(0,0,0,0.12)',
+            borderRadius:999, padding:'10px 16px', fontWeight:900,
+            animation:'pointsPop 1.3s ease-out both', zIndex:60
+          }}>
+            +{pointsBurst}
+          </div>
+        )}
 
+        <div style={{ display:'grid', gridTemplateColumns:'1fr', gap:10 }}>
+          <div style={{ background:'#fff', border:'1px solid rgba(0,0,0,0.08)', borderRadius:16, padding:10 }}>
             <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:6 }}>
               <div style={{ fontWeight:900, fontSize:18 }}>Genie Chat</div>
             </div>
 
-            {/* Stage: confirm (only visible during Rx step; chat entry skips this) */}
+            {/* Stage: confirm card still appears BEFORE chat, unchanged */}
             {stage === 'confirm' && (
               <>
                 {showTweaks && (
@@ -696,19 +725,21 @@ export default function ChatPage(){
                   )}
                 </div>
 
-                {/* Post-win CTA */}
-                {showLetsGo && (
-                  <div style={{ display:'flex', justifyContent:'center', marginTop:10 }}>
+                {/* Win CTA (appears after "done") */}
+                {showWinCTA && (
+                  <div style={{ marginTop: 10, textAlign:'center' }}>
                     <button
-                      onClick={() => router.push('/checklist')}
+                      onClick={triggerExerciseOne}
                       style={{
+                        appearance:'none',
                         padding:'12px 18px',
-                        borderRadius:12,
-                        border:'1px solid rgba(0,0,0,0.12)',
-                        background:'#ffd600',
                         fontWeight:900,
+                        border:0,
+                        borderRadius:12,
+                        background:'#111',
+                        color:'#ffd600',
                         cursor:'pointer',
-                        boxShadow:'0 6px 16px rgba(0,0,0,0.08)'
+                        boxShadow:'0 8px 24px rgba(0,0,0,.18)'
                       }}
                     >
                       LET’S GO!
