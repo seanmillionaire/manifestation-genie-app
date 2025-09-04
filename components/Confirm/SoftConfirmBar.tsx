@@ -46,7 +46,7 @@ const SoftConfirmBar: React.FC<Props> = ({
         <div className="min-w-0 flex-1">
           <p className="text-[15px] leading-snug text-slate-900 dark:text-slate-100">
             I read your notes: you want <strong>“{o}”</strong>, but{" "}
-            <strong>“{b}”</strong> keeps looping. If that’s right, I’ll prescribe
+            <strong>“{b}”</strong> keeps looping. <br></br>If that’s right, I’ll prescribe
             your first step.
           </p>
 
