@@ -1,89 +1,72 @@
 import React from "react";
 
-type Mode = "rx" | "buy";
-
 type Props = {
-  /** OPTIONAL: if omitted, we'll auto-detect based on presence of onCta */
-  mode?: Mode;
-
   title: string;
   why?: string;
+  /** Optional price info (not shown in CTA – kept for future use) */
+  priceCents?: number;
 
-  /** BUY mode only */
+  /** Legacy commerce props (kept for backward-compat, unused when onCta is provided) */
   buyUrl?: string;
-
-  /** RX mode only */
-  onCta?: (e?: React.MouseEvent<HTMLButtonElement>) => void;
-  ctaLabel?: string;
-
-  /** legacy (kept for compatibility, used only in buy fallback) */
   previewUrl?: string;
   onUnlock?: () => void;
 
-  /** close/hide the card */
+  /** Close/hide the card */
   onClose?: () => void;
 
-  /** not shown now, kept for future */
-  priceCents?: number;
+  /** 👇 New: parent-provided CTA handler (e.g., show Genie overlay in /pages/chat.js) */
+  onCta?: (e?: React.MouseEvent<HTMLButtonElement>) => void;
+
+  /** Optional CTA label */
+  ctaLabel?: string;
 };
 
 export default function PrescriptionCard({
-  mode,
   title,
   why,
-  buyUrl,
-  onCta,
-  ctaLabel,
-  previewUrl, // unused
-  onUnlock,   // legacy
-  onClose,
   priceCents = 1200,
+  buyUrl = "https://hypnoticmeditations.ai/b/l0kmb",
+  previewUrl, // unused
+  onUnlock,
+  onClose,
+  onCta,
+  ctaLabel = "Listen To This »",
 }: Props): JSX.Element {
   const DUMMY_AUDIO =
     "https://cdnstreaming.myclickfunnels.com/audiofile/25873/file/original-3b1398f834c94cd9eeba088f4bcdba73/audiofile/25873/file/original-3b1398f834c94cd9eeba088f4bcdba73.flac";
 
-  // Auto-detect mode if not provided:
-  // - If a parent gives us onCta, we assume RX (free) flow.
-  // - Otherwise, default to BUY (open buyUrl).
-  const effectiveMode: Mode = mode ?? (onCta ? "rx" : "buy");
-
-  function openBuy() {
-    const url = buyUrl?.trim();
-    if (url) {
-      window.open(url, "_blank", "noopener,noreferrer");
+  /** Fallback: only used if onCta is NOT provided */
+  async function legacyUnlock() {
+    try {
+      if (buyUrl) {
+        window.open(buyUrl, "_blank", "noopener,noreferrer");
+        onClose?.();
+        return;
+      }
+      if (onUnlock) {
+        await onUnlock();
+        onClose?.();
+        return;
+      }
+      alert("No checkout link configured.");
+    } catch {
       onClose?.();
-      return;
     }
-    // legacy escape hatch
-    if (onUnlock) {
-      Promise.resolve(onUnlock()).finally(() => onClose?.());
-      return;
-    }
-    alert("No checkout link configured.");
-    onClose?.();
   }
 
   function handleClick(e: React.MouseEvent<HTMLButtonElement>) {
+    // Prevent any default navigation bubbling from parent wrappers
     e.preventDefault();
     e.stopPropagation();
 
-    if (effectiveMode === "buy") {
-      openBuy();
+    if (onCta) {
+      // ✅ New path: delegate to parent (chat.js) to show Genie overlay + stage to chat
+      onCta(e);
       return;
     }
-
-    if (effectiveMode === "rx") {
-      if (onCta) {
-        onCta(e); // parent (chat.js) shows Genie overlay
-        return;
-      }
-      // If dev forgot to pass onCta for rx, noop with a console hint
-      console.warn("[PrescriptionCard] mode='rx' (effective) but no onCta provided.");
-    }
+    // Legacy fallback (commerce)
+    legacyUnlock();
   }
-
-  const label =
-    ctaLabel ?? (effectiveMode === "buy" ? "Unlock Session »" : "Listen To This »");
 
   return (
     <div
@@ -132,9 +115,9 @@ export default function PrescriptionCard({
           minWidth: 44,
           boxShadow: "0 2px 0 rgba(0,0,0,0.06)",
         }}
-        aria-label={label}
+        aria-label={ctaLabel}
       >
-        {label}
+        {ctaLabel}
       </button>
     </div>
   );
