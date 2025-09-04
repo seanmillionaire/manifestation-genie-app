@@ -182,7 +182,7 @@ const startManifesting = () => {
   return (
     <main style={{ width: "min(900px, 94vw)", margin: "30px auto" }}>
       <h1 style={{ fontSize: 28, fontWeight: 900, margin: "0 0 12px" }}>
-        Welcome to the portal, {firstName} 👋
+        👋 Hi {firstName}, welcome to the portal
       </h1>
       <p
         style={{
@@ -322,7 +322,7 @@ const startManifesting = () => {
               }}
               aria-label="Start Manifesting"
             >
-              START MANIFESTING »
+              CLICK HERE TO START MANIFESTING »
             </button>
 
             {!agreedAt && (
