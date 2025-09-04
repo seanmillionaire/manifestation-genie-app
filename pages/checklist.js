@@ -1,8 +1,7 @@
 // /pages/checklist.js — Manifestor primer (concise) — no Edit Plan button
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
-import { get, set, pushThread } from '../src/flowState';
-import { supabase } from '../src/supabaseClient'; // save progress server-side
+import { get, set } from '../src/flowState';
 
 export default function ChecklistPage() {
   const router = useRouter();
@@ -24,43 +23,8 @@ export default function ChecklistPage() {
   const wishText  = S.currentWish?.wish  || 'your intention';
   const microText = S.currentWish?.micro || 'your next tiny step';
 
-  async function goChat() {
-    // grab current answers at the moment of click
-    const cur = get();
-    const w = cur?.currentWish?.wish  || '';
-    const b = cur?.currentWish?.block || '';
-    const m = cur?.currentWish?.micro || '';
-
-    // 1) push a friendly recap into the chat thread so Genie sees it immediately
-    if (w || b || m) {
-      pushThread({
-        role: 'user',
-        content: `Quick recap for today:\n• Goal: ${w || '—'}\n• Blocker: ${b || '—'}\n• Tiny step: ${m || '—'}`
-      });
-    }
-
-    // 2) mark phase & “wizard done today” locally
+  function goChat() {
     set({ phase: 'chat' });
-    try { localStorage.setItem('mg_wizard_day', new Date().toISOString().slice(0,10)); } catch {}
-
-    // 3) save to Supabase so new devices pick it up
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const user = session?.user;
-      if (user) {
-        await supabase
-          .from('user_progress')
-          .upsert({
-            user_id: user.id,
-            day_key: new Date().toISOString().slice(0,10),
-            step: 'checklist',
-            details: { wish: w, block: b, micro: m },
-            updated_at: new Date().toISOString()
-          }, { onConflict: 'user_id,day_key' });
-      }
-    } catch {}
-
-    // 4) go to chat
     router.push('/chat');
   }
 
