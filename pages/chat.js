@@ -296,7 +296,7 @@ async function send(){
           content: `Got it. Tell me your goal and sticking point in one line, like:\n“Goal: … | Block: …”`
         });
         setS(get());
-        return;
+        return;//
       }
     }
 
