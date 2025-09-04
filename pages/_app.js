@@ -4,22 +4,25 @@ import '../styles/light-theme.css'
 import Head from 'next/head'
 import Link from 'next/link'
 import { useRouter } from 'next/router'
-import { useEffect } from 'react'
-import { setFirstName } from '../src/flowState';
+import { useEffect, useMemo, useState } from 'react'
+import { setFirstName } from '../src/flowState'
 
 // If you DID set up the "@" alias, keep this line.
 // If not, change to:  import { loadAllIntoFlowState } from '../src/persist'
 import { loadAllIntoFlowState } from '../src/persist'
 import { hydrateFirstNameFromSupabase } from '../src/userName'
 
+// ✅ New: use Supabase auth helpers in the browser to know if user is logged in
+import { createBrowserSupabaseClient } from '@supabase/auth-helpers-nextjs'
+
 const LOGO_SRC = 'https://storage.googleapis.com/mixo-sites/images/file-a7eebac5-6af9-4253-bc71-34c0d455a852.png'
 
+// Protected app links (only when authed)
 const navLinks = [
-  { href: '/home',  label: 'Home'   },
-  { href: '/vibe',  label: 'Start'  },  // "Start" = Flow page
+  { href: '/home',    label: 'Home'   },
+  { href: '/vibe',    label: 'Start'  }, // "Start" = Flow page
   { href: '/profile', label: 'Profile' }
 ];
-
 
 function NavLink({ href, label, isActive }) {
   return (
@@ -27,14 +30,16 @@ function NavLink({ href, label, isActive }) {
       <a
         aria-current={isActive ? 'page' : undefined}
         style={{
-          padding: '8px 12px',
+          padding: '10px 14px',        // ≥44px touch height incl. line-height
+          lineHeight: '24px',
           borderRadius: 10,
           fontWeight: isActive ? 800 : 600,
           textDecoration: 'none',
           border: isActive ? `1px solid var(--brand)` : '1px solid transparent',
           background: isActive ? 'var(--soft)' : 'transparent',
           color: 'var(--text)',
-          whiteSpace: 'nowrap'
+          whiteSpace: 'nowrap',
+          outlineOffset: 2
         }}
       >
         {label}
@@ -43,7 +48,7 @@ function NavLink({ href, label, isActive }) {
   )
 }
 
-function LogoHeader({ currentPath }) {
+function LogoHeader({ currentPath, isAuthed }) {
   return (
     <div style={{
       width:'100%',
@@ -67,22 +72,62 @@ function LogoHeader({ currentPath }) {
             marginLeft:'auto',
             display:'flex',
             alignItems:'center',
-            gap:6,
+            gap:8,
             overflowX:'auto',
             padding:'4px 0'
           }}
         >
-          {navLinks.map(l => (
-            <NavLink
-              key={l.href}
-              href={l.href}
-              label={l.label}
-              isActive={
-                currentPath === l.href ||
-                (l.href !== '/' && currentPath.startsWith(l.href))
-              }
-            />
-          ))}
+          {isAuthed ? (
+            // ✅ Logged in: show full app navigation
+            navLinks.map(l => (
+              <NavLink
+                key={l.href}
+                href={l.href}
+                label={l.label}
+                isActive={
+                  currentPath === l.href ||
+                  (l.href !== '/' && currentPath.startsWith(l.href))
+                }
+              />
+            ))
+          ) : (
+            // 🚪 Logged out: show only Demo + Login
+            <>
+              <Link href="/demo" legacyBehavior>
+                <a
+                  style={{
+                    padding:'10px 14px',
+                    lineHeight:'24px',
+                    borderRadius:10,
+                    fontWeight:700,
+                    border:'1px solid var(--border)',
+                    background:'var(--soft)',
+                    color:'var(--text)',
+                    whiteSpace:'nowrap'
+                  }}
+                  aria-label="Try the free demo"
+                >
+                  Try Demo
+                </a>
+              </Link>
+              <Link href="/login" legacyBehavior>
+                <a
+                  style={{
+                    padding:'10px 16px',
+                    lineHeight:'24px',
+                    borderRadius:10,
+                    fontWeight:700,
+                    background:'var(--purple)',
+                    color:'#fff',
+                    whiteSpace:'nowrap'
+                  }}
+                  aria-label="Log in"
+                >
+                  Log In
+                </a>
+              </Link>
+            </>
+          )}
         </nav>
       </div>
     </div>
@@ -92,27 +137,50 @@ function LogoHeader({ currentPath }) {
 export default function App({ Component, pageProps }) {
   const router = useRouter()
 
-  // 🔑 Load saved data from Supabase → flowState (client-side only)
-useEffect(() => {
-  // Pull everything (firstName, vibe, wish, agreement) into the shared store
-  loadAllIntoFlowState().then(() => {
-    try {
-      const cached = localStorage.getItem('mg_first_name');
+  // 🆕 Auth state for header
+  const [isAuthed, setIsAuthed] = useState(false)
+  const supabase = useMemo(() => createBrowserSupabaseClient(), [])
 
-      // ✅ If we have a real cached name, push it into the global flow state
-      if (cached && cached.trim() && cached !== 'Friend') {
-        setFirstName(cached);
-      } else {
-        // Otherwise, try Supabase to hydrate it
+  // 🔑 Load saved data from Supabase → flowState (client-side only)
+  useEffect(() => {
+    // Pull everything (firstName, vibe, wish, agreement) into the shared store
+    loadAllIntoFlowState().then(() => {
+      try {
+        const cached = localStorage.getItem('mg_first_name');
+
+        // ✅ If we have a real cached name, push it into the global flow state
+        if (cached && cached.trim() && cached !== 'Friend') {
+          setFirstName(cached);
+        } else {
+          // Otherwise, try Supabase to hydrate it
+          hydrateFirstNameFromSupabase?.();
+        }
+      } catch {
+        // If localStorage is blocked, still try server
         hydrateFirstNameFromSupabase?.();
       }
-    } catch {
-      // If localStorage is blocked, still try server
-      hydrateFirstNameFromSupabase?.();
-    }
-  });
-}, []);
+    });
+  }, []);
 
+  // 🆕 Determine logged-in/out for header
+  useEffect(() => {
+    let mounted = true;
+
+    supabase.auth.getSession().then(({ data }) => {
+      if (!mounted) return;
+      setIsAuthed(!!data?.session);
+    });
+
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!mounted) return;
+      setIsAuthed(!!session);
+    });
+
+    return () => {
+      mounted = false;
+      sub?.subscription?.unsubscribe?.();
+    };
+  }, [supabase]);
 
   return (
     <>
@@ -132,6 +200,7 @@ useEffect(() => {
           *{ box-sizing:border-box }
           .pageWrap{ display:flex; flex-direction:column; min-height:100vh; }
           main{ flex:1; }
+          a:focus-visible{ outline: 3px solid var(--brand); outline-offset:2px; border-radius:10px; }
           footer{ text-align:center; padding:20px 12px; font-size:14px; color:var(--muted);
             border-top:1px solid var(--border); line-height:1.6; background:#fff; }
           footer a{ color:#0b67ff; text-decoration:none; font-weight:600; }
@@ -139,7 +208,7 @@ useEffect(() => {
         `}</style>
       </Head>
       <div className="pageWrap">
-        <LogoHeader currentPath={router.pathname} />
+        <LogoHeader currentPath={router.pathname} isAuthed={isAuthed} />
         <main>
           <Component {...pageProps} />
         </main>
