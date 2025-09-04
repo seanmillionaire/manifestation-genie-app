@@ -69,24 +69,6 @@ const SoftConfirmBar: React.FC<Props> = ({
               <span className="font-semibold">Looks right</span>
             </button>
 
-            <button
-              type="button"
-              onClick={onTweak}
-              aria-label="Tweak"
-              className={clsx(
-                "inline-flex items-center justify-center",
-                "rounded-xl px-5 min-h-[44px] min-w-[44px]",
-                "bg-white/70 dark:bg-white/5",
-                "ring-1 ring-slate-300/70 dark:ring-white/15",
-                "text-slate-800 dark:text-slate-100",
-                "hover:bg-white/90 dark:hover:bg-white/10",
-                "active:scale-[0.99]",
-                "focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/70"
-              )}
-            >
-              <span className="mr-2">✏️</span>
-              <span className="font-medium">Tweak</span>
-            </button>
           </div>
         </div>
       </div>
