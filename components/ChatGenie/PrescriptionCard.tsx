@@ -3,8 +3,8 @@ import React from "react";
 type Mode = "rx" | "buy";
 
 type Props = {
-  /** REQUIRED: explicitly choose behavior */
-  mode: Mode;
+  /** OPTIONAL: if omitted, we'll auto-detect based on presence of onCta */
+  mode?: Mode;
 
   title: string;
   why?: string;
@@ -33,7 +33,7 @@ export default function PrescriptionCard({
   why,
   buyUrl,
   onCta,
-  ctaLabel = mode === "buy" ? "Unlock Session »" : "Listen To This »",
+  ctaLabel,
   previewUrl, // unused
   onUnlock,   // legacy
   onClose,
@@ -41,6 +41,11 @@ export default function PrescriptionCard({
 }: Props): JSX.Element {
   const DUMMY_AUDIO =
     "https://cdnstreaming.myclickfunnels.com/audiofile/25873/file/original-3b1398f834c94cd9eeba088f4bcdba73/audiofile/25873/file/original-3b1398f834c94cd9eeba088f4bcdba73.flac";
+
+  // Auto-detect mode if not provided:
+  // - If a parent gives us onCta, we assume RX (free) flow.
+  // - Otherwise, default to BUY (open buyUrl).
+  const effectiveMode: Mode = mode ?? (onCta ? "rx" : "buy");
 
   function openBuy() {
     const url = buyUrl?.trim();
@@ -62,21 +67,23 @@ export default function PrescriptionCard({
     e.preventDefault();
     e.stopPropagation();
 
-    // 🔒 Hard guard by mode
-    if (mode === "buy") {
+    if (effectiveMode === "buy") {
       openBuy();
       return;
     }
 
-    if (mode === "rx") {
+    if (effectiveMode === "rx") {
       if (onCta) {
         onCta(e); // parent (chat.js) shows Genie overlay
         return;
       }
-      // If dev forgot to pass onCta for rx, do nothing visible
-      console.warn("[PrescriptionCard] mode='rx' but no onCta provided.");
+      // If dev forgot to pass onCta for rx, noop with a console hint
+      console.warn("[PrescriptionCard] mode='rx' (effective) but no onCta provided.");
     }
   }
+
+  const label =
+    ctaLabel ?? (effectiveMode === "buy" ? "Unlock Session »" : "Listen To This »");
 
   return (
     <div
@@ -125,9 +132,9 @@ export default function PrescriptionCard({
           minWidth: 44,
           boxShadow: "0 2px 0 rgba(0,0,0,0.06)",
         }}
-        aria-label={ctaLabel}
+        aria-label={label}
       >
-        {ctaLabel}
+        {label}
       </button>
     </div>
   );
