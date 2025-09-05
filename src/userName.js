@@ -1,107 +1,87 @@
 // /src/userName.js
-import { supabase } from './supabaseClient';
-import { get, set } from './flowState';
+import { supabase } from "./supabaseClient";
+import { set, get } from "./flowState";
 
-// -------- utils --------
-function firstWord(s) {
-  if (!s) return '';
-  const t = String(s).trim();
-  if (!t) return '';
-  return t.split(/\s+/)[0] || '';
-}
+// helpers
+function firstWord(s) { return s ? String(s).trim().split(/\s+/)[0] : ""; }
 function cleanFirst(s) {
-  const t = (s || '').trim();
-  if (!t || t.length < 2) return '';
-  if (t.toLowerCase() === 'friend') return '';
-  if (/[0-9_@]/.test(t)) return '';
+  const t = firstWord(s);
+  if (!t) return "";
+  if (t.length < 2) return "";
+  if (/^(friend)$/i.test(t)) return "";
+  if (/[0-9_@]/.test(t)) return "";
   return t[0].toUpperCase() + t.slice(1);
 }
-function pickBestName(obj = {}) {
-  const candidates = [
-    obj.first_name,
-    obj.full_name,
-    obj.display_name,
-    obj.name,
-    obj.fullName,
-    obj.displayName,
-  ];
-  for (const c of candidates) {
-    const first = cleanFirst(firstWord(c));
-    if (first) return first;
-  }
-  return '';
-}
 
-// -------- sources --------
-function fromState() {
-  try {
-    const s = get();
-    const first = cleanFirst(s?.firstName);
-    return first || '';
-  } catch { return ''; }
-}
-function fromLocalStorage() {
-  try {
-    if (typeof window === 'undefined') return '';
-    const ls = (localStorage.getItem('mg_first_name') || '').trim();
-    return cleanFirst(ls);
-  } catch { return ''; }
-}
-
-async function fromSupabase() {
+/**
+ * Hydrates firstName into flowState from Supabase.
+ * Order of truth:
+ *   1) profiles.first_name / full_name / display_name / name
+ *   2) auth.user().user_metadata.name  (one-time backfill into profiles)
+ * NEVER writes to localStorage. Supabase is the source of truth.
+ */
+export async function hydrateFirstNameFromSupabase() {
   try {
     const { data: { session } } = await supabase.auth.getSession();
     const user = session?.user;
-    if (!user) return '';
+    if (!user) return null;
 
-    // 1) profiles
-    const { data: p } = await supabase
-      .from('profiles')
-      .select('first_name, full_name, display_name, name')
-      .eq('id', user.id)
+    // 1) Read from profiles
+    const { data: row, error } = await supabase
+      .from("profiles")
+      .select("first_name, full_name, display_name, name")
+      .eq("id", user.id)
       .maybeSingle();
 
-    // 2) user_profile (fallback)
-    const { data: up } = await supabase
-      .from('user_profile')
-      .select('first_name, full_name, display_name, name')
-      .eq('user_id', user.id)
-      .maybeSingle();
+    if (error && error.code !== "PGRST116") {
+      // (PGRST116 = no rows) — ignore that
+      console.warn("profiles fetch error:", error);
+    }
 
-    const best = pickBestName({
-      first_name: p?.first_name ?? up?.first_name,
-      full_name:  p?.full_name  ?? up?.full_name,
-      display_name: p?.display_name ?? up?.display_name,
-      name: p?.name ?? up?.name,
-      fullName: user.user_metadata?.full_name,
-      displayName: user.user_metadata?.name,
-    });
+    const fromProfiles =
+      cleanFirst(row?.first_name) ||
+      cleanFirst(row?.full_name) ||
+      cleanFirst(row?.display_name) ||
+      cleanFirst(row?.name);
 
-    return best || '';
-  } catch { return ''; }
+    if (fromProfiles) {
+      set({ firstName: fromProfiles });
+      return fromProfiles;
+    }
+
+    // 2) Fallback: auth user_metadata.name (one-time backfill)
+    const metaFirst = cleanFirst(user.user_metadata?.name);
+    if (metaFirst) {
+      // backfill into profiles so all devices get it next time
+      await supabase
+        .from("profiles")
+        .upsert(
+          { id: user.id, first_name: metaFirst, updated_at: new Date().toISOString() },
+          { onConflict: "id" }
+        );
+
+      set({ firstName: metaFirst });
+      return metaFirst;
+    }
+
+    // 3) Nothing found -> keep Friend (but do NOT store it)
+    set({ firstName: "Friend" });
+    return null;
+  } catch (e) {
+    console.warn("hydrateFirstNameFromSupabase failed:", e);
+    return null;
+  }
 }
 
-// -------- public API --------
+/**
+ * Ensure flowState has a firstName. If missing, hydrate from Supabase.
+ * Returns the best current name (or "Friend" if unavailable).
+ */
 export async function ensureFirstName() {
-  // 1) state
-  let name = fromState();
-  if (name) return name;
+  const cur = get();
+  const existing = (cur.firstName || "").trim();
+  if (existing && !/^friend$/i.test(existing)) return existing;
 
-  // 2) localStorage
-  name = fromLocalStorage();
-  if (name) {
-    set({ firstName: name });
-    return name;
-  }
-
-  // 3) Supabase
-  name = await fromSupabase();
-  if (name) {
-    set({ firstName: name });
-    try { localStorage.setItem('mg_first_name', name); } catch {}
-    return name;
-  }
-
-  // Nothing found
-  return '';
+  const hydrated = await hydrateFirstNameFromSupabase();
+  return hydrated || "Friend";
 }
