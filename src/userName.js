@@ -2,122 +2,123 @@
 import { supabase } from './supabaseClient';
 import { set, get } from './flowState';
 
-// ----- tiny helpers (plain JS; no TS syntax) -----
+// basic cleaners (no TS syntax here)
 function firstWord(s) {
-  if (!s) return null;
+  if (!s) return '';
   const t = String(s).trim();
-  if (!t) return null;
-  return t.split(/\s+/)[0] || null;
+  if (!t) return '';
+  return t.split(/\s+/)[0];
 }
 function cleanFirst(s) {
-  if (!s) return null;
+  if (!s) return '';
   const t = String(s).trim();
-  if (t.length < 2) return null;
-  if (t.toLowerCase() === 'friend') return null;
-  if (/[0-9_@]/.test(t)) return null;
+  if (t.length < 2) return '';
+  if (t.toLowerCase() === 'friend') return '';
+  if (/[0-9_@]/.test(t)) return '';
   return t[0].toUpperCase() + t.slice(1);
 }
-function fromEmailPrefix(email) {
-  try {
-    if (!email || typeof email !== 'string') return null;
-    const prefix = email.split('@')[0].replace(/[._-]+/g, ' ').trim();
-    return cleanFirst(firstWord(prefix));
-  } catch { return null; }
-}
-function setEverywhere(first) {
-  if (!first) return;
-  const cur = get() || {};
-  set({ ...cur, firstName: first });
-  try { if (typeof window !== 'undefined') localStorage.setItem('mg_first_name', first); } catch {}
-}
 
-// Exported: quick resolver that prefers cached/local values
-export function resolveFirstNameCached() {
-  // 1) flowState
-  const st = get() || {};
-  if (st.firstName && st.firstName !== 'Friend') return st.firstName;
-
-  // 2) localStorage
-  if (typeof window !== 'undefined') {
-    try {
-      const ls = (localStorage.getItem('mg_first_name') || '').trim();
-      const c = cleanFirst(firstWord(ls));
-      if (c) return c;
-    } catch {}
-  }
-  return null;
-}
-
-// Exported: main hydrator that fetches from Supabase if needed
-export async function hydrateFirstNameFromSupabase() {
-  // If we already have a valid cached name, set it in state and exit
-  const cached = resolveFirstNameCached();
-  if (cached) { setEverywhere(cached); return cached; }
-
-  // Pull session
-  const { data: { session } } = await supabase.auth.getSession();
-  const user = session?.user;
-  if (!user) return null;
-
-  // Try profiles table
-  let row = null;
-  try {
-    const { data } = await supabase
-      .from('profiles')
-      .select('first_name, full_name, display_name, name')
-      .eq('id', user.id)
-      .maybeSingle();
-    row = data || null;
-  } catch {}
-
-  // Try user_profile (if you use it)
-  let row2 = null;
-  try {
-    const { data } = await supabase
-      .from('user_profile')
-      .select('first_name, full_name, display_name, name')
-      .eq('user_id', user.id)
-      .maybeSingle();
-    row2 = data || null;
-  } catch {}
-
-  // user_metadata and email fallbacks
-  const meta = user?.user_metadata || {};
-  const metaName =
-    firstWord(meta.name) ||
-    firstWord(meta.full_name) ||
-    firstWord(meta.given_name) ||
-    null;
-
-  const emailGuess = fromEmailPrefix(user.email);
-
-  // Build candidate list, pick the first clean one
-  const candidates = [
-    firstWord(row?.first_name),
-    firstWord(row?.full_name),
-    firstWord(row?.display_name),
-    firstWord(row?.name),
-
-    firstWord(row2?.first_name),
-    firstWord(row2?.full_name),
-    firstWord(row2?.display_name),
-    firstWord(row2?.name),
-
-    metaName,
-    emailGuess
-  ].filter(Boolean);
-
-  let picked = null;
+function chooseBestName(candidates) {
   for (const c of candidates) {
-    const cleaned = cleanFirst(c);
-    if (cleaned) { picked = cleaned; break; }
+    const f = cleanFirst(firstWord(c));
+    if (f) return f;
   }
+  return '';
+}
 
-  if (picked) {
-    setEverywhere(picked);
-    return picked;
+export async function hydrateFirstNameFromSupabase() {
+  try {
+    // if we already have a decent name in state, keep it
+    const curState = get() || {};
+    const existing = cleanFirst(firstWord(curState.firstName));
+    if (existing) {
+      // also ensure localStorage is synced
+      try { localStorage.setItem('mg_first_name', existing); } catch {}
+      return existing;
+    }
+
+    // session + user
+    const { data: { session } } = await supabase.auth.getSession();
+    const user = session?.user;
+    if (!user) {
+      // last resort: localStorage cache
+      try {
+        const cached = cleanFirst(firstWord(localStorage.getItem('mg_first_name')));
+        if (cached) {
+          set({ firstName: cached });
+          return cached;
+        }
+      } catch {}
+      return null;
+    }
+
+    // 1) try profiles (your screenshot shows first_name & full_name here)
+    let pRow = null;
+    try {
+      const { data } = await supabase
+        .from('profiles')
+        .select('first_name, full_name, display_name, name')
+        .eq('id', user.id)
+        .maybeSingle();
+      pRow = data || null;
+    } catch {}
+
+    // 2) try user_profile (backup location)
+    let upRow = null;
+    try {
+      const { data } = await supabase
+        .from('user_profile')
+        .select('first_name, full_name')
+        .eq('user_id', user.id)
+        .maybeSingle();
+      upRow = data || null;
+    } catch {}
+
+    // 3) user metadata (Supabase OAuth etc.)
+    const meta = user.user_metadata || {};
+
+    const chosen = chooseBestName([
+      pRow?.first_name,
+      pRow?.full_name,
+      pRow?.display_name,
+      pRow?.name,
+      upRow?.first_name,
+      upRow?.full_name,
+      meta.full_name,
+      meta.name,
+      meta.preferred_username,
+      user.email // ultra last-resort
+    ]);
+
+    if (chosen) {
+      set({ firstName: chosen });
+      try { localStorage.setItem('mg_first_name', chosen); } catch {}
+      return chosen;
+    }
+
+    // still nothing: try localStorage cache
+    try {
+      const cached = cleanFirst(firstWord(localStorage.getItem('mg_first_name')));
+      if (cached) {
+        set({ firstName: cached });
+        return cached;
+      }
+    } catch {}
+
+    return null;
+  } catch {
+    // silent failure; don’t block app
+    return null;
   }
+}
 
-  // Nothing good found
-  return null;
+// tiny helper for places where you just want the best available now
+export function getCachedFirstName() {
+  const stateName = cleanFirst(firstWord((get() || {}).firstName));
+  if (stateName) return stateName;
+  try {
+    const ls = cleanFirst(firstWord(localStorage.getItem('mg_first_name')));
+    if (ls) return ls;
+  } catch {}
+  return 'Friend';
 }
