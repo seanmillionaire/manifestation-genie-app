@@ -48,16 +48,40 @@ export default function ChatPage() {
   const [lastChatPayload, setLastChatPayload] = useState(null);
   const listRef = useRef(null);
 const { conversationId, setConversationId } = useGenieConversation();
+const [booted, setBooted] = useState(false);
 
+// hydrate existing conversation on refresh
 useEffect(() => {
   async function hydrate() {
-    if (!conversationId) return;
-    const r = await fetch(`/api/history?conversationId=${conversationId}`);
-    const { messages } = await r.json();
-    setChatMessages(messages); // populate your UI state
+    // if we don't have a conversation yet, nothing to hydrate
+    if (!conversationId) { setBooted(true); return; }
+
+    try {
+      const r = await fetch(`/api/history?conversationId=${conversationId}`);
+      const { messages } = await r.json();
+
+      const thread = (messages || []).map(m => ({
+        id: newId(),
+        role: m.role,
+        content: m.content,
+      }));
+
+      if (thread.length > 0) {
+        set({ thread });   // write into FlowState
+        setS(get());
+        setStage("chat");  // ⬅️ jump straight to chat
+        setPhase("free");
+        setShowReadyCTA(false);
+      }
+    } catch (_) {
+      // ignore; still allow app to render
+    } finally {
+      setBooted(true);
+    }
   }
   hydrate();
 }, [conversationId]);
+
 
   // UI stages: 'confirm' → 'chat'   (RX removed)
   const [stage, setStage] = useState("confirm");
@@ -104,16 +128,21 @@ useEffect(() => {
   }, [S.thread, uiOffer, stage, showReadyCTA, pointsBurst]);
 
   // deterministic intro on empty thread
-  useEffect(() => {
-    if (stage !== "chat") return;
-    const empty = !Array.isArray(S.thread) || S.thread.length === 0;
-    if (empty && phase !== "intro") {
-      setPhase("intro");
-      setShowReadyCTA(false);
-      autoIntroSequence();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stage]);
+useEffect(() => {
+  if (stage !== "chat") return;
+
+  const empty = !Array.isArray(S.thread) || S.thread.length === 0;
+
+  // If we already have a conversation id, hydration will fill the thread.
+  // Do NOT run the intro in that case.
+  if (empty && !conversationId && phase !== "intro") {
+    setPhase("intro");
+    setShowReadyCTA(false);
+    autoIntroSequence();
+  }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [stage, S.thread, conversationId]);
+
 
   async function callGenie({ text, systemHint = null }) {
     const stateNow = get();
@@ -345,23 +374,21 @@ Keep it upbeat, concise, and practical.`;
   }
 
   /* soft-confirm actions */
-  function handleLooksRight() {
-    set({ thread: [] });                 // clean boot
-    setStage("chat");
+function handleLooksRight() {
+  const hasExisting = Array.isArray(get().thread) && get().thread.length > 0;
+  // Only clear for a true first-time boot (no existing thread + no convo)
+  if (!hasExisting && !conversationId) {
+    set({ thread: [] });
     setPhase("intro");
     setShowReadyCTA(false);
     autoIntroSequence();
+  } else {
+    setPhase("free");
+    setShowReadyCTA(false);
   }
-  function onTweak() { setShowTweaks(true); }
-  function onApplyTweaks(next) {
-    setParsed({
-      outcome: next.outcome || parsed.outcome,
-      block: next.block || parsed.block,
-      state: (next.state ?? parsed.state) || null,
-    });
-    setShowTweaks(false);
-    handleLooksRight();
-  }
+  setStage("chat");
+}
+
 
   const overlayStyles = `
 @keyframes pointsPop {
