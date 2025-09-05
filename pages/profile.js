@@ -283,3 +283,33 @@ function displayName(u) {
     "Manifestor"
   );
 }
+function fallbackWishFromClient() {
+  try {
+    // 1) Same source chat uses: flowState.currentWish
+    const fs = getFlowState?.();
+    const title = (fs?.currentWish?.wish || "").trim();
+    const note  = (fs?.currentWish?.block || "").trim();
+    const date  = fs?.currentWish?.date || null;
+    if (title) return [{ id: "flowstate", title, note, created_at: date }];
+
+    // 2) Common localStorage keys we use in the app
+    const lsTitle =
+      (typeof window !== "undefined" && (
+        localStorage.getItem("mg_wish_title") ||
+        localStorage.getItem("mg_current_wish") ||
+        localStorage.getItem("wish")
+      )) || "";
+    const lsNote =
+      (typeof window !== "undefined" && (
+        localStorage.getItem("mg_wish_block") ||
+        localStorage.getItem("wish_block")
+      )) || "";
+
+    if (lsTitle && lsTitle.trim()) {
+      return [{ id: "localstorage", title: lsTitle.trim(), note: (lsNote || "").trim(), created_at: null }];
+    }
+  } catch (e) {
+    // ignore
+  }
+  return [];
+}
