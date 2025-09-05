@@ -1,11 +1,8 @@
 import { useEffect, useState } from "react";
-import supabase from "../src/supabaseClient";
-
+import { supabase } from "../src/supabaseClient"; // named import
 
 export default function ProfilePage() {
-  const user = useUser();
-  const supabase = useSupabaseClient();
-
+  const [user, setUser] = useState(null);
   const [streak, setStreak] = useState(0);
   const [weekCount, setWeekCount] = useState(0);
   const [lastDate, setLastDate] = useState(null);
@@ -16,56 +13,59 @@ export default function ProfilePage() {
   useEffect(() => {
     let alive = true;
     async function load() {
-      if (!user?.id) return;
-      try {
-        // 1) VISITS (last 60 days)
-        const since = new Date();
-        since.setDate(since.getDate() - 60);
-        const { data: visits = [] } = await supabase
-          .from("user_daily_visits")
-          .select("visit_date")
-          .gte("visit_date", since.toISOString().slice(0, 10))
-          .order("visit_date", { ascending: false });
+      const { data } = await supabase.auth.getUser();
+      const u = data?.user || null;
+      if (!alive) return;
+      setUser(u);
+      if (!u) { setLoading(false); return; }
 
-        if (!alive) return;
-        const { streak, weekCount, last } = computeVisitStats(visits || []);
-        setStreak(streak);
-        setWeekCount(weekCount);
-        setLastDate(last);
+      // 1) visits (last 60 days)
+      const since = new Date();
+      since.setDate(since.getDate() - 60);
+      const { data: visits = [] } = await supabase
+        .from("user_daily_visits")
+        .select("visit_date")
+        .gte("visit_date", since.toISOString().slice(0, 10))
+        .order("visit_date", { ascending: false });
 
-        // 2) WISHLIST — try questionnaire view first; if not present, fall back to "wishes" table
-        let wl = [];
-        const { data: wlView, error: wlErr } = await supabase
-          .from("user_questionnaire_wishlist")
-          .select("title, created_at")
+      if (!alive) return;
+      const { streak, weekCount, last } = computeVisitStats(visits || []);
+      setStreak(streak);
+      setWeekCount(weekCount);
+      setLastDate(last);
+
+      // 2) wishlist (view → fallback to wishes table)
+      let wl = [];
+      const { data: wlView, error: wlErr } = await supabase
+        .from("user_questionnaire_wishlist")
+        .select("title, created_at")
+        .order("created_at", { ascending: false });
+
+      if (!wlErr && wlView) {
+        wl = wlView;
+      } else {
+        const { data: wlTbl } = await supabase
+          .from("wishes")
+          .select("id, title, note, created_at")
           .order("created_at", { ascending: false });
-
-        if (!wlErr && wlView) {
-          wl = wlView;
-        } else {
-          const { data: wlTbl } = await supabase
-            .from("wishes")
-            .select("id, title, note, created_at")
-            .order("created_at", { ascending: false });
-          wl = wlTbl || [];
-        }
-        if (!alive) return;
-        setWishes(wl);
-
-        // 3) WINS
-        const { data: wn = [] } = await supabase
-          .from("wins")
-          .select("id, title, note, points, created_at")
-          .order("created_at", { ascending: false });
-        if (!alive) return;
-        setWins(wn || []);
-      } finally {
-        if (alive) setLoading(false);
+        wl = wlTbl || [];
       }
+      if (!alive) return;
+      setWishes(wl);
+
+      // 3) wins
+      const { data: wn = [] } = await supabase
+        .from("wins")
+        .select("id, title, note, points, created_at")
+        .order("created_at", { ascending: false });
+
+      if (!alive) return;
+      setWins(wn || []);
+      setLoading(false);
     }
     load();
     return () => { alive = false; };
-  }, [user?.id, supabase]);
+  }, []);
 
   if (!user) return <div className="p-6 text-lg">Please sign in.</div>;
 
@@ -82,7 +82,7 @@ export default function ProfilePage() {
           <Stat label="Last session" value={lastDate ? new Date(lastDate).toLocaleDateString() : "—"} />
         </div>
         <p className="mt-3 text-sm text-gray-500" aria-live="polite">
-          No buttons needed—opening the app while signed in counts automatically.
+          Opening the app while signed in counts automatically.
         </p>
       </Section>
 
@@ -134,9 +134,7 @@ export default function ProfilePage() {
 }
 
 /* helpers */
-
 function computeVisitStats(visits) {
-  // streak counting back from today
   const set = new Set((visits || []).map((v) => v.visit_date));
   let streak = 0;
   const d = new Date();
@@ -146,10 +144,9 @@ function computeVisitStats(visits) {
     streak += 1;
     d.setDate(d.getDate() - 1);
   }
-  // sessions this week (Sun..Sat)
   const now = new Date();
   const start = new Date(now);
-  start.setDate(now.getDate() - now.getDay());
+  start.setDate(now.getDate() - now.getDay()); // Sunday
   const weekKey = start.toISOString().slice(0, 10);
   const weekCount = (visits || []).filter((v) => v.visit_date >= weekKey).length;
   const last = (visits || [])[0]?.visit_date ?? null;
