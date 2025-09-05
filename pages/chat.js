@@ -1,6 +1,4 @@
-// /pages/chat.js — SoftConfirm → Chat (intro → CTA → Exercise1 → DOB Numerology)
-// RX is skipped entirely.
-
+// /pages/chat.js — Intro → CTA → Exercise1 → DOB Numerology (no localStorage)
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/router";
 import { get, set, newId, pushThread, toPlainMessages } from "../src/flowState";
@@ -8,59 +6,14 @@ import { supabase } from "../src/supabaseClient";
 import TweakChips from "../components/Confirm/TweakChips";
 import SoftConfirmBar from "../components/Confirm/SoftConfirmBar";
 import { parseAnswers, scoreConfidence, variantFromScore } from "../src/features/confirm/decision";
+import { prescribe } from "../src/engine/prescribe";
 import { detectBeliefFrom, recommendProduct } from "../src/engine/recommendProduct";
 import { hydrateFirstNameFromSupabase } from "../src/userName";
-import ChatBubble from "../components/Chat/ChatBubble";
 
 /* tiny utils */
 function escapeHTML(s=''){return s.replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
 function nl2br(s=''){ return s.replace(/\n/g, "<br/>"); }
 function pretty(o){ try { return JSON.stringify(o, null, 2); } catch { return String(o); } }
-// ensure every message has a stable id + reactions bucket
-function withMeta(m) {
-  return {
-    ...m,
-    id: m.id || Math.random().toString(36).slice(2),
-    reactions: m.reactions || { userLiked: false, genieLiked: false },
-  };
-}
-
-// toggle a user's "like" on a message by id (stored in flowState.thread)
-function toggleUserLike(msgId) {
-  const st = get();
-  const next = (st.thread || []).map((m) => {
-    const mm = withMeta(m);
-    if (mm.id === msgId) {
-      return {
-        ...mm,
-        reactions: { ...mm.reactions, userLiked: !mm.reactions?.userLiked },
-      };
-    }
-    return mm;
-  });
-  set({ thread: next });
-}
-
-// Genie auto-likes a *user* message if it looks like a “good signal”
-function maybeGenieAutoLike(userText) {
-  const good =
-    /^done\b/i.test(userText) ||
-    /\b(thanks|thank you|got it|nice|awesome|great|yes)\b/i.test(userText);
-  if (!good) return;
-
-  const st = get();
-  const last = [...(st.thread || [])].reverse().find((m) => m.role === "user");
-  if (!last) return;
-
-  const next = (st.thread || []).map((m) => {
-    const mm = withMeta(m);
-    if (mm.id === last.id) {
-      return { ...mm, reactions: { ...mm.reactions, genieLiked: true } };
-    }
-    return mm;
-  });
-  set({ thread: next });
-}
 
 /* confetti (client-only; no localStorage/sessionStorage) */
 let _confetti = null;
@@ -68,13 +21,13 @@ async function loadConfetti(){ try { const m = await import("canvas-confetti"); 
 async function popConfetti() {
   try {
     if (!_confetti) return;
-    const end = Date.now() + 800; // shorter tail so it doesn’t linger
+    const end = Date.now() + 1000;
     (function frame(){
       _confetti({ particleCount: 8, angle: 60, spread: 70, origin: { x: 0 }});
       _confetti({ particleCount: 8, angle: 120, spread: 70, origin: { x: 1 }});
       if (Date.now() < end) requestAnimationFrame(frame);
     })();
-    _confetti({ particleCount: 120, startVelocity: 52, spread: 360, ticks: 100, scalar: 1.0, origin: { y: 0.6 }});
+    _confetti({ particleCount: 140, startVelocity: 50, spread: 360, ticks: 120, scalar: 1.0, origin: { y: 0.6 }});
   } catch {}
 }
 
@@ -89,15 +42,19 @@ export default function ChatPage(){
   const [lastChatPayload, setLastChatPayload] = useState(null);
   const listRef = useRef(null);
 
-  // UI stages: 'confirm' → 'chat'   (RX removed)
+  // UI stages: 'confirm' (soft bar only) → 'rx' → 'chat'
   const [stage, setStage] = useState("confirm");
 
   // phases: 'intro' → 'exercise1' → 'dob' → 'work' → 'free'
   const [phase, setPhase] = useState("free");
 
+  // overlay (launch chat)
+  const [overlayVisible, setOverlayVisible] = useState(false);
+
   // soft-confirm state
   const [confirmVariant, setConfirmVariant] = useState(null);
   const [parsed, setParsed] = useState({ outcome: null, block: null, state: null });
+  const [firstRx, setFirstRx] = useState(null);
   const [showTweaks, setShowTweaks] = useState(false);
 
   // dopamine UI
@@ -135,13 +92,13 @@ export default function ChatPage(){
     if (el && stage === "chat") el.scrollTop = el.scrollHeight;
   }, [S.thread, uiOffer, stage, showReadyCTA, pointsBurst]);
 
-  // if chat opens empty for any reason, kick off intro deterministically
+  // ensure intro when entering chat with empty thread
   useEffect(() => {
     if (stage !== "chat") return;
-    const empty = !Array.isArray(S.thread) || S.thread.length === 0;
-    if (empty && phase !== "intro") {
-      setPhase("intro");
+    const noMessages = !Array.isArray(S.thread) || S.thread.length === 0;
+    if (noMessages && phase !== "intro") {
       setShowReadyCTA(false);
+      setPhase("intro");
       autoIntroSequence();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -225,7 +182,7 @@ export default function ChatPage(){
         }, { onConflict: "user_id,day_key" });
       }
     } catch {}
-    setTimeout(() => setPointsBurst(0), 1100);
+    setTimeout(() => setPointsBurst(0), 1200);
   }
 
   async function finishExercise1ThenAskDOB(){
@@ -247,12 +204,12 @@ export default function ChatPage(){
     await awardPoints(50);
 
     pushBubble(`✨ Nice work. That small win wires momentum.`);
-    setTimeout(() => { pushBubble(`Let’s do one more quick alignment to lock this in.`); }, 500);
+    setTimeout(() => { pushBubble(`Let’s do one more quick alignment to lock this in.`); }, 600);
 
     setTimeout(() => {
       setPhase("dob");
       pushBubble(`Tell me your date of birth (MM/DD/YYYY). I’ll map the numerology to “${get().currentWish?.wish || "your goal"}” and give you 3 aligned moves.`);
-    }, 1000);
+    }, 1200);
   }
 
   function isDOB(s=''){
@@ -294,7 +251,7 @@ Keep it upbeat, concise, and practical.`;
     setTimeout(() => {
       pushBubble(`That’s a strong finish for today. Come back tomorrow for your next dose — or chat freely with me now.`);
       setPhase("free");
-    }, 500);
+    }, 600);
   }
 
   async function send(){
@@ -343,6 +300,7 @@ Keep it upbeat, concise, and practical.`;
             why: belief
               ? `Limiting belief detected: “${belief}.” Tonight’s session dissolves that pattern so your next action feels natural.`
               : `Based on your goal, this short trance helps you move without overthinking.`,
+            priceCents: rec.price,
             buyUrl: "https://hypnoticmeditations.ai/b/l0kmb"
           });
         }
@@ -361,14 +319,14 @@ Keep it upbeat, concise, and practical.`;
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
   }
 
-  /* soft-confirm actions */
-  function handleLooksRight() {
-    // Fresh chat boot every time; no device-specific carryover
-    set({ thread: [] });
+  function onLooksRight() {
+    const plan = prescribe(parsed || {});
+    setFirstRx(plan);
     setStage("chat");
-    setPhase("intro");
-    setShowReadyCTA(false);
-    autoIntroSequence();
+    setTimeout(() => {
+      const el = document.getElementById("first-prescription");
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 0);
   }
   function onTweak() { setShowTweaks(true); }
   function onApplyTweaks(next){
@@ -378,10 +336,27 @@ Keep it upbeat, concise, and practical.`;
       state: (next.state ?? parsed.state) || null
     });
     setShowTweaks(false);
-    handleLooksRight();
+    onLooksRight();
+  }
+
+  async function dismissOverlay(){
+    // Fresh chat boot every time; no device-specific carryover
+    set({ thread: [], phase: undefined });
+    setStage("chat");
+    setOverlayVisible(false);
+    setPhase("intro");
+    setShowReadyCTA(false);
+    autoIntroSequence();
+
+    setTimeout(() => {
+      const el = listRef.current;
+      if (el) el.scrollTop = el.scrollHeight;
+    }, 1600);
   }
 
   const overlayStyles = `
+@keyframes popIn { 0% { transform: scale(.7); opacity: 0 } 60% { transform: scale(1.08); opacity:1 } 100% { transform: scale(1) } }
+@keyframes floaty { 0% { transform: translateY(0) } 50% { transform: translateY(-6px) } 100% { transform: translateY(0) } }
 @keyframes pointsPop {
   0% { transform: translate(-50%, 10px) scale(.9); opacity: 0 }
   20% { opacity: 1 }
@@ -464,6 +439,12 @@ Keep it upbeat, concise, and practical.`;
                 {pretty(lastChatPayload ?? { info: "No chat call yet. Send a message to populate lastChatPayload." })}
               </pre>
             </div>
+            <div style={{ gridColumn:"1 / span 2", background:"#0f172a", padding:10, borderRadius:8 }}>
+              <div style={{ fontSize:12, opacity:.8, marginBottom:6 }}>softConfirm</div>
+              <pre style={{ margin:0, fontSize:12, whiteSpace:"pre-wrap" }}>
+                {pretty({ parsed, confirmVariant, firstRx, stage, overlayVisible, phase })}
+              </pre>
+            </div>
           </div>
         </div>
       )}
@@ -505,11 +486,43 @@ Keep it upbeat, concise, and practical.`;
                   <SoftConfirmBar
                     outcome={parsed?.outcome}
                     block={parsed?.block}
-                    onLooksRight={handleLooksRight}   // ← go straight to chat
-                    onTweak={onTweak}
+                    onLooksRight={()=>{
+                      const plan = prescribe(parsed || {});
+                      setFirstRx(plan);
+                      setStage("rx");
+                      setTimeout(() => {
+                        const el = document.getElementById("first-prescription");
+                        if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+                      }, 0);
+                    }}
+                    onTweak={()=>setShowTweaks(true)}
                   />
                 </div>
               </>
+            )}
+
+            {/* Stage: rx (button opens overlay that leads to chat intro) */}
+            {stage === "rx" && firstRx && (
+              <div id="first-prescription" style={{ marginBottom: 8 }}>
+                <div style={{ border:"1px solid rgba(0,0,0,0.1)", borderRadius:12, padding:12 }}>
+                  <div style={{ fontWeight:800, marginBottom:6 }}>{firstRx.firstMeditation}</div>
+                  <div style={{ fontSize:13, color:"#334155", marginBottom:10 }}>
+                    Fastest unlock for your path ({firstRx.family} • {firstRx.protocol}). Use once tonight. Return for next dose.
+                  </div>
+                  <button
+                    onClick={()=>{
+                      setOverlayVisible(true);
+                      setTimeout(()=>{ const ov = document.getElementById("genie-overlay-tap"); ov?.focus(); }, 100);
+                    }}
+                    style={{
+                      padding:"10px 14px", borderRadius:12, border:0, background:"#ffd600",
+                      fontWeight:900, cursor:"pointer"
+                    }}
+                  >
+                    Open Chat With Genie »
+                  </button>
+                </div>
+              </div>
             )}
 
             {/* Stage: chat */}
@@ -522,20 +535,9 @@ Keep it upbeat, concise, and practical.`;
                     border: "1px solid rgba(0,0,0,0.08)", borderRadius: 12, padding: 10, background: "#f8fafc"
                   }}
                 >
-        {(S.thread || []).map((m) => {
-  const mm = withMeta(m);
-  return (
-    <ChatBubble
-      key={mm.id}
-      id={mm.id}
-      role={mm.role}
-      content={nl2br(escapeHTML(mm.content || ""))}
-      reactions={mm.reactions}
-      onToggleUserLike={() => toggleUserLike(mm.id)}
-    />
-  );
-})}
-
+                  {(S.thread || []).map(m => {
+                    const isAI = m.role !== "user";
+                    return (
                       <div
                         key={m.id || newId()}
                         style={{
@@ -625,6 +627,39 @@ Keep it upbeat, concise, and practical.`;
           </div>
         </div>
       </div>
+
+      {/* Overlay to enter chat */}
+      {overlayVisible && (
+        <div
+          onClick={dismissOverlay}
+          role="button"
+          id="genie-overlay-tap"
+          tabIndex={0}
+          title="Tap to meet your Genie"
+          style={{
+            position:"fixed", inset:0, background:"rgba(0,0,0,0.55)",
+            display:"flex", alignItems:"center", justifyContent:"center",
+            zIndex: 50, cursor:"pointer"
+          }}
+        >
+          <div
+            style={{
+              width: 360, maxWidth:"88%", background:"#fff", borderRadius:16, padding:"18px 16px",
+              textAlign:"center", border:"1px solid rgba(0,0,0,0.08)", animation: "popIn .28s ease-out"
+            }}
+          >
+            <div style={{ fontSize:40, lineHeight:1, animation:"floaty 2.2s ease-in-out infinite" }}>🧞‍♂️</div>
+            <div style={{ fontWeight:900, marginTop:8, fontSize:18 }}>The Genie is waiting for you…</div>
+            <div style={{ marginTop:6, fontSize:13, color:"#334155" }}>Tap anywhere to begin your conversation.</div>
+            <div style={{ marginTop:12 }}>
+              <span style={{
+                display:"inline-block", padding:"10px 14px", background:"#ffd600",
+                borderRadius:12, fontWeight:900
+              }}>Tap to enter</span>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }
