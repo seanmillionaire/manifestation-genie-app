@@ -1,6 +1,7 @@
 // /pages/profile.js
 import { useEffect, useState } from "react";
-import { supabase } from "../src/supabaseClient"; // use the same client as the rest of the app
+import { supabase } from "../lib/supabaseClient"; // <-- named import, lib path
+
 
 export default function ProfilePage() {
   const [user, setUser] = useState(null);
