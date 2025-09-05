@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { useUser, useSupabaseClient } from "@supabase/auth-helpers-react";
+import supabase from "../src/supabaseClient";
+
 
 export default function ProfilePage() {
   const user = useUser();
