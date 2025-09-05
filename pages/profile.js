@@ -140,40 +140,56 @@ export default function ProfilePage() {
   );
 }
 
-/* ---------- small UI helpers to match your white design ---------- */
+/* ---------- small UI helpers to match full app design ---------- */
 
 function PageWrap({ children }) {
   return (
-    <div style={{ width: "min(1100px, 94vw)", margin: "18px auto 36px", padding: "0 2px" }}>
+    <div style={{
+      width: "min(1100px, 94vw)",
+      margin: "32px auto 48px",
+      padding: "0 4px"
+    }}>
       {children}
     </div>
   );
 }
 
 function H1({ children }) {
-  return <h1 style={{ fontSize: 28, fontWeight: 700, margin: "6px 0 6px" }}>{children}</h1>;
+  return <h1 style={{
+    fontSize: 32,
+    fontWeight: 700,
+    margin: "0 0 6px",
+    color: "var(--text)"
+  }}>{children}</h1>;
 }
 
 function H2({ children }) {
-  return <h2 style={{ fontSize: 18, fontWeight: 700, margin: "0 0 10px" }}>{children}</h2>;
+  return <h2 style={{
+    fontSize: 20,
+    fontWeight: 700,
+    margin: "0 0 12px",
+    color: "var(--text)"
+  }}>{children}</h2>;
 }
 
 function Muted({ children }) {
-  return <p style={{ color: "var(--muted)", marginTop: 0, marginBottom: 14 }}>{children}</p>;
+  return <p style={{
+    color: "var(--muted)",
+    margin: "4px 0 16px",
+    fontSize: 15
+  }}>{children}</p>;
 }
 
 function Card({ children }) {
   return (
-    <section
-      style={{
-        background: "#fff",
-        border: "1px solid var(--border)",
-        borderRadius: 12,
-        padding: "14px 14px",
-        margin: "14px 0",
-        boxShadow: "0 1px 0 rgba(0,0,0,0.02)"
-      }}
-    >
+    <section style={{
+      background: "#fff",
+      border: "1px solid var(--border)",
+      borderRadius: 12,
+      padding: "18px 20px",
+      margin: "20px 0",
+      boxShadow: "0 2px 4px rgba(0,0,0,0.04)"
+    }}>
       {children}
     </section>
   );
@@ -183,12 +199,13 @@ function Stat({ label, value }) {
   return (
     <div style={{
       border: "1px solid var(--border)",
-      borderRadius: 10,
-      padding: 12,
-      minHeight: 72
+      borderRadius: 12,
+      padding: "14px 16px",
+      minHeight: 80,
+      background: "var(--soft)"
     }}>
-      <div style={{ fontSize: 13, color: "var(--muted)" }}>{label}</div>
-      <div style={{ fontSize: 24, fontWeight: 700, marginTop: 4 }}>{value}</div>
+      <div style={{ fontSize: 14, color: "var(--muted)" }}>{label}</div>
+      <div style={{ fontSize: 26, fontWeight: 700, marginTop: 4, color: "var(--text)" }}>{value}</div>
     </div>
   );
 }
@@ -196,9 +213,8 @@ function Stat({ label, value }) {
 const grid3 = {
   display: "grid",
   gridTemplateColumns: "1fr",
-  gap: 12
+  gap: 16
 };
-// make it 3 columns on wide screens without Tailwind
 if (typeof window !== "undefined") {
   const mql = window.matchMedia("(min-width: 720px)");
   if (mql.matches) grid3.gridTemplateColumns = "repeat(3, 1fr)";
@@ -207,12 +223,14 @@ if (typeof window !== "undefined") {
 const rowItem = {
   border: "1px solid var(--border)",
   borderRadius: 10,
-  padding: 12,
-  marginTop: 8
+  padding: 14,
+  marginTop: 10,
+  background: "var(--soft)"
 };
 
-const subMeta = { fontSize: 12, color: "var(--muted)", marginTop: 6 };
-const finePrint = { fontSize: 12, color: "var(--muted)", marginTop: 10 };
+const subMeta = { fontSize: 13, color: "var(--muted)", marginTop: 6 };
+const finePrint = { fontSize: 13, color: "var(--muted)", marginTop: 12 };
+
 
 /* ---------- logic helpers ---------- */
 function computeVisitStats(visits) {
