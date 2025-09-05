@@ -1,12 +1,13 @@
-import "@/styles/globals.css";
+import "../styles/globals.css";
 import { useEffect } from "react";
-import supabase from "@/src/supabaseClient"; // <-- your existing client
+import supabase from "../src/supabaseClient";
 
 export default function MyApp({ Component, pageProps }) {
   useEffect(() => {
-    let unsub = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session?.user?.id) upsertToday(session.user.id);
-    }).data?.subscription;
+    const { data: { subscription } = { subscription: null } } =
+      supabase.auth.onAuthStateChange((_event, session) => {
+        if (session?.user?.id) upsertToday(session.user.id);
+      });
 
     // also run once on mount for current session
     supabase.auth.getSession().then(({ data }) => {
@@ -14,7 +15,9 @@ export default function MyApp({ Component, pageProps }) {
       if (uid) upsertToday(uid);
     });
 
-    return () => { unsub && unsub.unsubscribe(); };
+    return () => {
+      if (subscription) subscription.unsubscribe();
+    };
   }, []);
 
   return <Component {...pageProps} />;
