@@ -1,25 +1,26 @@
 // /pages/profile.js
 import { useEffect, useState } from "react";
-import { createBrowserSupabaseClient } from "@supabase/auth-helpers-nextjs";
+import { supabase } from "../src/supabaseClient"; // use the same client as the rest of the app
 
 export default function ProfilePage() {
-  const supabase = createBrowserSupabaseClient();
-
   const [user, setUser] = useState(null);
   const [streak, setStreak] = useState(0);
   const [weekCount, setWeekCount] = useState(0);
   const [lastDate, setLastDate] = useState(null);
   const [wishes, setWishes] = useState([]);
   const [wins, setWins] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(true); // <- gate the initial render
 
   useEffect(() => {
     let alive = true;
     async function load() {
-      const { data } = await supabase.auth.getUser();
-      const u = data?.user || null;
+      // get the active session (faster + more reliable than getUser during first paint)
+      const { data: { session } } = await supabase.auth.getSession();
+      const u = session?.user ?? null;
+
       if (!alive) return;
       setUser(u);
+
       if (!u) { setLoading(false); return; }
 
       // 1) visits (last 60 days)
@@ -60,14 +61,25 @@ export default function ProfilePage() {
         .from("wins")
         .select("id, title, note, points, created_at")
         .order("created_at", { ascending: false });
+
       if (!alive) return;
       setWins(wn || []);
       setLoading(false);
     }
     load();
     return () => { alive = false; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // ✅ Don’t show “Please sign in” until we are DONE loading
+  if (loading) {
+    return (
+      <PageWrap>
+        <H1>Your Profile</H1>
+        <Muted>This is your personal dashboard</Muted>
+        <Card><Muted>Loading…</Muted></Card>
+      </PageWrap>
+    );
+  }
 
   if (!user) {
     return (
@@ -156,27 +168,19 @@ function PageWrap({ children }) {
 
 function H1({ children }) {
   return <h1 style={{
-    fontSize: 32,
-    fontWeight: 700,
-    margin: "0 0 6px",
-    color: "var(--text)"
+    fontSize: 32, fontWeight: 700, margin: "0 0 6px", color: "var(--text)"
   }}>{children}</h1>;
 }
 
 function H2({ children }) {
   return <h2 style={{
-    fontSize: 20,
-    fontWeight: 700,
-    margin: "0 0 12px",
-    color: "var(--text)"
+    fontSize: 20, fontWeight: 700, margin: "0 0 12px", color: "var(--text)"
   }}>{children}</h2>;
 }
 
 function Muted({ children }) {
   return <p style={{
-    color: "var(--muted)",
-    margin: "4px 0 16px",
-    fontSize: 15
+    color: "var(--muted)", margin: "4px 0 16px", fontSize: 15
   }}>{children}</p>;
 }
 
@@ -210,27 +214,18 @@ function Stat({ label, value }) {
   );
 }
 
-const grid3 = {
-  display: "grid",
-  gridTemplateColumns: "1fr",
-  gap: 16
-};
+const grid3 = { display: "grid", gridTemplateColumns: "1fr", gap: 16 };
 if (typeof window !== "undefined") {
   const mql = window.matchMedia("(min-width: 720px)");
   if (mql.matches) grid3.gridTemplateColumns = "repeat(3, 1fr)";
 }
 
 const rowItem = {
-  border: "1px solid var(--border)",
-  borderRadius: 10,
-  padding: 14,
-  marginTop: 10,
-  background: "var(--soft)"
+  border: "1px solid var(--border)", borderRadius: 10, padding: 14, marginTop: 10, background: "var(--soft)"
 };
 
 const subMeta = { fontSize: 13, color: "var(--muted)", marginTop: 6 };
 const finePrint = { fontSize: 13, color: "var(--muted)", marginTop: 12 };
-
 
 /* ---------- logic helpers ---------- */
 function computeVisitStats(visits) {
