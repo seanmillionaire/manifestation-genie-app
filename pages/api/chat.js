@@ -1,6 +1,6 @@
 // /pages/api/chat.js
 // Genie: cosmic, playful, prescriptive, non-repetitive.
-import { getRandomSigil } from "@/src/sigils";
+import { getRandomSigil } from "../src/sigils";
 
 function sysPrompt({ userName, vibe, wantStoryFlag, promptSpecText }) {
   const name = userName || "Friend";
