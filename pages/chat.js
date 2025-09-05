@@ -10,11 +10,57 @@ import SoftConfirmBar from "../components/Confirm/SoftConfirmBar";
 import { parseAnswers, scoreConfidence, variantFromScore } from "../src/features/confirm/decision";
 import { detectBeliefFrom, recommendProduct } from "../src/engine/recommendProduct";
 import { hydrateFirstNameFromSupabase } from "../src/userName";
+import ChatBubble from "../components/Chat/ChatBubble";
 
 /* tiny utils */
 function escapeHTML(s=''){return s.replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
 function nl2br(s=''){ return s.replace(/\n/g, "<br/>"); }
 function pretty(o){ try { return JSON.stringify(o, null, 2); } catch { return String(o); } }
+// ensure every message has a stable id + reactions bucket
+function withMeta(m) {
+  return {
+    ...m,
+    id: m.id || Math.random().toString(36).slice(2),
+    reactions: m.reactions || { userLiked: false, genieLiked: false },
+  };
+}
+
+// toggle a user's "like" on a message by id (stored in flowState.thread)
+function toggleUserLike(msgId) {
+  const st = get();
+  const next = (st.thread || []).map((m) => {
+    const mm = withMeta(m);
+    if (mm.id === msgId) {
+      return {
+        ...mm,
+        reactions: { ...mm.reactions, userLiked: !mm.reactions?.userLiked },
+      };
+    }
+    return mm;
+  });
+  set({ thread: next });
+}
+
+// Genie auto-likes a *user* message if it looks like a “good signal”
+function maybeGenieAutoLike(userText) {
+  const good =
+    /^done\b/i.test(userText) ||
+    /\b(thanks|thank you|got it|nice|awesome|great|yes)\b/i.test(userText);
+  if (!good) return;
+
+  const st = get();
+  const last = [...(st.thread || [])].reverse().find((m) => m.role === "user");
+  if (!last) return;
+
+  const next = (st.thread || []).map((m) => {
+    const mm = withMeta(m);
+    if (mm.id === last.id) {
+      return { ...mm, reactions: { ...mm.reactions, genieLiked: true } };
+    }
+    return mm;
+  });
+  set({ thread: next });
+}
 
 /* confetti (client-only; no localStorage/sessionStorage) */
 let _confetti = null;
@@ -476,9 +522,20 @@ Keep it upbeat, concise, and practical.`;
                     border: "1px solid rgba(0,0,0,0.08)", borderRadius: 12, padding: 10, background: "#f8fafc"
                   }}
                 >
-                  {(S.thread || []).map(m => {
-                    const isAI = m.role !== "user";
-                    return (
+        {(S.thread || []).map((m) => {
+  const mm = withMeta(m);
+  return (
+    <ChatBubble
+      key={mm.id}
+      id={mm.id}
+      role={mm.role}
+      content={nl2br(escapeHTML(mm.content || ""))}
+      reactions={mm.reactions}
+      onToggleUserLike={() => toggleUserLike(mm.id)}
+    />
+  );
+})}
+
                       <div
                         key={m.id || newId()}
                         style={{
