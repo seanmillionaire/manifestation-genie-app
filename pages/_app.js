@@ -1,6 +1,6 @@
 import "../styles/globals.css";
 import { useEffect } from "react";
-import supabase from "../src/supabaseClient";
+import { supabase } from "../src/supabaseClient"; // <-- named import
 
 export default function MyApp({ Component, pageProps }) {
   useEffect(() => {
