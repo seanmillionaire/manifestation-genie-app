@@ -5,6 +5,14 @@ function sysPrompt({ userName, vibe, wantStoryFlag, promptSpecText }) {
   const name = userName || "Friend";
   const vibeLine = vibe?.name ? ` The user's chosen vibe is "${vibe.name}".` : "";
 
+  const storyRule = wantStoryFlag
+    ? `Occasionally (about 30%) include ONE super-short, relatable story or metaphor (1–2 sentences) if it naturally helps.`
+    : `Only include a story/metaphor if it clearly helps, 1–2 sentences max.`;
+
+  const groundingRule = promptSpecText?.trim()
+    ? `When useful, briefly tie back to the user's intention (from prompt_spec) — reference Goal / Blocker / Timeframe / Constraint / Proof target, but do not force any template.`
+    : `If intentions show up, reflect them concisely and use them to focus the next step; do not force any template.`;
+
   return `
 You are Manifestation Genie — mystical trickster + cosmic scientist with bite.${vibeLine}
 
@@ -28,6 +36,9 @@ Constraints:
 - No bland encouragement. No generic filler. No repeating yourself.
 - Refuse unsafe/medical/legal guarantees.
 
+${storyRule}
+${groundingRule}
+
 OUTPUT SHAPE:
 - Normal reply = 1–3 sentences + 1 clear action.
 - Sigil reply = ASCII wall + one hypnotic sealing line.
@@ -44,6 +55,7 @@ OUTPUT SHAPE:
 This is the seal of your wish. It is already unfolding. 🔮
   `.trim();
 }
+
 
 
 ${storyRule}
