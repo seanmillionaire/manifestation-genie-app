@@ -1,76 +1,77 @@
-// /components/Chat/ChatBubble.tsx
+// components/Chat/ChatBubble.tsx
 import React from "react";
-import clsx from "clsx";
 
-type Reactions = { userLiked?: boolean; genieLiked?: boolean };
 type Props = {
   id: string;
-  role: "assistant" | "user" | string;
-  content: string;                 // already escaped HTML (we render as HTML)
-  reactions?: Reactions;
-  onToggleUserLike?: () => void;
+  role: "assistant" | "user" | "system";
+  /** HTML string (already sanitized/escaped upstream) */
+  content: string;
 };
 
-const Avatar: React.FC<{ role: string }> = ({ role }) => {
+const ChatBubble: React.FC<Props> = ({ role, content }) => {
   const isAI = role !== "user";
+
+  const avatar = isAI ? "🧞‍♂️" : "🙂";
+  const name   = isAI ? "Genie" : "You";
+
   return (
     <div
-      aria-hidden
-      className={clsx(
-        "flex h-6 w-6 shrink-0 items-center justify-center rounded-full border",
-        isAI ? "bg-sky-50 border-sky-200" : "bg-amber-50 border-amber-200"
-      )}
-      style={{ fontSize: 12, lineHeight: 1 }}
-      title={isAI ? "Genie" : "You"}
+      style={{
+        marginBottom: 10,
+        display: "flex",
+        gap: 8,
+        alignItems: "flex-start",
+        flexDirection: isAI ? "row" : "row-reverse",
+      }}
     >
-      {isAI ? "🧞‍♂️" : "🙂"}
-    </div>
-  );
-};
-
-const LikePill: React.FC<{ liked?: boolean; onClick?: () => void; align: "left" | "right" }> = ({ liked, onClick, align }) => {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={!!liked}
-      className={clsx(
-        "mt-1 inline-flex items-center gap-1 rounded-md border text-[11px] leading-none",
-        "px-2 py-[3px] select-none",
-        liked
-          ? "bg-amber-100 border-amber-300 text-amber-900"
-          : "bg-white border-slate-200 text-slate-600 hover:bg-slate-100",
-        align === "left" ? "self-start" : "self-end"
-      )}
-      style={{ transform: "translateY(-2px)" }}
-    >
-      <span style={{ fontSize: 12, lineHeight: 1 }}>{liked ? "👍" : "👍"}</span>
-      <span>Like</span>
-    </button>
-  );
-};
-
-const ChatBubble: React.FC<Props> = ({ role, content, reactions, onToggleUserLike }) => {
-  const isAI = role !== "user";
-  return (
-    <div className={clsx("mb-2 flex w-full", isAI ? "justify-start" : "justify-end")}>
-      {isAI && <Avatar role={role} />}
-
-      <div className={clsx("mx-2 flex max-w-[88%] flex-col")}>
-        <div
-          className={clsx(
-            "rounded-xl border px-3 py-2 text-[14px] leading-snug",
-            isAI
-              ? "bg-slate-50 border-slate-200 text-slate-900"
-              : "bg-amber-50 border-amber-200 text-slate-900"
-          )}
-          dangerouslySetInnerHTML={{ __html: content }}
-        />
-        {/* compact like */}
-        <LikePill liked={!!reactions?.userLiked} onClick={onToggleUserLike} align={isAI ? "left" : "right"} />
+      {/* avatar */}
+      <div
+        aria-hidden
+        style={{
+          width: 26,
+          height: 26,
+          borderRadius: "50%",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          border: "1px solid rgba(0,0,0,.10)",
+          background: "#fff",
+          lineHeight: 1,
+          fontSize: 16,
+        }}
+      >
+        <span>{avatar}</span>
       </div>
 
-      {!isAI && <Avatar role={role} />}
+      {/* bubble */}
+      <div style={{ maxWidth: "88%" }}>
+        <div
+          style={{
+            fontSize: 12,
+            fontWeight: 700,
+            color: "#334155",
+            marginBottom: 4,
+            textAlign: isAI ? "left" : "right",
+          }}
+        >
+          {name}
+        </div>
+
+        <div
+          style={{
+            background: isAI ? "rgba(0,0,0,0.04)" : "rgba(255,214,0,0.15)",
+            border: "1px solid rgba(0,0,0,0.08)",
+            borderRadius: 12,
+            padding: "8px 10px",
+            whiteSpace: "pre-wrap",
+            lineHeight: 1.4,
+          }}
+          // content is already escaped upstream
+          dangerouslySetInnerHTML={{ __html: content }}
+        />
+
+        {/* No reactions / like row on purpose */}
+      </div>
     </div>
   );
 };
