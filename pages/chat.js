@@ -203,6 +203,18 @@ export default function ChatPage(){
     if (el && stage === 'chat') el.scrollTop = el.scrollHeight;
   }, [S.thread, uiOffer, stage, showReadyCTA, pointsBurst]);
 
+// If chat is visible and we have no messages yet, ensure we kick off the intro.
+useEffect(() => {
+  if (stage !== 'chat') return;
+  const noMessages = !Array.isArray(S.thread) || S.thread.length === 0;
+  if (noMessages && phase !== 'intro') {
+    setShowReadyCTA(false);
+    setPhase('intro');
+    autoIntroSequence();
+  }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [stage]);
+  
   // backend call
   async function callGenie({ text, systemHint=null }) {
     const stateNow = get();
@@ -422,15 +434,22 @@ Keep it upbeat, concise, and practical.`;
 
   // overlay tap → enter chat (intro bubbles with pacing)
   async function dismissOverlay(){
-    set({ thread: [] }); // fresh thread
+  // Fresh boot: kill any lingering scripted state from previous runs
+  set({
+    thread: [],
+    chat_boot_version: 2,      // optional: diagnostic marker
+    // nuke any old per-day script flags if you stored them previously
+    phase: undefined,          // clear accidental persisted phase in flowState (if present)
+  });
     await markWizardDoneToday();
 
     setStage('chat');
     setOverlayVisible(false);
 
-    // run the three intro bubbles with delays, then show CTA
-    setPhase('intro');
-    autoIntroSequence();
+  // Always start at intro; never auto-advance
+  setShowReadyCTA(false);
+  setPhase('intro');
+  autoIntroSequence();
 
     setTimeout(() => {
       const el = listRef.current;
