@@ -134,18 +134,26 @@ export default async function handler(req, res) {
     const lastUserMessage = (text || "").toLowerCase();
     const sigilTriggers = ["sigil", "seal", "ritual", "wish", "888", "money", "flow", "rich", "paid", "cash"];
 
-    // 1) Keyword triggers → direct pull from bank and SAVE both sides
-    if (text && sigilTriggers.some(w => lastUserMessage.includes(w))) {
-      const sigil = getRandomSigil();
-      await saveTurn({
-        conversationId: convoId,
-        messages: [
-          { role: "user", content: text },
-          { role: "assistant", content: sigil }
-        ]
-      });
-      return res.status(200).json({ reply: sigil, conversationId: convoId });
-    }
+// 🔮 Sigil intercept — banked ASCII only, no links.
+const rawText = String(text || "");
+const lastUserMessage = rawText.toLowerCase();
+
+// expanded nudges so “what else” etc. also fire
+const sigilTriggers = [
+  "sigil","seal","ritual","wish","888","money","flow","rich","paid","cash",
+  "what else","more","next","continue","ok","done"
+];
+
+// heuristic: if the last assistant ended with a question and the user reply is short,
+// break the loop with a sigil instead of more words.
+const lastAssistant = [...cleanedHistory].reverse().find(m => m.role === "assistant");
+const lastWasQuestion = !!(lastAssistant && /\?\s*$/.test(lastAssistant.content || ""));
+const shortPing = rawText.trim().split(/\s+/).length <= 3;
+
+if (sigilTriggers.some(w => lastUserMessage.includes(w)) || (lastWasQuestion && shortPing)) {
+  return res.status(200).json({ reply: getRandomSigil() }); // pulls from src/sigils
+}
+
 
     // 2) Loop-break trigger → after 2 assistant replies (SAVE both sides)
     const assistantSince = assistantRepliesSinceLastUser(cleanedHistory);
