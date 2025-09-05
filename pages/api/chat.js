@@ -1,5 +1,5 @@
 // /pages/api/chat.js
-// Genie: warm, conversational, non-repetitive, advances naturally.
+// Genie: cosmic, playful, prescriptive, non-repetitive.
 
 function sysPrompt({ userName, vibe, wantStoryFlag, promptSpecText }) {
   const name = userName || "Friend";
@@ -56,41 +56,20 @@ This is the seal of your wish. It is already unfolding. 🔮
   `.trim();
 }
 
-
-
-${storyRule}
-${groundingRule}
-
-Advancement rules:
-- Do NOT demand a specific phrasing like “Goal: … | Block: …”.
-- If the user already answered earlier prompts, do NOT re-ask them; move forward.
-- If the user is casual (“hey”, jokes), respond naturally and then guide gently.
-- Offer an optional tiny next step only when the user seems ready or asks.
-
-Tone:
-- Warm, encouraging, clear. Minimal emoji (⭐️/✨ only if it enhances).
-- No bossy imperatives.
-  `.trim();
-}
-
 // --- Helpers to prevent loops/repeats ---
 
-// Any assistant seed lines we never want to echo or re-ask:
 const BLOCKED_SEED_SNIPPETS = [
   "Tell me your goal and sticking point in one line",
   "Goal: ... | Block: ..."
 ];
 
-// Remove scripted assistant seeds and duplicate prompts
 function stripSeedRepeats(messages = []) {
   let lastAssistant = null;
   return messages.filter(m => {
     const role = m.role === "user" ? "user" : "assistant";
     const content = String(m.content || "");
     if (role === "assistant") {
-      // 1) Drop known seed prompts
       if (BLOCKED_SEED_SNIPPETS.some(s => content.includes(s))) return false;
-      // 2) Drop exact (or near-exact) duplicates vs previous assistant
       if (lastAssistant && content.slice(0, 120) === lastAssistant.slice(0, 120)) return false;
       lastAssistant = content;
     }
@@ -98,12 +77,10 @@ function stripSeedRepeats(messages = []) {
   }).map(m => ({ role: m.role === "user" ? "user" : "assistant", content: String(m.content || "") }));
 }
 
-// Simple heuristic: did the user already provide intent-ish text?
 function userLikelyProvidedIntent(messages = []) {
   const lastUser = [...messages].reverse().find(m => m.role === "user");
   if (!lastUser) return false;
   const t = (lastUser.content || "").toLowerCase();
-  // “good enough” signals someone gave an intent without a template
   return /i want|goal|wish|need|stuck|block|problem|help|plan|money|time|deadline|launch|grow|sell|learn/.test(t);
 }
 
@@ -121,19 +98,17 @@ export default async function handler(req, res) {
 
     const wantStoryFlag = Math.random() < 0.3;
 
-    // Pull prompt_spec text if present
     const promptSpecText = typeof context?.prompt_spec === "string"
       ? context.prompt_spec
       : (context?.prompt_spec?.prompt || null);
 
-    // --- Build messages safely ---
     const cleanedHistory = stripSeedRepeats(Array.isArray(messages) ? messages : []);
-    const alreadyGaveIntent = userLikelyProvidedIntent(cleanedHistory.concat(text ? [{ role: "user", content: String(text) }] : []));
+    const alreadyGaveIntent = userLikelyProvidedIntent(
+      cleanedHistory.concat(text ? [{ role: "user", content: String(text) }] : [])
+    );
 
     const chat = [
       { role: "system", content: sysPrompt({ userName, vibe: context.vibe, wantStoryFlag, promptSpecText }) },
-
-      // Compact optional context packet
       {
         role: "system",
         content: "Optional context: " + JSON.stringify({
@@ -143,8 +118,6 @@ export default async function handler(req, res) {
           vibe: context.vibe || null,
         }),
       },
-
-      // Meta-guard so the model advances if user already answered
       {
         role: "system",
         content: [
@@ -154,8 +127,6 @@ export default async function handler(req, res) {
             : "If the user hasn't given intent yet, you may ask ONE natural question to understand their goal or sticking point."
         ].join(" ")
       },
-
-      // Optional intention packet (but NOT a demand)
       ...(promptSpecText ? [{
         role: "system",
         content: [
@@ -164,7 +135,6 @@ export default async function handler(req, res) {
           "Use only as light guidance; do NOT force exact phrasing.",
         ].join("\n")
       }] : []),
-
       ...cleanedHistory
     ];
 
@@ -181,10 +151,10 @@ export default async function handler(req, res) {
       body: JSON.stringify({
         model: "gpt-4o-mini",
         messages: chat,
-        temperature: 0.85,     // a bit lower for coherence
+        temperature: 0.85,
         top_p: 1,
         presence_penalty: 0.3,
-        frequency_penalty: 0.7, // stronger anti-repeat
+        frequency_penalty: 0.7,
         max_tokens: 350,
       }),
     });
