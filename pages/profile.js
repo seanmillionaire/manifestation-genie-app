@@ -38,32 +38,37 @@ export default function ProfilePage() {
       setWeekCount(_weekCount);
       setLastDate(_last);
 
-      // 2) wishlist (view → fallback)
-      let wl = [];
-      const { data: wlView, error: wlErr } = await supabase
-        .from("user_questionnaire_wishlist")
-        .select("title, created_at")
-        .order("created_at", { ascending: false });
-      if (!wlErr && wlView) {
-        wl = wlView;
-      } else {
-        const { data: wlTbl } = await supabase
-          .from("wishes")
-          .select("id, title, note, created_at")
-          .order("created_at", { ascending: false });
-        wl = wlTbl || [];
-      }
-      if (!alive) return;
-      setWishes(wl);
 
-      // 3) wins
-      const { data: wn = [] } = await supabase
-        .from("wins")
-        .select("id, title, note, points, created_at")
-        .order("created_at", { ascending: false });
+// 2) WISHLIST — prefer view, else table
+let wl = [];
+const { data: wlView, error: wlErr } = await supabase
+  .from("user_questionnaire_wishlist")
+  .select("user_id, title, created_at")
+  .eq("user_id", user.id)                  // NEW: filter to me
+  .order("created_at", { ascending: false });
+if (wlErr && wlErr.code !== "PGRST302") console.warn("wishlist view error", wlErr);
+if (!wlErr && wlView) {
+  wl = wlView;
+} else {
+  const { data: wlTbl, error: wlTblErr } = await supabase
+    .from("wishes")
+    .select("id, title, note, created_at")
+    .eq("user_id", user.id)                // NEW: filter to me
+    .order("created_at", { ascending: false });
+  if (wlTblErr) console.warn("wishes table error", wlTblErr);
+  wl = wlTbl || [];
+}
+setWishes(wl);
 
-      if (!alive) return;
-      setWins(wn || []);
+// 3) WINS
+const { data: wn = [], error: winsErr } = await supabase
+  .from("wins")
+  .select("id, title, note, points, created_at")
+  .eq("user_id", user.id)                  // NEW: filter to me
+  .order("created_at", { ascending: false });
+if (winsErr) console.warn("wins error", winsErr);
+setWins(wn || []);
+
       setLoading(false);
     }
     load();
