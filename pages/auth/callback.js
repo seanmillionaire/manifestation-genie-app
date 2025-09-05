@@ -11,7 +11,7 @@ export default function AuthCallback() {
     supabase.auth.onAuthStateChange((event, session) => {
       if (session) {
         // redirect after login success
-        router.push("/chat"); // 👈 change this to your main app page
+        router.push("/home"); // 👈 change this to your main app page
       }
     });
   }, [router]);
