@@ -1,7 +1,8 @@
 // /pages/chat.js — SoftConfirm → Chat (intro → CTA → Exercise1 → DOB Numerology)
 // RX is skipped entirely. Like buttons removed.
 
-import { useEffect, useRef, useState } from "react";
++import { useEffect, useRef, useState } from "react";
++import { useGenieConversation } from "../src/hooks/useGenieConversation";
 import { useRouter } from "next/router";
 import { get, set, newId, pushThread, toPlainMessages } from "../src/flowState";
 import { supabase } from "../src/supabaseClient";
