@@ -93,6 +93,14 @@ export default function ProfilePage() {
       <PageWrap>
         <H1>Your Profile</H1>
         <Muted>This is your personal dashboard</Muted>
+      {/* USER INFO */}
+<Card>
+  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+    <div style={{ fontSize: 18, fontWeight: 700 }}>{user.user_metadata?.name || "Manifestor"}</div>
+    <div style={{ fontSize: 15, color: "var(--muted)" }}>{user.email}</div>
+  </div>
+</Card>
+
         <Card><Muted>Loading…</Muted></Card>
       </PageWrap>
     );
