@@ -42,27 +42,62 @@ export default function ProfilePage() {
         setLastDate(_last);
 
         // 2) wishlist
-        let wl = [];
-        const { data: wlView, error: wlErr } = await supabase
-          .from("user_questionnaire_wishlist")
-          .select("user_id, title, created_at")
-          .eq("user_id", u.id)
-          .order("created_at", { ascending: false });
+// 2) wishlist (view → table), filter to me
+let wl = [];
+const { data: wlView, error: wlErr } = await supabase
+  .from("user_questionnaire_wishlist")
+  .select("user_id, title, created_at")
+  .eq("user_id", u.id)
+  .order("created_at", { ascending: false });
 
-        if (wlErr) {
-          console.warn("wishlist view error:", wlErr?.code, wlErr?.message);
-          const { data: wlTbl, error: wlTblErr } = await supabase
-            .from("wishes")
-            .select("id, title, note, created_at")
-            .eq("user_id", u.id)
-            .order("created_at", { ascending: false });
-          if (wlTblErr) console.error("wishes table error:", wlTblErr);
-          wl = wlTbl || [];
-        } else {
-          wl = wlView || [];
-        }
-        if (!alive) return;
-        setWishes(wl);
+if (wlErr) {
+  // view may not exist — that's fine
+  const { data: wlTbl, error: wlTblErr } = await supabase
+    .from("wishes")
+    .select("id, title, note, created_at")
+    .eq("user_id", u.id)
+    .order("created_at", { ascending: false });
+  if (wlTblErr) console.warn("wishes table error:", wlTblErr);
+  wl = wlTbl || [];
+} else {
+  wl = wlView || [];
+}
+
+/* 🆕 Fallback to FlowState if DB is empty, and backfill */
+if (!wl || wl.length === 0) {
+  try {
+    const fs = getFlowState();
+    const fsWish = (fs?.currentWish?.wish || "").trim();
+    const fsBlock = (fs?.currentWish?.block || "").trim();
+    const fsDate  = (fs?.currentWish?.date || null);
+
+    if (fsWish) {
+      // Show it immediately on Profile
+      wl = [{ id: "flowstate", title: fsWish, note: fsBlock, created_at: fsDate }];
+
+      // Backfill into DB once if the user has no wishes yet
+      const { data: existing, error: existErr } = await supabase
+        .from("wishes")
+        .select("id")
+        .eq("user_id", u.id)
+        .limit(1);
+
+      if (!existErr && (!existing || existing.length === 0)) {
+        await supabase.from("wishes").insert({
+          user_id: u.id,
+          title: fsWish,
+          note: fsBlock || null
+        });
+      }
+    }
+  } catch (e) {
+    console.warn("FlowState wishlist fallback failed:", e);
+  }
+}
+
+if (!alive) return;
+setWishes(wl);
+
 
         // 3) wins
         const { data: wn, error: winsErr } = await supabase
