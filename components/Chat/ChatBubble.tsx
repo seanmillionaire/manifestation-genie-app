@@ -1,50 +1,49 @@
-// components/Chat/ChatBubble.tsx
+// /components/Chat/ChatBubble.tsx
 import React from "react";
 
 type Props = {
   id: string;
   role: "assistant" | "user" | "system";
-  /** HTML string (already sanitized/escaped upstream) */
+  /** HTML string (already escaped upstream) */
   content: string;
 };
 
+/**
+ * Minimal bubble with avatars. Like button removed.
+ */
 const ChatBubble: React.FC<Props> = ({ role, content }) => {
   const isAI = role !== "user";
-
+  const name = isAI ? "Genie" : "You";
   const avatar = isAI ? "🧞‍♂️" : "🙂";
-  const name   = isAI ? "Genie" : "You";
 
   return (
     <div
       style={{
-        marginBottom: 10,
-        display: "flex",
+        display: "grid",
+        gridTemplateColumns: isAI ? "28px auto" : "auto 28px",
         gap: 8,
         alignItems: "flex-start",
-        flexDirection: isAI ? "row" : "row-reverse",
+        marginBottom: 8,
       }}
     >
-      {/* avatar */}
-      <div
-        aria-hidden
-        style={{
-          width: 26,
-          height: 26,
-          borderRadius: "50%",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          border: "1px solid rgba(0,0,0,.10)",
-          background: "#fff",
-          lineHeight: 1,
-          fontSize: 16,
-        }}
-      >
-        <span>{avatar}</span>
-      </div>
+      {isAI && (
+        <div
+          aria-hidden
+          style={{
+            width: 28,
+            height: 28,
+            display: "grid",
+            placeItems: "center",
+            borderRadius: 999,
+            background: "rgba(0,0,0,0.06)",
+          }}
+          title={name}
+        >
+          <span style={{ fontSize: 16, lineHeight: 1 }}>{avatar}</span>
+        </div>
+      )}
 
-      {/* bubble */}
-      <div style={{ maxWidth: "88%" }}>
+      <div style={{ display: "flex", flexDirection: "column", alignItems: isAI ? "flex-start" : "flex-end" }}>
         <div
           style={{
             fontSize: 12,
@@ -63,15 +62,31 @@ const ChatBubble: React.FC<Props> = ({ role, content }) => {
             border: "1px solid rgba(0,0,0,0.08)",
             borderRadius: 12,
             padding: "8px 10px",
+            maxWidth: "90%",
             whiteSpace: "pre-wrap",
             lineHeight: 1.4,
           }}
-          // content is already escaped upstream
+          // content already escaped upstream
           dangerouslySetInnerHTML={{ __html: content }}
         />
-
-        {/* No reactions / like row on purpose */}
       </div>
+
+      {!isAI && (
+        <div
+          aria-hidden
+          style={{
+            width: 28,
+            height: 28,
+            display: "grid",
+            placeItems: "center",
+            borderRadius: 999,
+            background: "rgba(255,214,0,0.25)",
+          }}
+          title={name}
+        >
+          <span style={{ fontSize: 16, lineHeight: 1 }}>{avatar}</span>
+        </div>
+      )}
     </div>
   );
 };
