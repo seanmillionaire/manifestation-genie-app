@@ -403,7 +403,7 @@ Keep it upbeat, concise, and practical.`;
   function onLooksRight() {
     const plan = prescribe(parsed || {});
     setFirstRx(plan);
-    setStage('rx');
+    setStage('chat');
     setTimeout(() => {
       const el = document.getElementById("first-prescription");
       if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
