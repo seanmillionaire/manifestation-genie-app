@@ -2,6 +2,7 @@
 // Genie: cosmic, playful, prescriptive, non-repetitive.
 
 import { getRandomSigil } from "../../src/sigils";
+import { ensureConversation, saveTurn } from "../../src/lib/history";
 
 /* ---------------- System Prompt ---------------- */
 
