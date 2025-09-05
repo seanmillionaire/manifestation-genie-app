@@ -1,28 +1,52 @@
-// /components/Chat/ChatBubble.jsx
 import React from "react";
 
-/**
- * Props
- * - id: string
- * - role: "assistant" | "user"
- * - content: string (already HTML-escaped + nl2br'd upstream)
- * - reactions: { userLiked?: boolean, genieLiked?: boolean }
- * - onToggleUserLike: () => void
- */
 export default function ChatBubble({
   id,
-  role = "assistant",
-  content = "",
+  role = "assistant",               // "assistant" | "user"
+  content = "",                      // already HTML-escaped by caller
   reactions = { userLiked: false, genieLiked: false },
-  onToggleUserLike,
+  onToggleUserLike = () => {},
+  userName = "You",
 }) {
   const isAI = role !== "user";
-  const name = isAI ? "Genie" : "You";
+
+  // avatar + label
   const avatar = isAI ? "🧞‍♂️" : "🙂";
+  const label  = isAI ? "Genie" : userName || "You";
+
+  // bubble colors
+  const bubbleStyle = {
+    background: isAI ? "rgba(0,0,0,0.04)" : "rgba(255,214,0,0.15)",
+    border: "1px solid rgba(0,0,0,0.08)",
+    borderRadius: 12,
+    padding: "8px 10px",
+    maxWidth: "92%",
+    whiteSpace: "pre-wrap",
+    lineHeight: 1.4,
+  };
+
+  // compact “Like” pill
+  const liked = !!reactions?.userLiked;
+  const likeStyle = {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 6,
+    height: 22,
+    padding: "0 8px",
+    fontSize: 12,
+    lineHeight: "22px",
+    borderRadius: 999,
+    border: liked ? "1px solid #f59e0b" : "1px solid rgba(0,0,0,.12)",
+    background: liked ? "#fde68a" : "rgba(0,0,0,.04)",
+    color: "#334155",
+    cursor: "pointer",
+  };
+
+  // tiny “Genie liked this” badge when Genie auto-likes a USER message
+  const showGenieLiked = !isAI && reactions?.genieLiked;
 
   return (
     <div
-      key={id}
       style={{
         marginBottom: 10,
         display: "flex",
@@ -30,7 +54,7 @@ export default function ChatBubble({
         alignItems: isAI ? "flex-start" : "flex-end",
       }}
     >
-      {/* tiny header with avatar + name */}
+      {/* header: avatar + name */}
       <div
         style={{
           display: "flex",
@@ -39,82 +63,53 @@ export default function ChatBubble({
           marginBottom: 4,
         }}
       >
-        <span
+        <div
           aria-hidden
           style={{
+            width: 22,
+            height: 22,
+            borderRadius: "50%",
+            display: "grid",
+            placeItems: "center",
             fontSize: 14,
-            lineHeight: 1,
-            filter: isAI ? "none" : "grayscale(0.1)",
+            background: isAI ? "#eef2ff" : "#fff7ed",
+            border: "1px solid rgba(0,0,0,.08)",
           }}
         >
-          {avatar}
-        </span>
-        <span
+          <span>{avatar}</span>
+        </div>
+        <div
           style={{
-            fontSize: 11,
+            fontSize: 12,
             fontWeight: 700,
             color: "#334155",
-            opacity: 0.9,
           }}
         >
-          {name}
-        </span>
+          {label}
+        </div>
       </div>
 
       {/* bubble */}
       <div
-        style={{
-          background: isAI ? "rgba(0,0,0,0.04)" : "rgba(255,214,0,0.16)",
-          border: "1px solid rgba(0,0,0,0.08)",
-          borderRadius: 12,
-          padding: "8px 10px",
-          maxWidth: "90%",
-          whiteSpace: "pre-wrap",
-          lineHeight: 1.42,
-        }}
+        style={bubbleStyle}
+        // content already sanitized by caller (escapeHTML + nl2br)
         dangerouslySetInnerHTML={{ __html: content }}
       />
 
-      {/* reactions row (compact) */}
+      {/* actions row */}
       <div
         style={{
           display: "flex",
           alignItems: "center",
           gap: 8,
           marginTop: 6,
-          // nudge toward the bubble side
-          alignSelf: isAI ? "flex-start" : "flex-end",
+          // keep Like under the bubble on the same side
+          justifyContent: isAI ? "flex-start" : "flex-end",
+          width: "100%",
         }}
       >
-        {/* Like pill — compact */}
-        <button
-          type="button"
-          onClick={onToggleUserLike}
-          aria-pressed={!!reactions.userLiked}
-          title={reactions.userLiked ? "Unlike" : "Like"}
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 6,
-            fontSize: 12,
-            fontWeight: 600,
-            padding: "4px 8px",
-            borderRadius: 999,
-            border: "1px solid rgba(0,0,0,0.15)",
-            background: reactions.userLiked ? "#fde68a" : "white",
-            color: "#111827",
-            boxShadow: "0 1px 0 rgba(0,0,0,0.02)",
-            cursor: "pointer",
-          }}
-        >
-          <span aria-hidden style={{ fontSize: 12, lineHeight: 1 }}>
-            👍
-          </span>
-          <span>{reactions.userLiked ? "Liked" : "Like"}</span>
-        </button>
-
-        {/* Genie auto-like indicator (tiny, subtle) */}
-        {reactions.genieLiked && (
+        {/* Genie liked badge (only on user messages) */}
+        {showGenieLiked && (
           <span
             title="Genie liked this"
             style={{
@@ -122,19 +117,33 @@ export default function ChatBubble({
               alignItems: "center",
               gap: 4,
               fontSize: 11,
-              padding: "2px 6px",
+              padding: "0 8px",
+              height: 20,
               borderRadius: 999,
-              background: "rgba(59,130,246,0.08)",
-              border: "1px solid rgba(59,130,246,0.22)",
-              color: "#1e3a8a",
+              background: "#eef2ff",
+              border: "1px solid rgba(0,0,0,.08)",
+              color: "#334155",
             }}
           >
-            <span aria-hidden style={{ fontSize: 12 }}>
-              ✨
-            </span>
-            Genie liked
+            🧞‍♂️ 👍
+            <span style={{ opacity: 0.8 }}>Genie liked</span>
           </span>
         )}
+
+        {/* user like toggle (works on both AI + user bubbles) */}
+        <button
+          type="button"
+          onClick={(e) => {
+            e.preventDefault();
+            onToggleUserLike(id);
+          }}
+          aria-pressed={liked}
+          aria-label={liked ? "Unlike" : "Like"}
+          style={likeStyle}
+        >
+          <span aria-hidden>👍</span>
+          <span style={{ fontWeight: 600 }}>{liked ? "Liked" : "Like"}</span>
+        </button>
       </div>
     </div>
   );
