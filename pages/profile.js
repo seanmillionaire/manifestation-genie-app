@@ -1,7 +1,10 @@
+// /pages/profile.js
 import { useEffect, useState } from "react";
-import { supabase } from "../src/supabaseClient"; // named import
+import { createBrowserSupabaseClient } from "@supabase/auth-helpers-nextjs";
 
 export default function ProfilePage() {
+  const supabase = createBrowserSupabaseClient();
+
   const [user, setUser] = useState(null);
   const [streak, setStreak] = useState(0);
   const [weekCount, setWeekCount] = useState(0);
@@ -29,18 +32,17 @@ export default function ProfilePage() {
         .order("visit_date", { ascending: false });
 
       if (!alive) return;
-      const { streak, weekCount, last } = computeVisitStats(visits || []);
-      setStreak(streak);
-      setWeekCount(weekCount);
-      setLastDate(last);
+      const { _streak, _weekCount, _last } = computeVisitStats(visits || []);
+      setStreak(_streak);
+      setWeekCount(_weekCount);
+      setLastDate(_last);
 
-      // 2) wishlist (view → fallback to wishes table)
+      // 2) wishlist (view → fallback)
       let wl = [];
       const { data: wlView, error: wlErr } = await supabase
         .from("user_questionnaire_wishlist")
         .select("title, created_at")
         .order("created_at", { ascending: false });
-
       if (!wlErr && wlView) {
         wl = wlView;
       } else {
@@ -58,117 +60,176 @@ export default function ProfilePage() {
         .from("wins")
         .select("id, title, note, points, created_at")
         .order("created_at", { ascending: false });
-
       if (!alive) return;
       setWins(wn || []);
       setLoading(false);
     }
     load();
     return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  if (!user) return <div className="p-6 text-lg">Please sign in.</div>;
+  if (!user) {
+    return (
+      <PageWrap>
+        <H1>Your Profile</H1>
+        <Muted>This is your personal dashboard</Muted>
+        <Card><Muted>Please sign in.</Muted></Card>
+      </PageWrap>
+    );
+  }
 
   return (
-    <div className="max-w-4xl mx-auto p-4 sm:p-6">
-      <h1 className="text-2xl sm:text-3xl font-semibold mb-1">Your Profile</h1>
-      <p className="text-gray-600 mb-6">This is your personal dashboard</p>
+    <PageWrap>
+      <H1>Your Profile</H1>
+      <Muted>This is your personal dashboard</Muted>
 
       {/* PROGRESS */}
-      <Section title="Progress">
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <Card>
+        <H2>Progress</H2>
+        <div style={grid3}>
           <Stat label="Current streak" value={`${streak} day${streak === 1 ? "" : "s"}`} />
           <Stat label="Sessions this week" value={weekCount} />
           <Stat label="Last session" value={lastDate ? new Date(lastDate).toLocaleDateString() : "—"} />
         </div>
-        <p className="mt-3 text-sm text-gray-500" aria-live="polite">
+        <p style={finePrint} aria-live="polite">
           Opening the app while signed in counts automatically.
         </p>
-      </Section>
+      </Card>
 
       {/* MANIFESTATION LIST */}
-      <Section title="Manifestation list">
+      <Card>
+        <H2>Manifestation list</H2>
         {wishes.length === 0 ? (
-          <Empty text="Your questionnaire wishes will show here." />
+          <Muted>Your questionnaire wishes will show here.</Muted>
         ) : (
-          <ul className="mt-3 space-y-2">
+          <ul style={{ marginTop: 8, padding: 0, listStyle: "none" }}>
             {wishes.map((w, i) => (
-              <li key={w.id ?? w.title ?? i} className="flex items-start gap-3 p-3 rounded-lg border">
-                <span className="mt-1 inline-block w-2 h-2 rounded-full" />
-                <div>
-                  <div className="font-medium">{w.title}</div>
-                  {w.note && <div className="text-sm text-gray-600">{w.note}</div>}
-                  {w.created_at && (
-                    <div className="text-xs text-gray-500 mt-1">
-                      {new Date(w.created_at).toLocaleDateString()}
-                    </div>
-                  )}
+              <li key={w.id ?? w.title ?? i} style={rowItem}>
+                <div style={{ fontWeight: 600 }}>{w.title}</div>
+                <div style={subMeta}>
+                  {w.created_at ? new Date(w.created_at).toLocaleDateString() : ""}
                 </div>
               </li>
             ))}
           </ul>
         )}
-      </Section>
+      </Card>
 
       {/* WINS */}
-      <Section title="Wins">
+      <Card>
+        <H2>Wins</H2>
         {wins.length === 0 ? (
-          <Empty text="No wins yet — keep chatting with Genie to earn points." />
+          <Muted>No wins yet — keep chatting with Genie to earn points.</Muted>
         ) : (
-          <ul className="mt-3 space-y-2">
+          <ul style={{ marginTop: 8, padding: 0, listStyle: "none" }}>
             {wins.map((w) => (
-              <li key={w.id} className="p-3 rounded-lg border">
-                <div className="flex items-center justify-between">
-                  <div className="font-medium">{w.title}</div>
-                  <div className="text-sm">+{w.points ?? 0} pts</div>
+              <li key={w.id} style={rowItem}>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+                  <div style={{ fontWeight: 600 }}>{w.title}</div>
+                  <div style={{ fontSize: 14 }}>+{w.points ?? 0} pts</div>
                 </div>
-                {w.note && <div className="text-sm text-gray-600 mt-1">{w.note}</div>}
-                <div className="text-xs text-gray-500 mt-1">{new Date(w.created_at).toLocaleString()}</div>
+                {w.note && <div style={{ fontSize: 14, color: "var(--muted)", marginTop: 6 }}>{w.note}</div>}
+                <div style={subMeta}>{new Date(w.created_at).toLocaleString()}</div>
               </li>
             ))}
           </ul>
         )}
-      </Section>
+      </Card>
+    </PageWrap>
+  );
+}
+
+/* ---------- small UI helpers to match your white design ---------- */
+
+function PageWrap({ children }) {
+  return (
+    <div style={{ width: "min(1100px, 94vw)", margin: "18px auto 36px", padding: "0 2px" }}>
+      {children}
     </div>
   );
 }
 
-/* helpers */
+function H1({ children }) {
+  return <h1 style={{ fontSize: 28, fontWeight: 700, margin: "6px 0 6px" }}>{children}</h1>;
+}
+
+function H2({ children }) {
+  return <h2 style={{ fontSize: 18, fontWeight: 700, margin: "0 0 10px" }}>{children}</h2>;
+}
+
+function Muted({ children }) {
+  return <p style={{ color: "var(--muted)", marginTop: 0, marginBottom: 14 }}>{children}</p>;
+}
+
+function Card({ children }) {
+  return (
+    <section
+      style={{
+        background: "#fff",
+        border: "1px solid var(--border)",
+        borderRadius: 12,
+        padding: "14px 14px",
+        margin: "14px 0",
+        boxShadow: "0 1px 0 rgba(0,0,0,0.02)"
+      }}
+    >
+      {children}
+    </section>
+  );
+}
+
+function Stat({ label, value }) {
+  return (
+    <div style={{
+      border: "1px solid var(--border)",
+      borderRadius: 10,
+      padding: 12,
+      minHeight: 72
+    }}>
+      <div style={{ fontSize: 13, color: "var(--muted)" }}>{label}</div>
+      <div style={{ fontSize: 24, fontWeight: 700, marginTop: 4 }}>{value}</div>
+    </div>
+  );
+}
+
+const grid3 = {
+  display: "grid",
+  gridTemplateColumns: "1fr",
+  gap: 12
+};
+// make it 3 columns on wide screens without Tailwind
+if (typeof window !== "undefined") {
+  const mql = window.matchMedia("(min-width: 720px)");
+  if (mql.matches) grid3.gridTemplateColumns = "repeat(3, 1fr)";
+}
+
+const rowItem = {
+  border: "1px solid var(--border)",
+  borderRadius: 10,
+  padding: 12,
+  marginTop: 8
+};
+
+const subMeta = { fontSize: 12, color: "var(--muted)", marginTop: 6 };
+const finePrint = { fontSize: 12, color: "var(--muted)", marginTop: 10 };
+
+/* ---------- logic helpers ---------- */
 function computeVisitStats(visits) {
   const set = new Set((visits || []).map((v) => v.visit_date));
-  let streak = 0;
+  let _streak = 0;
   const d = new Date();
   for (;;) {
     const key = d.toISOString().slice(0, 10);
     if (!set.has(key)) break;
-    streak += 1;
+    _streak += 1;
     d.setDate(d.getDate() - 1);
   }
   const now = new Date();
   const start = new Date(now);
   start.setDate(now.getDate() - now.getDay()); // Sunday
   const weekKey = start.toISOString().slice(0, 10);
-  const weekCount = (visits || []).filter((v) => v.visit_date >= weekKey).length;
-  const last = (visits || [])[0]?.visit_date ?? null;
-  return { streak, weekCount, last };
-}
-
-function Section({ title, children }) {
-  return (
-    <section className="bg-white rounded-xl border p-4 sm:p-6 mb-6">
-      <h2 className="text-lg font-medium mb-3">{title}</h2>
-      {children}
-    </section>
-  );
-}
-function Stat({ label, value }) {
-  return (
-    <div className="rounded-lg border p-4 min-h-[72px]">
-      <div className="text-sm text-gray-600">{label}</div>
-      <div className="text-2xl font-semibold mt-1">{value}</div>
-    </div>
-  );
-}
-function Empty({ text }) {
-  return <p className="text-gray-600 mt-2">{text}</p>;
+  const _weekCount = (visits || []).filter((v) => v.visit_date >= weekKey).length;
+  const _last = (visits || [])[0]?.visit_date ?? null;
+  return { _streak, _weekCount, _last };
 }
