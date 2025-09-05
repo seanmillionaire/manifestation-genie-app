@@ -31,7 +31,7 @@ export default function ChatBubble({
     display: "inline-flex",
     alignItems: "center",
     gap: 6,
-    height: 22,
+    height: 12,
     padding: "0 8px",
     fontSize: 12,
     lineHeight: "22px",
