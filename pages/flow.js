@@ -87,7 +87,7 @@ async function lock() {
           }}
         >
           <label style={{ margin: '12px 0 6px', display: 'block', fontWeight: 600 }}>
-            What do you want to manifest?
+            What do you desire to call in?
           </label>
           <textarea
             rows={3}
@@ -109,13 +109,13 @@ async function lock() {
           />
 
           <label style={{ margin: '12px 0 6px', display: 'block', fontWeight: 600 }}>
-            What aligned step can you take today?
+            What aligned step can you take right now?
           </label>
           <input
             style={input}
             value={micro}
             onChange={e => setMicro(e.target.value)}
-            placeholder="Just one tiny step that will start the process."
+            placeholder="Send it. Start it. Claim it."
           />
 
           <button
