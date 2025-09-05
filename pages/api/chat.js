@@ -104,7 +104,7 @@ export default async function handler(req, res) {
       text = "",
       conversationId,
       userKey,
-      systemHint // optional extra steering from client
+      systemHint // optional
     } = req.body || {};
 
     const apiKey = process.env.OPENAI_API_KEY;
@@ -113,13 +113,12 @@ export default async function handler(req, res) {
     }
 
     const wantStoryFlag = Math.random() < 0.3;
-
     const promptSpecText =
       typeof context?.prompt_spec === "string"
         ? context.prompt_spec
         : (context?.prompt_spec?.prompt || null);
 
-    // Ensure conversation exists
+    // Ensure conversation exists (and get id)
     const derivedUserKey = userKey || "anon-device";
     const convoId = await ensureConversation({ userKey: derivedUserKey, conversationId });
 
@@ -129,33 +128,34 @@ export default async function handler(req, res) {
       cleanedHistory.concat(text ? [{ role: "user", content: String(text) }] : [])
     );
 
-    /* ---- SIGIL INVOCATION LAYER ---- */
+    /* ---- SIGIL INTERCEPT (single source of truth) ---- */
+    const rawText = String(text || "");
+    const lastUserMessage = rawText.toLowerCase();
 
-    const lastUserMessage = (text || "").toLowerCase();
-    const sigilTriggers = ["sigil", "seal", "ritual", "wish", "888", "money", "flow", "rich", "paid", "cash"];
+    // expanded nudges so “what else” etc. also fire
+    const sigilTriggers = [
+      "sigil","seal","ritual","wish","888","money","flow","rich","paid","cash",
+      "what else","more","next","continue","ok","done"
+    ];
 
-// 🔮 Sigil intercept — banked ASCII only, no links.
-const rawText = String(text || "");
-const lastUserMessage = rawText.toLowerCase();
+    // if the last assistant ended with a question and the user reply is short, break state
+    const lastAssistant = [...cleanedHistory].reverse().find(m => m.role === "assistant");
+    const lastWasQuestion = !!(lastAssistant && /\?\s*$/.test(lastAssistant.content || ""));
+    const shortPing = rawText.trim().split(/\s+/).length <= 3;
 
-// expanded nudges so “what else” etc. also fire
-const sigilTriggers = [
-  "sigil","seal","ritual","wish","888","money","flow","rich","paid","cash",
-  "what else","more","next","continue","ok","done"
-];
+    if (sigilTriggers.some(w => lastUserMessage.includes(w)) || (lastWasQuestion && shortPing)) {
+      const sigil = getRandomSigil();
+      await saveTurn({
+        conversationId: convoId,
+        messages: [
+          ...(text ? [{ role: "user", content: text }] : []),
+          { role: "assistant", content: sigil }
+        ]
+      });
+      return res.status(200).json({ reply: sigil, conversationId: convoId });
+    }
 
-// heuristic: if the last assistant ended with a question and the user reply is short,
-// break the loop with a sigil instead of more words.
-const lastAssistant = [...cleanedHistory].reverse().find(m => m.role === "assistant");
-const lastWasQuestion = !!(lastAssistant && /\?\s*$/.test(lastAssistant.content || ""));
-const shortPing = rawText.trim().split(/\s+/).length <= 3;
-
-if (sigilTriggers.some(w => lastUserMessage.includes(w)) || (lastWasQuestion && shortPing)) {
-  return res.status(200).json({ reply: getRandomSigil() }); // pulls from src/sigils
-}
-
-
-    // 2) Loop-break trigger → after 2 assistant replies (SAVE both sides)
+    // Loop-break: after 2 assistant replies since last user, hard-stop with sigil
     const assistantSince = assistantRepliesSinceLastUser(cleanedHistory);
     if (text && assistantSince >= 2) {
       const sigil = getRandomSigil();
@@ -198,7 +198,11 @@ if (sigilTriggers.some(w => lastUserMessage.includes(w)) || (lastWasQuestion && 
     if (promptSpecText) {
       chat.push({
         role: "system",
-        content: ["User intention (prompt_spec):", promptSpecText.trim(), "Use only as light guidance; do NOT force exact phrasing."].join("\n")
+        content: [
+          "User intention (prompt_spec):",
+          promptSpecText.trim(),
+          "Use only as light guidance; do NOT force exact phrasing."
+        ].join("\n")
       });
     }
 
