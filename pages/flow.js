@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { get, set } from '../src/flowState';
 import { generateChecklist } from '../src/checklistGen';
+import { supabase } from "../src/supabaseClient";
 
 export default function Flow() {
   const router = useRouter();
@@ -29,18 +30,35 @@ export default function Flow() {
 
   const can = wish.trim() && micro.trim();
 
-  function lock() {
-    const current = {
-      wish: wish.trim(),
-      block: block.trim(),
-      micro: micro.trim(),
-      vibe: S.vibe,
-      date: new Date().toISOString().slice(0, 10),
-    };
-    const steps = generateChecklist(current);
-    set({ currentWish: current, lastWish: current, steps, phase: 'checklist' });
-    router.push('/checklist');
+async function lock() {
+  const current = {
+    wish: wish.trim(),
+    block: block.trim(),
+    micro: micro.trim(),
+    vibe: S.vibe,
+    date: new Date().toISOString().slice(0, 10),
+  };
+  const steps = generateChecklist(current);
+  set({ currentWish: current, lastWish: current, steps, phase: 'checklist' });
+
+  // 🆕 save wish to Supabase for Profile
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    const uid = session?.user?.id;
+    if (uid) {
+      await supabase.from("wishes").insert({
+        user_id: uid,
+        title: current.wish,
+        note: current.block || null
+      });
+    }
+  } catch (err) {
+    console.error("Error saving wish:", err.message);
   }
+
+  router.push('/checklist');
+}
+
 
   return (
     <main style={{ width: 'min(900px, 94vw)', margin: '30px auto' }}>
