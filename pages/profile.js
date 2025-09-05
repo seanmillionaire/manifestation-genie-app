@@ -1,6 +1,6 @@
 // /pages/profile.js
 import { useEffect, useState } from "react";
-import { supabase } from "../lib/supabaseClient"; // or "../src/supabaseClient" if that's your path
+import { supabase } from "../src/supabaseClient"; // adjust if your client is in /lib
 
 export default function ProfilePage() {
   const [user, setUser] = useState(null);
@@ -9,11 +9,10 @@ export default function ProfilePage() {
   const [lastDate, setLastDate] = useState(null);
   const [wishes, setWishes] = useState([]);
   const [wins, setWins] = useState([]);
-  const [loading, setLoading] = useState(true); // gate UI until done
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let alive = true;
-
     async function load() {
       try {
         // 0) session
@@ -22,8 +21,7 @@ export default function ProfilePage() {
         const u = session?.user ?? null;
         if (!alive) return;
         setUser(u);
-
-        if (!u) return; // not signed in -> we’ll show the sign-in card below
+        if (!u) return;
 
         // 1) visits (last 60 days)
         const since = new Date();
@@ -42,7 +40,7 @@ export default function ProfilePage() {
         setWeekCount(_weekCount);
         setLastDate(_last);
 
-        // 2) wishlist (view → table), filter to me
+        // 2) wishlist
         let wl = [];
         const { data: wlView, error: wlErr } = await supabase
           .from("user_questionnaire_wishlist")
@@ -51,7 +49,6 @@ export default function ProfilePage() {
           .order("created_at", { ascending: false });
 
         if (wlErr) {
-          // view may not exist — that’s ok
           console.warn("wishlist view error:", wlErr?.code, wlErr?.message);
           const { data: wlTbl, error: wlTblErr } = await supabase
             .from("wishes")
@@ -66,7 +63,7 @@ export default function ProfilePage() {
         if (!alive) return;
         setWishes(wl);
 
-        // 3) wins (filter to me)
+        // 3) wins
         const { data: wn, error: winsErr } = await supabase
           .from("wins")
           .select("id, title, note, points, created_at")
@@ -79,28 +76,20 @@ export default function ProfilePage() {
       } catch (e) {
         console.error("Profile load fatal:", e);
       } finally {
-        if (alive) setLoading(false); // <-- ALWAYS clear loading
+        if (alive) setLoading(false);
       }
     }
-
     load();
     return () => { alive = false; };
   }, []);
 
-  // Loading gate
+  // Loading
   if (loading) {
     return (
       <PageWrap>
         <H1>Your Profile</H1>
         <Muted>This is your personal dashboard</Muted>
-{/* USER INFO */}
-<Card>
-  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-    <div style={{ fontSize: 18, fontWeight: 700 }}>{user.user_metadata?.name || "Manifestor"}</div>
-    <div style={{ fontSize: 15, color: "var(--muted)" }}>{user.email}</div>
-  </div>
-</Card>
-
+        <Card><Muted>Loading…</Muted></Card>
       </PageWrap>
     );
   }
@@ -116,10 +105,23 @@ export default function ProfilePage() {
     );
   }
 
+  // Signed in
   return (
     <PageWrap>
       <H1>Your Profile</H1>
       <Muted>This is your personal dashboard</Muted>
+
+      {/* USER INFO */}
+      <Card>
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <div style={{ fontSize: 18, fontWeight: 700 }}>
+            {displayName(user)}
+          </div>
+          <div style={{ fontSize: 15, color: "var(--muted)" }}>
+            {user.email}
+          </div>
+        </div>
+      </Card>
 
       {/* PROGRESS */}
       <Card>
@@ -175,8 +177,7 @@ export default function ProfilePage() {
   );
 }
 
-/* ---------- small UI helpers ---------- */
-
+/* ---------- UI helpers ---------- */
 function PageWrap({ children }) {
   return (
     <div style={{ width: "min(1100px, 94vw)", margin: "32px auto 48px", padding: "0 4px" }}>
@@ -184,44 +185,24 @@ function PageWrap({ children }) {
     </div>
   );
 }
-function H1({ children }) {
-  return <h1 style={{ fontSize: 32, fontWeight: 700, margin: "0 0 6px", color: "var(--text)" }}>{children}</h1>;
-}
-function H2({ children }) {
-  return <h2 style={{ fontSize: 20, fontWeight: 700, margin: "0 0 12px", color: "var(--text)" }}>{children}</h2>;
-}
-function Muted({ children }) {
-  return <p style={{ color: "var(--muted)", margin: "4px 0 16px", fontSize: 15 }}>{children}</p>;
-}
+function H1({ children }) { return <h1 style={{ fontSize: 32, fontWeight: 700, margin: "0 0 6px", color: "var(--text)" }}>{children}</h1>; }
+function H2({ children }) { return <h2 style={{ fontSize: 20, fontWeight: 700, margin: "0 0 12px", color: "var(--text)" }}>{children}</h2>; }
+function Muted({ children }) { return <p style={{ color: "var(--muted)", margin: "4px 0 16px", fontSize: 15 }}>{children}</p>; }
 function Card({ children }) {
-  return (
-    <section style={{
-      background: "#fff",
-      border: "1px solid var(--border)",
-      borderRadius: 12,
-      padding: "18px 20px",
-      margin: "20px 0",
-      boxShadow: "0 2px 4px rgba(0,0,0,0.04)"
-    }}>
-      {children}
-    </section>
-  );
+  return <section style={{
+    background: "#fff", border: "1px solid var(--border)", borderRadius: 12,
+    padding: "18px 20px", margin: "20px 0", boxShadow: "0 2px 4px rgba(0,0,0,0.04)"
+  }}>{children}</section>;
 }
 function Stat({ label, value }) {
-  return (
-    <div style={{
-      border: "1px solid var(--border)",
-      borderRadius: 12,
-      padding: "14px 16px",
-      minHeight: 80,
-      background: "var(--soft)"
-    }}>
-      <div style={{ fontSize: 14, color: "var(--muted)" }}>{label}</div>
-      <div style={{ fontSize: 26, fontWeight: 700, marginTop: 4, color: "var(--text)" }}>{value}</div>
-    </div>
-  );
+  return <div style={{
+    border: "1px solid var(--border)", borderRadius: 12, padding: "14px 16px",
+    minHeight: 80, background: "var(--soft)"
+  }}>
+    <div style={{ fontSize: 14, color: "var(--muted)" }}>{label}</div>
+    <div style={{ fontSize: 26, fontWeight: 700, marginTop: 4, color: "var(--text)" }}>{value}</div>
+  </div>;
 }
-
 const grid3 = { display: "grid", gridTemplateColumns: "1fr", gap: 16 };
 if (typeof window !== "undefined") {
   const mql = window.matchMedia("(min-width: 720px)");
@@ -244,9 +225,17 @@ function computeVisitStats(visits) {
   }
   const now = new Date();
   const start = new Date(now);
-  start.setDate(now.getDate() - now.getDay()); // Sunday
+  start.setDate(now.getDate() - now.getDay());
   const weekKey = start.toISOString().slice(0, 10);
   const _weekCount = (visits || []).filter((v) => v.visit_date >= weekKey).length;
   const _last = (visits || [])[0]?.visit_date ?? null;
   return { _streak, _weekCount, _last };
+}
+function displayName(u) {
+  return (
+    u?.user_metadata?.name ||
+    u?.user_metadata?.full_name ||
+    u?.user_metadata?.first_name ||
+    "Manifestor"
+  );
 }
