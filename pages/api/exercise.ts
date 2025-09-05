@@ -1,8 +1,5 @@
 // Next.js API route: returns the exercise pack / today's exercise
-// and handles DOB numerology calculation.
-//
-// New code uses TypeScript per rules; pages stay thin; UI calls this API.
-import { supabaseAdmin } from "../../src/lib/supabaseAdmin";
+// and handles DOB numerology calculation + exercise submission persistence.
 
 import type { NextApiRequest, NextApiResponse } from "next";
 import {
@@ -12,7 +9,7 @@ import {
   type Vibe,
   type Persona,
 } from "../../src/engine/exercises";
-
+import { supabaseAdmin } from "../../src/lib/supabaseAdmin";
 
 // ---------- DOB numerology helpers (bug-fixed) ----------
 function toInt(n: string | number) {
@@ -52,7 +49,7 @@ function normalizeDOB(input: unknown) {
     let month: number, day: number;
     if (a > 12 && b <= 12) { day = a; month = b; }       // DD/MM/YYYY
     else if (b > 12 && a <= 12) { day = b; month = a; }  // MM/DD/YYYY
-    else { month = a; day = b; }                          // default to MM/DD for locale
+    else { month = a; day = b; }                          // default to MM/DD
     return validateYMD(y, month, day);
   }
 
@@ -96,7 +93,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(200).json({ ok: true, mode: "today", exercise: today });
     }
 
-    // POST: actions (e.g., numerology calc)
+    // POST: actions (e.g., numerology calc, submit completion)
     if (req.method === "POST") {
       const { action } = (req.body || {}) as { action?: string };
 
@@ -114,54 +111,63 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         });
       }
 
-      // (Optional) stub for future exercise submissions
-   // /api/exercise  { action: "submit", userId, exerciseKey, payload? }
-if (action === "submit") {
-  type ExerciseKey = "reset-2min" | "dob-numerology";
+      // /api/exercise  { action: "submit", userId, exerciseKey, payload? }
+      if (action === "submit") {
+        type ExerciseKey = "reset-2min" | "dob-numerology";
 
-  const { userId, exerciseKey, payload } = (req.body || {}) as {
-    userId?: string;
-    exerciseKey?: ExerciseKey;
-    payload?: any;
-  };
+        const { userId, exerciseKey, payload } = (req.body || {}) as {
+          userId?: string;
+          exerciseKey?: ExerciseKey;
+          payload?: any;
+        };
 
-  if (!userId || !exerciseKey) {
-    return res.status(400).json({ ok: false, error: "Missing userId or exerciseKey" });
+        if (!userId || !exerciseKey) {
+          return res.status(400).json({ ok: false, error: "Missing userId or exerciseKey" });
+        }
+
+        // 1) event log
+        const { error: logError } = await supabaseAdmin
+          .from("exercise_log")
+          .insert({
+            user_id: userId,
+            exercise_key: exerciseKey,
+            status: "completed",
+            payload: payload ?? null,
+          });
+
+        if (logError) {
+          return res.status(500).json({ ok: false, error: logError.message });
+        }
+
+        // 2) day summary (Panama timezone → YYYY-MM-DD)
+        const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/Panama" }); // e.g., "2025-09-05"
+        const flags =
+          exerciseKey === "reset-2min"
+            ? { completed_reset: true }
+            : exerciseKey === "dob-numerology"
+            ? { completed_numerology: true }
+            : {};
+
+        const { error: upsertError } = await supabaseAdmin
+          .from("daily_journey")
+          .upsert(
+            { user_id: userId, journey_date: today, ...flags },
+            { onConflict: "user_id,journey_date" }
+          );
+
+        if (upsertError) {
+          return res.status(500).json({ ok: false, error: upsertError.message });
+        }
+
+        return res.status(200).json({ ok: true });
+      }
+
+      return res.status(400).json({ ok: false, error: "Unknown action" });
+    }
+
+    res.setHeader("Allow", "GET, POST");
+    return res.status(405).json({ ok: false, error: "Method not allowed" });
+  } catch (err: any) {
+    return res.status(400).json({ ok: false, error: err?.message || "Bad request" });
   }
-
-  // 1) event log
-  const { error: logError } = await supabaseAdmin
-    .from("exercise_log")
-    .insert({
-      user_id: userId,
-      exercise_key: exerciseKey,
-      status: "completed",
-      payload: payload ?? null,
-    });
-
-  if (logError) {
-    return res.status(500).json({ ok: false, error: logError.message });
-  }
-
-  // 2) day summary (Panama timezone → YYYY-MM-DD)
-  const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/Panama" }); // e.g., "2025-09-05"
-  const flags =
-    exerciseKey === "reset-2min"
-      ? { completed_reset: true }
-      : exerciseKey === "dob-numerology"
-      ? { completed_numerology: true }
-      : {};
-
-  const { error: upsertError } = await supabaseAdmin
-    .from("daily_journey")
-    .upsert(
-      { user_id: userId, journey_date: today, ...flags },
-      { onConflict: "user_id,journey_date" }
-    );
-
-  if (upsertError) {
-    return res.status(500).json({ ok: false, error: upsertError.message });
-  }
-
-  return res.status(200).json({ ok: true });
 }
