@@ -64,14 +64,19 @@ async function saveProgressToProfile({ supabase, step, details }) {
   } catch {}
 }
 
-async function markWizardDoneToday(){
-  try { localStorage.setItem('mg_wizard_day', todayKey()); } catch {}
-  await saveProgressToProfile({
-    supabase,
-    step: 'wizard_done',
-    details: { at: new Date().toISOString() }
-  });
+// was using localStorage mg_wizard_day
+async function markWizardDoneToday() {
+  const day_key = new Date().toISOString().slice(0,10);
+  await supabase.from("user_progress").upsert(
+    {
+      day_key,
+      step: "wizard_done",
+      details: { at: new Date().toISOString() }
+    },
+    { onConflict: "user_id,day_key,step" }
+  );
 }
+
 
 /* ------------------------ confetti (client-only) ------------------------ */
 let _confetti = null; // will be set by dynamic import
@@ -419,6 +424,49 @@ Keep it upbeat, concise, and practical.`;
     setShowTweaks(false);
     onLooksRight();
   }
+async function shouldShowOfferNow() {
+  const { data: { session } } = await supabase.auth.getSession();
+  const user = session?.user;
+  if (!user) return false;
+
+  const today = new Date().toISOString().slice(0,10);
+  const { data: st } = await supabase
+    .from("user_state")
+    .select("flags")
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  const last = st?.flags?.offer_last_shown_day;
+  return last !== today; // show once per day
+}
+
+async function markOfferShown() {
+  const { data: { session } } = await supabase.auth.getSession();
+  const user = session?.user;
+  if (!user) return;
+
+  const today = new Date().toISOString().slice(0,10);
+  const { data: st } = await supabase
+    .from("user_state")
+    .select("flags")
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  const nextFlags = { ...(st?.flags || {}), offer_last_shown_day: today };
+  await supabase
+    .from("user_state")
+    .upsert({ user_id: user.id, flags: nextFlags });
+}
+async function awardPoints(amount = 50) {
+  await supabase.from("user_rewards").insert({
+    delta: amount,
+    reason: "win_points",
+    at: new Date().toISOString()
+  });
+
+  // Optional: maintain a running total in user_profile or user_state
+  await supabase.rpc("increment_points_total", { amount }); // if you prefer a Postgres function
+}
 
   // overlay tap → enter chat (intro bubbles with pacing)
   async function dismissOverlay(){
