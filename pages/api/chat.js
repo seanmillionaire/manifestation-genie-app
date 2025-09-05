@@ -104,4 +104,152 @@ export default async function handler(req, res) {
       text = "",
       conversationId,
       userKey,
-      systemHint // optional extra s
+      systemHint // optional extra steering from client
+    } = req.body || {};
+
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey) {
+      return res.status(500).json({ error: "Missing OPENAI_API_KEY" });
+    }
+
+    const wantStoryFlag = Math.random() < 0.3;
+
+    const promptSpecText =
+      typeof context?.prompt_spec === "string"
+        ? context.prompt_spec
+        : (context?.prompt_spec?.prompt || null);
+
+    // Ensure conversation exists
+    const derivedUserKey = userKey || "anon-device";
+    const convoId = await ensureConversation({ userKey: derivedUserKey, conversationId });
+
+    // Clean history + detect intent
+    const cleanedHistory = stripSeedRepeats(Array.isArray(messages) ? messages : []);
+    const alreadyGaveIntent = userLikelyProvidedIntent(
+      cleanedHistory.concat(text ? [{ role: "user", content: String(text) }] : [])
+    );
+
+    /* ---- SIGIL INVOCATION LAYER ---- */
+
+    const lastUserMessage = (text || "").toLowerCase();
+    const sigilTriggers = ["sigil", "seal", "ritual", "wish", "888", "money", "flow", "rich", "paid", "cash"];
+
+    // 1) Keyword triggers → direct pull from bank and SAVE both sides
+    if (text && sigilTriggers.some(w => lastUserMessage.includes(w))) {
+      const sigil = getRandomSigil();
+      await saveTurn({
+        conversationId: convoId,
+        messages: [
+          { role: "user", content: text },
+          { role: "assistant", content: sigil }
+        ]
+      });
+      return res.status(200).json({ reply: sigil, conversationId: convoId });
+    }
+
+    // 2) Loop-break trigger → after 2 assistant replies (SAVE both sides)
+    const assistantSince = assistantRepliesSinceLastUser(cleanedHistory);
+    if (text && assistantSince >= 2) {
+      const sigil = getRandomSigil();
+      await saveTurn({
+        conversationId: convoId,
+        messages: [
+          { role: "user", content: text },
+          { role: "assistant", content: sigil }
+        ]
+      });
+      return res.status(200).json({ reply: sigil, conversationId: convoId });
+    }
+
+    /* ---- Build chat for OpenAI ---- */
+
+    const chat = [
+      { role: "system", content: sysPrompt({ userName, vibe: context.vibe, wantStoryFlag, promptSpecText }) },
+      {
+        role: "system",
+        content:
+          "Optional context: " +
+          JSON.stringify({
+            wish: context.wish || null,
+            block: context.block || null,
+            micro: context.micro || null,
+            vibe: context.vibe || null
+          })
+      },
+      {
+        role: "system",
+        content: [
+          "Meta rule: Do not repeat the same prompt across multiple turns.",
+          alreadyGaveIntent
+            ? "The user already provided intent-like information. Do NOT ask them to restate it in a template; advance naturally."
+            : "If the user hasn't given intent yet, you may ask ONE natural question to understand their goal or sticking point."
+        ].join(" ")
+      }
+    ];
+
+    if (promptSpecText) {
+      chat.push({
+        role: "system",
+        content: ["User intention (prompt_spec):", promptSpecText.trim(), "Use only as light guidance; do NOT force exact phrasing."].join("\n")
+      });
+    }
+
+    if (systemHint && String(systemHint).trim()) {
+      chat.push({ role: "system", content: String(systemHint).trim() });
+    }
+
+    chat.push(...cleanedHistory);
+
+    if (text && (!messages.length || messages[messages.length - 1]?.content !== text)) {
+      chat.push({ role: "user", content: String(text) });
+    }
+
+    /* ---- Call OpenAI ---- */
+
+    const resp = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        model: "gpt-4o-mini",
+        messages: chat,
+        temperature: 0.85,
+        top_p: 1,
+        presence_penalty: 0.3,
+        frequency_penalty: 0.7,
+        max_tokens: 350
+      })
+    });
+
+    const data = await resp.json();
+    if (!resp.ok) {
+      console.error("OpenAI API error:", data);
+      return res.status(500).json({ error: "OpenAI API error", detail: data });
+    }
+
+    const reply = data?.choices?.[0]?.message?.content?.trim() || "I’m here. What’s on your mind?";
+
+    // SAVE both user and assistant turns
+    if (text) {
+      await saveTurn({
+        conversationId: convoId,
+        messages: [
+          { role: "user", content: text },
+          { role: "assistant", content: reply }
+        ]
+      });
+    } else {
+      await saveTurn({
+        conversationId: convoId,
+        messages: [{ role: "assistant", content: reply }]
+      });
+    }
+
+    return res.status(200).json({ reply, conversationId: convoId });
+  } catch (e) {
+    console.error("Server error:", e);
+    return res.status(500).json({ error: "Server error", detail: String(e?.message || e) });
+  }
+}
