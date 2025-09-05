@@ -86,23 +86,7 @@ function LogoHeader({ currentPath, isAuthed }) {
             ))
           ) : (
             <>
-              <Link href="/demo" legacyBehavior>
-                <a
-                  style={{
-                    padding:'10px 14px',
-                    lineHeight:'24px',
-                    borderRadius:10,
-                    fontWeight:700,
-                    border:'1px solid var(--border)',
-                    background:'var(--soft)',
-                    color:'var(--text)',
-                    whiteSpace:'nowrap'
-                  }}
-                  aria-label="Try the free demo"
-                >
-                  Try Demo
-                </a>
-              </Link>
+             
               <Link href="/login" legacyBehavior>
                 <a
                   style={{
