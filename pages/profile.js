@@ -1,7 +1,7 @@
 // /pages/profile.js
 import { useEffect, useState } from "react";
 import { supabase } from "../src/supabaseClient"; // adjust if your client is in /lib
-import { get } from "../src/flowState"; // add this at the top
+import { get as getFlowState } from "../src/flowState"; // adjust path if yours is /src
 
 export default function ProfilePage() {
   const [user, setUser] = useState(null);
@@ -44,59 +44,64 @@ export default function ProfilePage() {
         // 2) wishlist
 // 2) wishlist (view → table), filter to me
 let wl = [];
-const { data: wlView, error: wlErr } = await supabase
-  .from("user_questionnaire_wishlist")
-  .select("user_id, title, created_at")
-  .eq("user_id", u.id)
-  .order("created_at", { ascending: false });
-
-if (wlErr) {
-  // view may not exist — that's fine
-  const { data: wlTbl, error: wlTblErr } = await supabase
-    .from("wishes")
-    .select("id, title, note, created_at")
+try {
+  const { data: wlView, error: wlErr } = await supabase
+    .from("user_questionnaire_wishlist")
+    .select("user_id, title, created_at")
     .eq("user_id", u.id)
     .order("created_at", { ascending: false });
-  if (wlTblErr) console.warn("wishes table error:", wlTblErr);
-  wl = wlTbl || [];
-} else {
-  wl = wlView || [];
+
+  if (wlErr) {
+    const { data: wlTbl, error: wlTblErr } = await supabase
+      .from("wishes")
+      .select("id, title, note, created_at")
+      .eq("user_id", u.id)
+      .order("created_at", { ascending: false });
+    if (wlTblErr) console.warn("wishes table error:", wlTblErr);
+    wl = wlTbl || [];
+  } else {
+    wl = wlView || [];
+  }
+} catch (e) {
+  console.warn("wishlist fetch failed:", e);
 }
 
-/* 🆕 Fallback to FlowState if DB is empty, and backfill */
+/* 🆕 Fallback to FlowState/localStorage, with one retry after hydration.
+   This guarantees your chat wish appears immediately on Profile. */
 if (!wl || wl.length === 0) {
-  try {
-    const fs = getFlowState();
-    const fsWish = (fs?.currentWish?.wish || "").trim();
-    const fsBlock = (fs?.currentWish?.block || "").trim();
-    const fsDate  = (fs?.currentWish?.date || null);
+  // first attempt
+  wl = fallbackWishFromClient();
 
-    if (fsWish) {
-      // Show it immediately on Profile
-      wl = [{ id: "flowstate", title: fsWish, note: fsBlock, created_at: fsDate }];
+  // if still empty, wait a moment for _app to hydrate flowState, then try again
+  if (!wl || wl.length === 0) {
+    await new Promise((r) => setTimeout(r, 350));
+    wl = fallbackWishFromClient();
+  }
 
-      // Backfill into DB once if the user has no wishes yet
-      const { data: existing, error: existErr } = await supabase
+  // backfill to DB once if we found a wish but user has none saved yet
+  if (wl && wl.length > 0 && wl[0]?.title) {
+    try {
+      const { data: existing } = await supabase
         .from("wishes")
         .select("id")
         .eq("user_id", u.id)
         .limit(1);
-
-      if (!existErr && (!existing || existing.length === 0)) {
+      if (!existing || existing.length === 0) {
         await supabase.from("wishes").insert({
           user_id: u.id,
-          title: fsWish,
-          note: fsBlock || null
+          title: wl[0].title,
+          note: wl[0].note || null
         });
       }
+    } catch (e) {
+      console.warn("wishlist backfill failed:", e);
     }
-  } catch (e) {
-    console.warn("FlowState wishlist fallback failed:", e);
   }
 }
 
 if (!alive) return;
 setWishes(wl);
+
 
 
         // 3) wins
