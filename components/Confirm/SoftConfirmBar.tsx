@@ -57,7 +57,7 @@ const SoftConfirmBar: React.FC<Props> = ({
             {/* YES button */}
             <button
               type="button"
-              onClick={() => router.push("/chat")}
+              onClick={onLooksRight}
               aria-label="Looks right"
               className={clsx(
                 "inline-flex items-center justify-center",
