@@ -319,15 +319,17 @@ Keep it upbeat, concise, and practical.`;
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
   }
 
-  function onLooksRight() {
-    const plan = prescribe(parsed || {});
-    setFirstRx(plan);
-    setStage("chat");
-    setTimeout(() => {
-      const el = document.getElementById("first-prescription");
-      if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
-    }, 0);
-  }
+function onLooksRight() {
+  // optionally keep prescribe() if you still need the plan object:
+  const plan = prescribe(parsed || {});
+  setFirstRx(plan);
+
+  // go straight to chat
+  setStage('chat');
+  setOverlayVisible(true);     // if you still use the overlay
+  // or directly kick off your intro bubbles here if you removed the overlay
+}
+
   function onTweak() { setShowTweaks(true); }
   function onApplyTweaks(next){
     setParsed({
