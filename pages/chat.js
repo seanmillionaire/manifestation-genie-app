@@ -400,25 +400,75 @@ Keep it upbeat, concise, and practical.`;
 
   /* -------------------------- staged handlers --------------------------- */
 
-  function onLooksRight() {
-    const plan = prescribe(parsed || {});
-    setFirstRx(plan);
-    setStage('rx');
-    setTimeout(() => {
-      const el = document.getElementById("first-prescription");
-      if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
-    }, 0);
-  }
-  function onTweak() { setShowTweaks(true); }
-  function onApplyTweaks(next){
-    setParsed({
-      outcome: next.outcome || parsed.outcome,
-      block: next.block || parsed.block,
-      state: (next.state ?? parsed.state) || null
-    });
-    setShowTweaks(false);
-    onLooksRight();
-  }
+/* --------------------------- staged handlers ---------------------------- */
+
+function onLooksRight() {
+  // mark the wizard as done for today (keeps your tracking consistent)
+  markWizardDoneToday();
+
+  // enter Chat right away (skip RX)
+  setStage('chat');
+  setOverlayVisible(false);
+
+  // we start in the exercise phase (no confirm round 2)
+  setChatScriptPhase('exercise');
+
+  // build a friendly recap and pace the bubbles
+  const st = get();
+  const fn    = st.firstName || 'Friend';
+  const wish  = st.currentWish?.wish  || 'your goal';
+  const block = st.currentWish?.block || '';
+  const micro = st.currentWish?.micro || '';
+
+  // 1) quick hello (human tone)
+  pushThread({ role: 'assistant', content: `hey ${fn} — glad you’re here.` });
+  setS(get());
+
+  // 2) reflect the goal (single short bubble)
+  setTimeout(() => {
+    pushThread({ role: 'assistant', content: `I’m hearing your main aim is “${wish}”.` });
+    setS(get());
+  }, 650);
+
+  // 3) (optional) mention the snag in one line
+  setTimeout(() => {
+    if (block && block.toLowerCase() !== 'nothing') {
+      pushThread({ role: 'assistant', content: `and the thing that trips it up is “${block}”.` });
+      setS(get());
+    }
+  }, 1200);
+
+  // 4) gentle “let’s begin” nudge
+  setTimeout(() => {
+    pushThread({ role: 'assistant', content: `alright ${fn}, let’s get started.` });
+    setS(get());
+  }, 1600);
+
+  // 5) start the 2-min reset (the part that waits for **done**)
+  setTimeout(() => {
+    const goal = get().currentWish?.wish || 'your goal';
+    const msg = [
+      `Great — let’s get you a quick win now.`,
+      ``,
+      `🧠 2-Min Focus Reset`,
+      `1) Sit tall. Close your eyes.`,
+      `2) Inhale for 4… hold 2… exhale for 6. Do 6 breaths.`,
+      `3) On each exhale, picture taking the tiniest step toward “${goal}”.`,
+      ``,
+      `Type **done** when you finish.`
+    ].join('\n');
+
+    pushThread({ role:'assistant', content: msg });
+    setS(get());
+  }, 2200);
+
+  // keep the scroll pinned as messages land
+  setTimeout(() => {
+    const el = listRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, 2300);
+}
+
 
   // overlay tap → enter chat (intro bubbles with pacing)
   async function dismissOverlay(){
