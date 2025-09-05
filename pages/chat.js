@@ -9,7 +9,7 @@ import SoftConfirmBar from "../components/Confirm/SoftConfirmBar";
 import { parseAnswers, scoreConfidence, variantFromScore } from "../src/features/confirm/decision";
 import { prescribe } from "../src/engine/prescribe";
 import { detectBeliefFrom, recommendProduct } from "../src/engine/recommendProduct";
-
+import { ensureFirstName } from '../src/userName';
 /* ----------------------------- tiny helpers ----------------------------- */
 
 function escapeHTML(s=''){return s.replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
