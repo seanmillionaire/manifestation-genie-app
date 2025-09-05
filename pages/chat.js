@@ -1,9 +1,9 @@
 // /pages/chat.js — SoftConfirm → Chat (intro → CTA → Exercise1 → DOB Numerology)
-// RX is skipped entirely. Messages are stamped with id + reactions so Like works.
+// RX is skipped entirely. Like buttons removed.
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/router";
-import { get, set, newId, toPlainMessages } from "../src/flowState";
+import { get, set, newId, pushThread, toPlainMessages } from "../src/flowState";
 import { supabase } from "../src/supabaseClient";
 import TweakChips from "../components/Confirm/TweakChips";
 import SoftConfirmBar from "../components/Confirm/SoftConfirmBar";
@@ -19,42 +19,24 @@ function escapeHTML(s = "") {
 function nl2br(s = "") { return s.replace(/\n/g, "<br/>"); }
 function pretty(o) { try { return JSON.stringify(o, null, 2); } catch { return String(o); } }
 
-/* confetti (client-only; no storage) */
+/* confetti (client-only) */
 let _confetti = null;
-async function loadConfetti(){ try { const m = await import("canvas-confetti"); _confetti = m.default || m; } catch {} }
+async function loadConfetti() { try { const m = await import("canvas-confetti"); _confetti = m.default || m; } catch {} }
 async function popConfetti() {
   try {
     if (!_confetti) return;
     const end = Date.now() + 800;
-    (function frame(){
-      _confetti({ particleCount: 8, angle: 60, spread: 70, origin: { x: 0 }});
-      _confetti({ particleCount: 8, angle: 120, spread: 70, origin: { x: 1 }});
+    (function frame() {
+      _confetti({ particleCount: 8, angle: 60, spread: 70, origin: { x: 0 } });
+      _confetti({ particleCount: 8, angle: 120, spread: 70, origin: { x: 1 } });
       if (Date.now() < end) requestAnimationFrame(frame);
     })();
-    _confetti({ particleCount: 120, startVelocity: 52, spread: 360, ticks: 100, scalar: 1.0, origin: { y: 0.6 }});
+    _confetti({ particleCount: 120, startVelocity: 52, spread: 360, ticks: 100, scalar: 1.0, origin: { y: 0.6 } });
   } catch {}
 }
 
-/* message helpers — ensure every message has an id and reactions */
-function stampMessage(m) {
-  return {
-    id: m.id || newId(),
-    role: m.role || "assistant",
-    content: m.content || "",
-    reactions: {
-      userLiked: false,
-      genieLiked: false,
-      ...(m.reactions || {})
-    }
-  };
-}
-function addMessage(m) {
-  const st = get();
-  const next = [ ...(st.thread || []), stampMessage(m) ];
-  set({ thread: next });
-}
-
-export default function ChatPage(){
+/* component */
+export default function ChatPage() {
   const router = useRouter();
   const [S, setS] = useState(get());
   const [input, setInput] = useState("");
@@ -64,7 +46,7 @@ export default function ChatPage(){
   const [lastChatPayload, setLastChatPayload] = useState(null);
   const listRef = useRef(null);
 
-  // UI stages: 'confirm' → 'chat'
+  // UI stages: 'confirm' → 'chat'   (RX removed)
   const [stage, setStage] = useState("confirm");
 
   // phases: 'intro' → 'exercise1' → 'dob' → 'work' → 'free'
@@ -108,7 +90,7 @@ export default function ChatPage(){
     if (el && stage === "chat") el.scrollTop = el.scrollHeight;
   }, [S.thread, uiOffer, stage, showReadyCTA, pointsBurst]);
 
-  // deterministic intro if thread is empty
+  // deterministic intro on empty thread
   useEffect(() => {
     if (stage !== "chat") return;
     const empty = !Array.isArray(S.thread) || S.thread.length === 0;
@@ -120,7 +102,7 @@ export default function ChatPage(){
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stage]);
 
-  async function callGenie({ text, systemHint=null }) {
+  async function callGenie({ text, systemHint = null }) {
     const stateNow = get();
     const payload = {
       userName: stateNow.firstName || null,
@@ -133,41 +115,44 @@ export default function ChatPage(){
         systemHint,
       },
       messages: toPlainMessages(stateNow.thread || []),
-      text
+      text,
     };
     setLastChatPayload(payload);
 
     const resp = await fetch("/api/chat", {
-      method:"POST", headers:{ "Content-Type":"application/json" }, body: JSON.stringify(payload)
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
     });
     if (!resp.ok) throw new Error("Genie API error");
     const data = await resp.json();
     return data?.reply || "I’m here.";
   }
 
-  function pushAssistant(line) {
-    addMessage({ role: "assistant", content: line });
+  function pushBubble(line) {
+    pushThread({ role: "assistant", content: line, id: newId() });
     setS(get());
   }
 
-  function autoIntroSequence(){
+  function autoIntroSequence() {
     const st = get();
-    const fn = (st.firstName && st.firstName !== "Friend") ? st.firstName : "Friend";
-    const wish  = st.currentWish?.wish  || "your goal";
+    const fn = st.firstName && st.firstName !== "Friend" ? st.firstName : "Friend";
+    const wish = st.currentWish?.wish || "your goal";
     const block = st.currentWish?.block || "what gets in the way";
     const micro = st.currentWish?.micro || null;
 
-    pushAssistant(`Hey ${fn} — great to see you here.`);
+    pushBubble(`Hey ${fn} — great to see you here.`);
     setTimeout(() => {
-      pushAssistant(`I see your goal is “${wish}”, the snag is “${block}”, and your next tiny step is ${micro ? `“${micro}”` : "something we’ll set now"}.`);
+      const recap = `I see your goal is “${wish}”, the snag is “${block}”, and your next tiny step is ${micro ? `“${micro}”` : "something we’ll set now"}.`;
+      pushBubble(recap);
     }, 700);
     setTimeout(() => {
-      pushAssistant(`Ready to start manifesting?`);
+      pushBubble(`Ready to start manifesting?`);
       setShowReadyCTA(true);
     }, 1300);
   }
 
-  function startExercise1(){
+  function startExercise1() {
     setShowReadyCTA(false);
     setPhase("exercise1");
     const st = get();
@@ -180,66 +165,73 @@ export default function ChatPage(){
       `2) Inhale for 4… hold 2… exhale for 6. Do 6 breaths.`,
       `3) On each exhale, picture taking the tiniest step toward “${goal}”.`,
       ``,
-      `Type **done** when you finish.`
+      `Type **done** when you finish.`,
     ].join("\n");
-    pushAssistant(msg);
+    pushBubble(msg);
   }
 
-  async function awardPoints(amount = 50){
-    setPointsBurst(p => p + amount);
+  async function awardPoints(amount = 50) {
+    setPointsBurst((p) => p + amount);
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const user = session?.user;
       if (user) {
-        await supabase.from("user_progress").upsert({
-          user_id: user.id,
-          day_key: new Date().toISOString().slice(0,10),
-          step: "win_points",
-          details: { amount, at: new Date().toISOString() },
-          updated_at: new Date().toISOString()
-        }, { onConflict: "user_id,day_key" });
+        await supabase.from("user_progress").upsert(
+          {
+            user_id: user.id,
+            day_key: new Date().toISOString().slice(0, 10),
+            step: "win_points",
+            details: { amount, at: new Date().toISOString() },
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "user_id,day_key" }
+        );
       }
     } catch {}
     setTimeout(() => setPointsBurst(0), 1100);
   }
 
-  async function finishExercise1ThenAskDOB(){
+  async function finishExercise1ThenAskDOB() {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const user = session?.user;
       if (user) {
-        await supabase.from("user_progress").upsert({
-          user_id: user.id,
-          day_key: new Date().toISOString().slice(0,10),
-          step: "exercise_done",
-          details: { when: new Date().toISOString() },
-          updated_at: new Date().toISOString()
-        }, { onConflict: "user_id,day_key" });
+        await supabase.from("user_progress").upsert(
+          {
+            user_id: user.id,
+            day_key: new Date().toISOString().slice(0, 10),
+            step: "exercise_done",
+            details: { when: new Date().toISOString() },
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "user_id,day_key" }
+        );
       }
     } catch {}
 
     await popConfetti();
     await awardPoints(50);
 
-    pushAssistant(`✨ Nice work. That small win wires momentum.`);
-    setTimeout(() => { pushAssistant(`Let’s do one more quick alignment to lock this in.`); }, 500);
+    pushBubble(`✨ Nice work. That small win wires momentum.`);
+    setTimeout(() => { pushBubble(`Let’s do one more quick alignment to lock this in.`); }, 500);
 
     setTimeout(() => {
       setPhase("dob");
-      pushAssistant(`Tell me your date of birth (MM/DD/YYYY). I’ll map the numerology to “${get().currentWish?.wish || "your goal"}” and give you 3 aligned moves.`);
+      pushBubble(
+        `Tell me your date of birth (MM/DD/YYYY). I’ll map the numerology to “${get().currentWish?.wish || "your goal"}” and give you 3 aligned moves.`
+      );
     }, 1000);
   }
 
-  function isDOB(s=''){
+  function isDOB(s = "") {
     return /\b(0?[1-9]|1[0-2])[\/\-\.](0?[1-9]|[12][0-9]|3[01])[\/\-\.](19|20)\d{2}\b/.test(s.trim());
   }
 
-  async function runNumerology(dob){
+  async function runNumerology(dob) {
     setPhase("work");
 
     const wish = get().currentWish?.wish || "my goal";
-    const systemHint =
-`You are a supportive manifestation coach. Use basic numerology with DOB: ${dob}.
+    const systemHint = `You are a supportive manifestation coach. Use basic numerology with DOB: ${dob}.
 Context user's primary goal: "${wish}".
 1) Derive life path or core numerology quickly (no long tables).
 2) Explain 1-2 relevant traits in plain language (2-3 sentences).
@@ -247,19 +239,22 @@ Context user's primary goal: "${wish}".
 Keep it upbeat, concise, and practical.`;
 
     const reply = await callGenie({ text: "Please analyze and advise.", systemHint });
-    pushAssistant(reply);
+    pushBubble(reply);
 
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const user = session?.user;
       if (user) {
-        await supabase.from("user_progress").upsert({
-          user_id: user.id,
-          day_key: new Date().toISOString().slice(0,10),
-          step: "exercise2_done",
-          details: { dob, at: new Date().toISOString() },
-          updated_at: new Date().toISOString()
-        }, { onConflict: "user_id,day_key" });
+        await supabase.from("user_progress").upsert(
+          {
+            user_id: user.id,
+            day_key: new Date().toISOString().slice(0, 10),
+            step: "exercise2_done",
+            details: { dob, at: new Date().toISOString() },
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "user_id,day_key" }
+        );
       }
     } catch {}
 
@@ -267,66 +262,28 @@ Keep it upbeat, concise, and practical.`;
     await popConfetti();
 
     setTimeout(() => {
-      pushAssistant(`That’s a strong finish for today. Come back tomorrow for your next dose — or chat freely with me now.`);
+      pushBubble(`That’s a strong finish for today. Come back tomorrow for your next dose — or chat freely with me now.`);
       setPhase("free");
     }, 500);
   }
 
-  // LIKE: user toggles like by id
-  function toggleUserLike(msgId){
-    const st = get();
-    const next = (st.thread || []).map(m => {
-      if (m.id === msgId) {
-        const liked = !(m.reactions?.userLiked);
-        return {
-          ...m,
-          reactions: { ...(m.reactions||{}), userLiked: liked }
-        };
-      }
-      return m;
-    });
-    set({ thread: next });
-    setS(get());
-  }
-
-  // LIKE: Genie auto-likes a user's positive/“done” message
-  function maybeGenieAutoLike(userText){
-    const good = /^done\b/i.test(userText) || /\b(thanks|thank you|got it|nice|awesome|great|yes)\b/i.test(userText);
-    if (!good) return;
-    const st = get();
-    const lastUser = [...(st.thread||[])].reverse().find(m => m.role === "user");
-    if (!lastUser) return;
-    const next = (st.thread||[]).map(m => {
-      if (m.id === lastUser.id) {
-        return { ...m, reactions: { ...(m.reactions||{}), genieLiked: true } };
-      }
-      return m;
-    });
-    set({ thread: next });
-    setS(get());
-  }
-
-  async function send(){
+  async function send() {
     const text = input.trim();
     if (!text || thinking) return;
     setInput("");
     setThinking(true);
 
-    // push user message with id + reactions
-    addMessage({ role: "user", content: text });
+    pushThread({ role: "user", content: text, id: newId() });
     setS(get());
 
     try {
-      // auto-like heuristics
-      maybeGenieAutoLike(text);
-
       if (phase === "exercise1") {
         if (/^done\b/i.test(text)) {
           await finishExercise1ThenAskDOB();
           setThinking(false);
           return;
         } else {
-          pushAssistant(`No rush. Do the 2-min reset, then type **done** when finished.`);
+          pushBubble(`No rush. Do the 2-min reset, then type **done** when finished.`);
           setThinking(false);
           return;
         }
@@ -338,7 +295,7 @@ Keep it upbeat, concise, and practical.`;
           setThinking(false);
           return;
         } else {
-          pushAssistant(`Got it. Please send DOB like **MM/DD/YYYY** (e.g., 08/14/1990).`);
+          pushBubble(`Got it. Please send DOB like **MM/DD/YYYY** (e.g., 08/14/1990).`);
           setThinking(false);
           return;
         }
@@ -356,38 +313,38 @@ Keep it upbeat, concise, and practical.`;
             why: belief
               ? `Limiting belief detected: “${belief}.” Tonight’s session dissolves that pattern so your next action feels natural.`
               : `Based on your goal, this short trance helps you move without overthinking.`,
-            buyUrl: "https://hypnoticmeditations.ai/b/l0kmb"
+            buyUrl: "https://hypnoticmeditations.ai/b/l0kmb",
           });
         }
       } catch {}
 
       const reply = await callGenie({ text: combined });
-      pushAssistant(reply);
+      pushBubble(reply);
     } catch {
-      pushAssistant("The lamp flickered. Try again in a moment.");
+      pushBubble("The lamp flickered. Try again in a moment.");
     } finally {
       setThinking(false);
     }
   }
 
-  function onKey(e){
+  function onKey(e) {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
   }
 
   /* soft-confirm actions */
   function handleLooksRight() {
-    set({ thread: [] });      // fresh chat
+    set({ thread: [] });                 // clean boot
     setStage("chat");
     setPhase("intro");
     setShowReadyCTA(false);
     autoIntroSequence();
   }
   function onTweak() { setShowTweaks(true); }
-  function onApplyTweaks(next){
+  function onApplyTweaks(next) {
     setParsed({
       outcome: next.outcome || parsed.outcome,
       block: next.block || parsed.block,
-      state: (next.state ?? parsed.state) || null
+      state: (next.state ?? parsed.state) || null,
     });
     setShowTweaks(false);
     handleLooksRight();
@@ -404,17 +361,17 @@ Keep it upbeat, concise, and practical.`;
 
   return (
     <>
-      <style dangerouslySetInnerHTML={{__html: overlayStyles}} />
+      <style dangerouslySetInnerHTML={{ __html: overlayStyles }} />
 
       {/* Debug pill */}
-      <div style={{ display:"flex", justifyContent:"center", margin:"10px 0" }}>
+      <div style={{ display: "flex", justifyContent: "center", margin: "10px 0" }}>
         <button
-          onClick={() => setDebugOn(v => !v)}
+          onClick={() => setDebugOn((v) => !v)}
           style={{
-            fontSize:12, fontWeight:800, letterSpacing:.3,
+            fontSize: 12, fontWeight: 800, letterSpacing: .3,
             background: debugOn ? "#dcfce7" : "#e5e7eb",
-            color: "#111", border:"1px solid rgba(0,0,0,0.15)",
-            borderRadius: 999, padding:"6px 10px", cursor:"pointer"
+            color: "#111", border: "1px solid rgba(0,0,0,0.15)",
+            borderRadius: 999, padding: "6px 10px", cursor: "pointer",
           }}
           aria-pressed={debugOn}
         >
@@ -424,11 +381,11 @@ Keep it upbeat, concise, and practical.`;
 
       {debugOn && (
         <div style={{
-          maxWidth: 980, margin:"0 auto 10px", padding:12,
-          background:"#0b1220", color:"#e5e7eb",
-          border:"1px solid rgba(255,255,255,0.12)", borderRadius:12
+          maxWidth: 980, margin: "0 auto 10px", padding: 12,
+          background: "#0b1220", color: "#e5e7eb",
+          border: "1px solid rgba(255,255,255,0.12)", borderRadius: 12,
         }}>
-          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <strong>Live FlowState Snapshot</strong>
             <button
               onClick={() => {
@@ -438,41 +395,41 @@ Keep it upbeat, concise, and practical.`;
                     vibe: S.vibe || null,
                     currentWish: S.currentWish || null,
                     prompt_spec: S.prompt_spec || null,
-                    lastChatPayload
+                    lastChatPayload,
                   };
                   navigator.clipboard?.writeText(JSON.stringify(snapshot, null, 2));
                 } catch {}
               }}
               style={{
-                fontSize:12, padding:"4px 8px", borderRadius:8,
-                border:"1px solid rgba(255,255,255,0.15)", background:"transparent", color:"#e5e7eb",
-                cursor:"pointer"
+                fontSize: 12, padding: "4px 8px", borderRadius: 8,
+                border: "1px solid rgba(255,255,255,0.15)", background: "transparent", color: "#e5e7eb",
+                cursor: "pointer",
               }}
             >
               Copy JSON
             </button>
           </div>
 
-          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginTop:10 }}>
-            <div style={{ background:"#0f172a", padding:10, borderRadius:8 }}>
-              <div style={{ fontSize:12, opacity:.8, marginBottom:6 }}>firstName</div>
-              <pre style={{ margin:0, fontSize:12, whiteSpace:"pre-wrap" }}>{pretty(S.firstName)}</pre>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 10 }}>
+            <div style={{ background: "#0f172a", padding: 10, borderRadius: 8 }}>
+              <div style={{ fontSize: 12, opacity: .8, marginBottom: 6 }}>firstName</div>
+              <pre style={{ margin: 0, fontSize: 12, whiteSpace: "pre-wrap" }}>{pretty(S.firstName)}</pre>
             </div>
-            <div style={{ background:"#0f172a", padding:10, borderRadius:8 }}>
-              <div style={{ fontSize:12, opacity:.8, marginBottom:6 }}>vibe</div>
-              <pre style={{ margin:0, fontSize:12, whiteSpace:"pre-wrap" }}>{pretty(S.vibe)}</pre>
+            <div style={{ background: "#0f172a", padding: 10, borderRadius: 8 }}>
+              <div style={{ fontSize: 12, opacity: .8, marginBottom: 6 }}>vibe</div>
+              <pre style={{ margin: 0, fontSize: 12, whiteSpace: "pre-wrap" }}>{pretty(S.vibe)}</pre>
             </div>
-            <div style={{ background:"#0f172a", padding:10, borderRadius:8 }}>
-              <div style={{ fontSize:12, opacity:.8, marginBottom:6 }}>currentWish</div>
-              <pre style={{ margin:0, fontSize:12, whiteSpace:"pre-wrap" }}>{pretty(S.currentWish)}</pre>
+            <div style={{ background: "#0f172a", padding: 10, borderRadius: 8 }}>
+              <div style={{ fontSize: 12, opacity: .8, marginBottom: 6 }}>currentWish</div>
+              <pre style={{ margin: 0, fontSize: 12, whiteSpace: "pre-wrap" }}>{pretty(S.currentWish)}</pre>
             </div>
-            <div style={{ background:"#0f172a", padding:10, borderRadius:8 }}>
-              <div style={{ fontSize:12, opacity:.8, marginBottom:6 }}>prompt_spec</div>
-              <pre style={{ margin:0, fontSize:12, whiteSpace:"pre-wrap" }}>{pretty(S.prompt_spec)}</pre>
+            <div style={{ background: "#0f172a", padding: 10, borderRadius: 8 }}>
+              <div style={{ fontSize: 12, opacity: .8, marginBottom: 6 }}>prompt_spec</div>
+              <pre style={{ margin: 0, fontSize: 12, whiteSpace: "pre-wrap" }}>{pretty(S.prompt_spec)}</pre>
             </div>
-            <div style={{ gridColumn:"1 / span 2", background:"#0f172a", padding:10, borderRadius:8 }}>
-              <div style={{ fontSize:12, opacity:.8, marginBottom:6 }}>lastChatPayload → /api/chat</div>
-              <pre style={{ margin:0, fontSize:12, overflowX:"auto" }}>
+            <div style={{ gridColumn: "1 / span 2", background: "#0f172a", padding: 10, borderRadius: 8 }}>
+              <div style={{ fontSize: 12, opacity: .8, marginBottom: 6 }}>lastChatPayload → /api/chat</div>
+              <pre style={{ margin: 0, fontSize: 12, overflowX: "auto" }}>
                 {pretty(lastChatPayload ?? { info: "No chat call yet. Send a message to populate lastChatPayload." })}
               </pre>
             </div>
@@ -481,22 +438,25 @@ Keep it upbeat, concise, and practical.`;
       )}
 
       {/* Main Card */}
-      <div style={{ maxWidth: 980, margin: "12px auto", padding: "0 10px", position:"relative" }}>
+      <div style={{ maxWidth: 980, margin: "12px auto", padding: "0 10px", position: "relative" }}>
         {/* points burst */}
         {pointsBurst > 0 && (
-          <div style={{
-            position:"fixed", left:"50%", bottom: 96, transform:"translateX(-50%)", pointerEvents:"none",
-            background:"rgba(255,214,0,0.95)", border:"1px solid rgba(0,0,0,0.12)", borderRadius:999,
-            padding:"10px 16px", fontWeight:900, animation:"pointsPop 1.1s ease-out both", zIndex:60
-          }}>
+          <div
+            style={{
+              position: "fixed", left: "50%", bottom: 96, transform: "translateX(-50%)",
+              pointerEvents: "none", background: "rgba(255,214,0,0.95)",
+              border: "1px solid rgba(0,0,0,0.12)", borderRadius: 999,
+              padding: "10px 16px", fontWeight: 900, animation: "pointsPop 1.1s ease-out both", zIndex: 60,
+            }}
+          >
             +{pointsBurst}
           </div>
         )}
 
-        <div style={{ display:"grid", gridTemplateColumns:"1fr", gap:10 }}>
-          <div style={{ background:"#fff", border:"1px solid rgba(0,0,0,0.08)", borderRadius:16, padding:10 }}>
-            <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:6 }}>
-              <div style={{ fontWeight:900, fontSize:18 }}>Genie Chat</div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 10 }}>
+          <div style={{ background: "#fff", border: "1px solid rgba(0,0,0,0.08)", borderRadius: 16, padding: 10 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+              <div style={{ fontWeight: 900, fontSize: 18 }}>Genie Chat</div>
             </div>
 
             {/* Stage: confirm (soft bar) */}
@@ -509,7 +469,7 @@ Keep it upbeat, concise, and practical.`;
                       block={parsed?.block || ""}
                       stateGuess={parsed?.state || null}
                       onApply={onApplyTweaks}
-                      onClose={()=>setShowTweaks(false)}
+                      onClose={() => setShowTweaks(false)}
                     />
                   </div>
                 )}
@@ -531,50 +491,49 @@ Keep it upbeat, concise, and practical.`;
                   ref={listRef}
                   style={{
                     minHeight: 280, maxHeight: 420, overflowY: "auto",
-                    border: "1px solid rgba(0,0,0,0.08)", borderRadius: 12, padding: 10, background: "#f8fafc"
+                    border: "1px solid rgba(0,0,0,0.08)", borderRadius: 12, padding: 10, background: "#f8fafc",
                   }}
                 >
                   {(S.thread || []).map((m) => (
                     <ChatBubble
-                      key={m.id}
-                      id={m.id}
+                      key={m.id || newId()}
+                      id={m.id || newId()}
                       role={m.role}
                       content={nl2br(escapeHTML(m.content || ""))}
-                      reactions={m.reactions}
-                      onToggleUserLike={() => toggleUserLike(m.id)}
                     />
                   ))}
 
                   {uiOffer ? (
                     <div style={{ marginTop: 8 }}>
-                      <div style={{ border:"1px solid rgba(0,0,0,0.1)", borderRadius:12, padding:12 }}>
-                        <div style={{ fontWeight:800, marginBottom:6 }}>{uiOffer.title}</div>
-                        <div style={{ fontSize:13, color:"#334155", marginBottom:10 }}>{uiOffer.why}</div>
+                      <div style={{ border: "1px solid rgba(0,0,0,0.1)", borderRadius: 12, padding: 12 }}>
+                        <div style={{ fontWeight: 800, marginBottom: 6 }}>{uiOffer.title}</div>
+                        <div style={{ fontSize: 13, color: "#334155", marginBottom: 10 }}>{uiOffer.why}</div>
                         <a
                           href={uiOffer.buyUrl}
-                          target="_blank" rel="noopener noreferrer"
-                          style={{ fontWeight:800, textDecoration:"underline" }}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{ fontWeight: 800, textDecoration: "underline" }}
                         >
                           Explore »
                         </a>
-                        <button onClick={()=>setUiOffer(null)} style={{ marginLeft:10 }}>Dismiss</button>
+                        <button onClick={() => setUiOffer(null)} style={{ marginLeft: 10 }}>Dismiss</button>
                       </div>
                     </div>
                   ) : null}
 
                   {thinking && (
-                    <div style={{ opacity:.7, fontStyle:"italic", marginTop:6 }}>Genie is thinking…</div>
+                    <div style={{ opacity: .7, fontStyle: "italic", marginTop: 6 }}>Genie is thinking…</div>
                   )}
                 </div>
 
                 {/* “Yes, I’m ready” CTA */}
                 {showReadyCTA && (
-                  <div style={{ marginTop: 10, textAlign:"center" }}>
+                  <div style={{ marginTop: 10, textAlign: "center" }}>
                     <button
                       onClick={startExercise1}
                       style={{
-                        appearance:"none", padding:"12px 18px", fontWeight:900, border:0, borderRadius:12,
-                        background:"#111", color:"#ffd600", cursor:"pointer", boxShadow:"0 8px 24px rgba(0,0,0,.18)"
+                        appearance: "none", padding: "12px 18px", fontWeight: 900, border: 0, borderRadius: 12,
+                        background: "#111", color: "#ffd600", cursor: "pointer", boxShadow: "0 8px 24px rgba(0,0,0,.18)",
                       }}
                     >
                       Yes, I’m ready
@@ -583,22 +542,22 @@ Keep it upbeat, concise, and practical.`;
                 )}
 
                 {/* input */}
-                <div style={{ display:"flex", gap:8, marginTop:10 }}>
+                <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
                   <textarea
                     rows={1}
                     value={input}
-                    onChange={e=>setInput(e.target.value)}
+                    onChange={(e) => setInput(e.target.value)}
                     onKeyDown={onKey}
-                    placeholder={`Speak to your Genie, ${(S.firstName && S.firstName!=="Friend") ? S.firstName : "Friend"}…`}
+                    placeholder={`Speak to your Genie, ${(S.firstName && S.firstName !== "Friend") ? S.firstName : "Friend"}…`}
                     style={{
-                      flex:1, padding:"10px 12px", borderRadius:12, border:"1px solid rgba(0,0,0,0.15)", resize:"vertical"
+                      flex: 1, padding: "10px 12px", borderRadius: 12, border: "1px solid rgba(0,0,0,0.15)", resize: "vertical",
                     }}
                   />
                   <button
                     onClick={send}
                     style={{
-                      padding:"10px 14px", borderRadius:12, border:0, background:"#ffd600",
-                      fontWeight:900, cursor:"pointer"
+                      padding: "10px 14px", borderRadius: 12, border: 0, background: "#ffd600",
+                      fontWeight: 900, cursor: "pointer",
                     }}
                   >
                     Send
