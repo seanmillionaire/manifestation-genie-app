@@ -1,5 +1,6 @@
 // /pages/api/chat.js
 // Genie: cosmic, playful, prescriptive, non-repetitive.
+import { getRandomSigil } from "@/src/sigils";
 
 function sysPrompt({ userName, vibe, wantStoryFlag, promptSpecText }) {
   const name = userName || "Friend";
@@ -43,7 +44,6 @@ OUTPUT SHAPE:
 - Normal reply = 1–3 sentences + 1 clear action.
 - Sigil reply = ASCII wall + one hypnotic sealing line.
 - Example sigil:
-\`\`\`
 8888888888
 88       88
  8888 8888
@@ -51,7 +51,6 @@ OUTPUT SHAPE:
  8888  8888
 88        88
 888888888888
-\`\`\`
 This is the seal of your wish. It is already unfolding. 🔮
   `.trim();
 }
@@ -106,6 +105,13 @@ export default async function handler(req, res) {
     const alreadyGaveIntent = userLikelyProvidedIntent(
       cleanedHistory.concat(text ? [{ role: "user", content: String(text) }] : [])
     );
+
+    // 🔮 Sigil triggers — intercept before sending to OpenAI
+    const lastUserMessage = (text || "").toLowerCase();
+    const sigilTriggers = ["sigil", "seal", "ritual", "wish", "888", "money", "flow", "rich", "paid", "cash"];
+    if (sigilTriggers.some(w => lastUserMessage.includes(w))) {
+      return res.status(200).json({ reply: getRandomSigil() });
+    }
 
     const chat = [
       { role: "system", content: sysPrompt({ userName, vibe: context.vibe, wantStoryFlag, promptSpecText }) },
