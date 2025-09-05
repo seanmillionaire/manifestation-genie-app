@@ -97,105 +97,11 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { userName, context = {}, messages = [], text = "" } = req.body || {};
-    const apiKey = process.env.OPENAI_API_KEY;
-    if (!apiKey) {
-      return res.status(500).json({ error: "Missing OPENAI_API_KEY" });
-    }
-
-    const wantStoryFlag = Math.random() < 0.3;
-
-    const promptSpecText =
-      typeof context?.prompt_spec === "string"
-        ? context.prompt_spec
-        : (context?.prompt_spec?.prompt || null);
-
-    const cleanedHistory = stripSeedRepeats(Array.isArray(messages) ? messages : []);
-    const alreadyGaveIntent = userLikelyProvidedIntent(
-      cleanedHistory.concat(text ? [{ role: "user", content: String(text) }] : [])
-    );
-
-    /* ---- SIGIL INVOCATION LAYER ---- */
-
-    const lastUserMessage = (text || "").toLowerCase();
-    const sigilTriggers = ["sigil", "seal", "ritual", "wish", "888", "money", "flow", "rich", "paid", "cash"];
-
-    // 1. Keyword triggers → direct pull from bank
-    if (sigilTriggers.some(w => lastUserMessage.includes(w))) {
-      return res.status(200).json({ reply: getRandomSigil() });
-    }
-
-    // 2. Loop-break trigger → after 2 assistant replies
-    const assistantSince = assistantRepliesSinceLastUser(cleanedHistory);
-    if (assistantSince >= 2) {
-      return res.status(200).json({ reply: getRandomSigil() });
-    }
-
-    /* ---- Normal OpenAI flow ---- */
-    const chat = [
-      { role: "system", content: sysPrompt({ userName, vibe: context.vibe, wantStoryFlag, promptSpecText }) },
-      {
-        role: "system",
-        content:
-          "Optional context: " +
-          JSON.stringify({
-            wish: context.wish || null,
-            block: context.block || null,
-            micro: context.micro || null,
-            vibe: context.vibe || null
-          })
-      },
-      {
-        role: "system",
-        content: [
-          "Meta rule: Do not repeat the same prompt across multiple turns.",
-          alreadyGaveIntent
-            ? "The user already provided intent-like information. Do NOT ask them to restate it in a template; advance naturally."
-            : "If the user hasn't given intent yet, you may ask ONE natural question to understand their goal or sticking point."
-        ].join(" ")
-      },
-      ...(promptSpecText
-        ? [
-            {
-              role: "system",
-              content: ["User intention (prompt_spec):", promptSpecText.trim(), "Use only as light guidance; do NOT force exact phrasing."].join("\n")
-            }
-          ]
-        : []),
-      ...cleanedHistory
-    ];
-
-    if (text && (!messages.length || messages[messages.length - 1]?.content !== text)) {
-      chat.push({ role: "user", content: String(text) });
-    }
-
-    const resp = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        model: "gpt-4o-mini",
-        messages: chat,
-        temperature: 0.85,
-        top_p: 1,
-        presence_penalty: 0.3,
-        frequency_penalty: 0.7,
-        max_tokens: 350
-      })
-    });
-
-    const data = await resp.json();
-    if (!resp.ok) {
-      console.error("OpenAI API error:", data);
-      return res.status(500).json({ error: "OpenAI API error", detail: data });
-    }
-
-    const reply = data?.choices?.[0]?.message?.content?.trim() || "I’m here. What’s on your mind?";
-    return res.status(200).json({ reply });
-  } catch (e) {
-    console.error("Server error:", e);
-    return res.status(500).json({ error: "Server error", detail: String(e?.message || e) });
-  }
-}
+    const {
+      userName,
+      context = {},
+      messages = [],
+      text = "",
+      conversationId,
+      userKey,
+      systemHint // optional extra s
