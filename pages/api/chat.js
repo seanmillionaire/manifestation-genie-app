@@ -3,6 +3,7 @@
 
 import { getRandomSigil } from "../../src/sigils";
 import { ensureConversation, saveTurn } from "../../src/lib/history";
+import { getRandomWowLine, shouldPopWow } from "../../src/wowlines";
 
 /* ---------------- System Prompt ---------------- */
 
@@ -242,7 +243,31 @@ export default async function handler(req, res) {
     }
 
     const reply = data?.choices?.[0]?.message?.content?.trim() || "I’m here. What’s on your mind?";
+// ✨ NEW: occasionally add a hype one-liner
+let finalReply = reply;
+try {
+  if (shouldPopWow({ text, reply, vibe: context?.vibe })) {
+    finalReply = `${reply}\n\n${getRandomWowLine(context?.vibe)}`;
+  }
+} catch { /* fail-safe: never crash the reply */ }
 
+// SAVE both user and assistant turns (use finalReply)
+if (text) {
+  await saveTurn({
+    conversationId: convoId,
+    messages: [
+      { role: "user", content: text },
+      { role: "assistant", content: finalReply }
+    ]
+  });
+} else {
+  await saveTurn({
+    conversationId: convoId,
+    messages: [{ role: "assistant", content: finalReply }]
+  });
+}
+
+return res.status(200).json({ reply: finalReply, conversationId: convoId });
     // SAVE both user and assistant turns
     if (text) {
       await saveTurn({
