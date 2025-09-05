@@ -98,14 +98,14 @@ async function lock() {
           />
 
           <label style={{ margin: '12px 0 6px', display: 'block', fontWeight: 600 }}>
-            What’s the resistance in the way?
+            What’s the block in the way?
           </label>
           <textarea
             rows={2}
             style={input}
             value={block}
             onChange={e => setBlock(e.target.value)}
-            placeholder="Name the snag. Honest + clear."
+            placeholder="What's blocking you? Honest + clear."
           />
 
           <label style={{ margin: '12px 0 6px', display: 'block', fontWeight: 600 }}>
@@ -132,7 +132,7 @@ async function lock() {
               width: '100%',
             }}
           >
-            ✨ Lock in my manifestation →
+            ✨ Start my manifestation →
           </button>
         </div>
       </section>
