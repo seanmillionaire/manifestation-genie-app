@@ -2,6 +2,7 @@
 // and handles DOB numerology calculation.
 //
 // New code uses TypeScript per rules; pages stay thin; UI calls this API.
+import { supabaseAdmin } from "../../src/lib/supabaseAdmin";
 
 import type { NextApiRequest, NextApiResponse } from "next";
 import {
@@ -114,16 +115,53 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
 
       // (Optional) stub for future exercise submissions
-      if (action === "submit") {
-        return res.status(200).json({ ok: true });
-      }
+   // /api/exercise  { action: "submit", userId, exerciseKey, payload? }
+if (action === "submit") {
+  type ExerciseKey = "reset-2min" | "dob-numerology";
 
-      return res.status(400).json({ ok: false, error: "Unknown action" });
-    }
+  const { userId, exerciseKey, payload } = (req.body || {}) as {
+    userId?: string;
+    exerciseKey?: ExerciseKey;
+    payload?: any;
+  };
 
-    res.setHeader("Allow", "GET, POST");
-    return res.status(405).json({ ok: false, error: "Method not allowed" });
-  } catch (err: any) {
-    return res.status(400).json({ ok: false, error: err?.message || "Bad request" });
+  if (!userId || !exerciseKey) {
+    return res.status(400).json({ ok: false, error: "Missing userId or exerciseKey" });
   }
+
+  // 1) event log
+  const { error: logError } = await supabaseAdmin
+    .from("exercise_log")
+    .insert({
+      user_id: userId,
+      exercise_key: exerciseKey,
+      status: "completed",
+      payload: payload ?? null,
+    });
+
+  if (logError) {
+    return res.status(500).json({ ok: false, error: logError.message });
+  }
+
+  // 2) day summary (Panama timezone → YYYY-MM-DD)
+  const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/Panama" }); // e.g., "2025-09-05"
+  const flags =
+    exerciseKey === "reset-2min"
+      ? { completed_reset: true }
+      : exerciseKey === "dob-numerology"
+      ? { completed_numerology: true }
+      : {};
+
+  const { error: upsertError } = await supabaseAdmin
+    .from("daily_journey")
+    .upsert(
+      { user_id: userId, journey_date: today, ...flags },
+      { onConflict: "user_id,journey_date" }
+    );
+
+  if (upsertError) {
+    return res.status(500).json({ ok: false, error: upsertError.message });
+  }
+
+  return res.status(200).json({ ok: true });
 }
