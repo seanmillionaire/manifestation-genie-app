@@ -143,6 +143,35 @@ useEffect(() => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
 }, [stage, S.thread, conversationId]);
 
+/* soft-confirm actions */
+function handleLooksRight() {
+  const hasExisting = Array.isArray(get().thread) && get().thread.length > 0;
+  if (!hasExisting && !conversationId) {
+    set({ thread: [] });
+    setPhase("intro");
+    setShowReadyCTA(false);
+    autoIntroSequence();
+  } else {
+    setPhase("free");
+    setShowReadyCTA(false);
+  }
+  setStage("chat");
+}
+
+// 🔧 bring these back
+function onTweak() {
+  setShowTweaks(true);
+}
+
+function onApplyTweaks(next) {
+  setParsed({
+    outcome: next?.outcome ?? parsed.outcome,
+    block:   next?.block   ?? parsed.block,
+    state:  (next?.state ?? parsed.state) || null,
+  });
+  setShowTweaks(false);
+  handleLooksRight();
+}
 
   async function callGenie({ text, systemHint = null }) {
     const stateNow = get();
