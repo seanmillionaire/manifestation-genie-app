@@ -1,37 +1,37 @@
 // /pages/profile.js
+// Shows a full “guest profile” if the user isn’t signed in, using the same
+// FlowState/localStorage sources that Chat uses. If signed in, shows synced data.
+
 import { useEffect, useState } from "react";
 import { supabase } from "../src/supabaseClient";
 import { get as getFlowState } from "../src/flowState";
 
-/* ----------------- helpers FIRST (avoid 'is not defined') ----------------- */
+/* ----------------- helpers (shared with Chat sources) ----------------- */
 
 function displayNameFromSources(user) {
-  // 1) Prefer the same source Chat uses
+  // Prefer the same source Chat uses
   try {
     const fsName = (getFlowState()?.firstName || "").trim();
     if (fsName) return fsName;
   } catch {}
 
-  // 2) Fallback to Supabase user metadata
+  // Fallback to Supabase metadata or a friendly default
   return (
     user?.user_metadata?.name ||
     user?.user_metadata?.full_name ||
     user?.user_metadata?.first_name ||
-    // 3) As a final fallback
     "Manifestor"
   );
 }
 
 function fallbackWishFromClient() {
   try {
-    // A) Same field Chat uses
     const fs = getFlowState?.();
     const title = (fs?.currentWish?.wish || "").trim();
     const note  = (fs?.currentWish?.block || "").trim();
     const date  = fs?.currentWish?.date || null;
     if (title) return [{ id: "flowstate", title, note, created_at: date }];
 
-    // B) Try common localStorage keys
     if (typeof window !== "undefined") {
       const lsTitle =
         localStorage.getItem("mg_wish_title") ||
@@ -57,6 +57,26 @@ function fallbackWishFromClient() {
   return [];
 }
 
+/* ------------------------------ logic helpers ----------------------------- */
+function computeVisitStats(visits) {
+  const set = new Set((visits || []).map((v) => v.visit_date));
+  let _streak = 0;
+  const d = new Date();
+  for (;;) {
+    const key = d.toISOString().slice(0, 10);
+    if (!set.has(key)) break;
+    _streak += 1;
+    d.setDate(d.getDate() - 1);
+  }
+  const now = new Date();
+  const start = new Date(now);
+  start.setDate(now.getDate() - now.getDay()); // Sunday
+  const weekKey = start.toISOString().slice(0, 10);
+  const _weekCount = (visits || []).filter((v) => v.visit_date >= weekKey).length;
+  const _last = (visits || [])[0]?.visit_date ?? null;
+  return { _streak, _weekCount, _last };
+}
+
 /* -------------------------------- component -------------------------------- */
 
 export default function ProfilePage() {
@@ -72,94 +92,69 @@ export default function ProfilePage() {
     let alive = true;
     async function load() {
       try {
-        // 0) session
+        // Session
         const { data: { session }, error: sessErr } = await supabase.auth.getSession();
         if (sessErr) console.error("getSession error:", sessErr);
         const u = session?.user ?? null;
         if (!alive) return;
         setUser(u);
-        if (!u) return;
 
-        // 1) visits (last 60 days)
-        const since = new Date();
-        since.setDate(since.getDate() - 60);
-        const { data: visits, error: vErr } = await supabase
-          .from("user_daily_visits")
-          .select("visit_date")
-          .gte("visit_date", since.toISOString().slice(0, 10))
-          .order("visit_date", { ascending: false });
+        // Always show at least local wishes, even for guests
+        let wl = fallbackWishFromClient();
 
-        if (vErr) console.error("visits error:", vErr);
-        const safeVisits = Array.isArray(visits) ? visits : [];
-        const { _streak, _weekCount, _last } = computeVisitStats(safeVisits);
-        if (!alive) return;
-        setStreak(_streak);
-        setWeekCount(_weekCount);
-        setLastDate(_last);
+        if (u) {
+          // Visits
+          const since = new Date();
+          since.setDate(since.getDate() - 60);
+          const { data: visits, error: vErr } = await supabase
+            .from("user_daily_visits")
+            .select("visit_date")
+            .gte("visit_date", since.toISOString().slice(0, 10))
+            .order("visit_date", { ascending: false });
+          if (vErr) console.error("visits error:", vErr);
+          const safeVisits = Array.isArray(visits) ? visits : [];
+          const { _streak, _weekCount, _last } = computeVisitStats(safeVisits);
+          if (!alive) return;
+          setStreak(_streak);
+          setWeekCount(_weekCount);
+          setLastDate(_last);
 
-        // 2) wishlist (try view → table)
-        let wl = [];
-        try {
-          const { data: wlView, error: wlErr } = await supabase
-            .from("user_questionnaire_wishlist")
-            .select("user_id, title, created_at")
-            .eq("user_id", u.id)
-            .order("created_at", { ascending: false });
-
-          if (wlErr) {
-            const { data: wlTbl, error: wlTblErr } = await supabase
-              .from("wishes")
-              .select("id, title, note, created_at")
+          // Wishes (synced)
+          try {
+            const { data: wlView, error: wlErr } = await supabase
+              .from("user_questionnaire_wishlist")
+              .select("user_id, title, created_at")
               .eq("user_id", u.id)
               .order("created_at", { ascending: false });
-            if (wlTblErr) console.warn("wishes table error:", wlTblErr);
-            wl = wlTbl || [];
-          } else {
-            wl = wlView || [];
+
+            if (wlErr) {
+              const { data: wlTbl, error: wlTblErr } = await supabase
+                .from("wishes")
+                .select("id, title, note, created_at")
+                .eq("user_id", u.id)
+                .order("created_at", { ascending: false });
+              if (wlTblErr) console.warn("wishes table error:", wlTblErr);
+              wl = (wlTbl && wlTbl.length ? wlTbl : wl);
+            } else {
+              wl = (wlView && wlView.length ? wlView : wl);
+            }
+          } catch (e) {
+            console.warn("wishlist fetch failed:", e);
           }
-        } catch (e) {
-          console.warn("wishlist fetch failed:", e);
+
+          // Wins
+          const { data: wn, error: winsErr } = await supabase
+            .from("wins")
+            .select("id, title, note, points, created_at")
+            .eq("user_id", u.id)
+            .order("created_at", { ascending: false });
+          if (winsErr) console.error("wins error:", winsErr);
+          if (!alive) return;
+          setWins(wn || []);
         }
 
-        // Fallback to FlowState/localStorage + backfill once
-        if (!wl || wl.length === 0) {
-          wl = fallbackWishFromClient();
-          if (!wl || wl.length === 0) {
-            await new Promise((r) => setTimeout(r, 350));
-            wl = fallbackWishFromClient();
-          }
-          if (wl && wl.length > 0 && wl[0]?.title) {
-            try {
-              const { data: existing } = await supabase
-                .from("wishes")
-                .select("id")
-                .eq("user_id", u.id)
-                .limit(1);
-              if (!existing || existing.length === 0) {
-                await supabase.from("wishes").insert({
-                  user_id: u.id,
-                  title: wl[0].title,
-                  note: wl[0].note || null,
-                });
-              }
-            } catch (e) {
-              console.warn("wishlist backfill failed:", e);
-            }
-          }
-        }
         if (!alive) return;
         setWishes(wl);
-
-        // 3) wins
-        const { data: wn, error: winsErr } = await supabase
-          .from("wins")
-          .select("id, title, note, points, created_at")
-          .eq("user_id", u.id)
-          .order("created_at", { ascending: false });
-
-        if (winsErr) console.error("wins error:", winsErr);
-        if (!alive) return;
-        setWins(wn || []);
       } catch (e) {
         console.error("Profile load fatal:", e);
       } finally {
@@ -181,18 +176,56 @@ export default function ProfilePage() {
     );
   }
 
-  // Not signed in
+  // ---------- Guest profile (no Supabase session) ----------
   if (!user) {
+    const guestWishes = wishes; // already from FlowState/localStorage
+
     return (
       <PageWrap>
         <H1>Your Profile</H1>
         <Muted>This is your personal dashboard</Muted>
-        <Card><Muted>Please sign in.</Muted></Card>
+
+        <Card>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            <div style={{ fontSize: 18, fontWeight: 700 }}>
+              {displayNameFromSources(null)}
+            </div>
+            <div style={{ fontSize: 15, color: "var(--muted)" }}>
+              Not signed in — showing local data from your device.
+            </div>
+            <div style={{ marginTop: 10 }}>
+              <a href="/auth" style={{ fontWeight: 800, textDecoration: "underline" }}>
+                Log in to sync across devices »
+              </a>
+            </div>
+          </div>
+        </Card>
+
+        <Card>
+          <H2>Manifestation list</H2>
+          {guestWishes.length === 0 ? (
+            <Muted>No saved wishes yet — set one on Start or in Chat.</Muted>
+          ) : (
+            <ul style={{ marginTop: 8, padding: 0, listStyle: "none" }}>
+              {guestWishes.map((w, i) => (
+                <li key={w.id ?? w.title ?? i} style={rowItem}>
+                  <div style={{ fontWeight: 600 }}>{w.title}</div>
+                  {w.note && <div style={subMeta}>{w.note}</div>}
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+
+        <Card>
+          <H2>Wins</H2>
+          <Muted>Wins will sync to your account after you sign in.</Muted>
+        </Card>
       </PageWrap>
     );
   }
 
-  // Signed in
+  // ---------- Signed-in profile ----------
   return (
     <PageWrap>
       <H1>Your Profile</H1>
@@ -298,23 +331,3 @@ if (typeof window !== "undefined") {
 const rowItem = { border: "1px solid var(--border)", borderRadius: 10, padding: 14, marginTop: 10, background: "var(--soft)" };
 const subMeta = { fontSize: 13, color: "var(--muted)", marginTop: 6 };
 const finePrint = { fontSize: 13, color: "var(--muted)", marginTop: 12 };
-
-/* ------------------------------ logic helpers ----------------------------- */
-function computeVisitStats(visits) {
-  const set = new Set((visits || []).map((v) => v.visit_date));
-  let _streak = 0;
-  const d = new Date();
-  for (;;) {
-    const key = d.toISOString().slice(0, 10);
-    if (!set.has(key)) break;
-    _streak += 1;
-    d.setDate(d.getDate() - 1);
-  }
-  const now = new Date();
-  const start = new Date(now);
-  start.setDate(now.getDate() - now.getDay()); // Sunday
-  const weekKey = start.toISOString().slice(0, 10);
-  const _weekCount = (visits || []).filter((v) => v.visit_date >= weekKey).length;
-  const _last = (visits || [])[0]?.visit_date ?? null;
-  return { _streak, _weekCount, _last };
-}
