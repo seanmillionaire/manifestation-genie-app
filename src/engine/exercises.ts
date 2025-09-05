@@ -1,5 +1,3 @@
-// /src/engine/exercises.ts
-
 export type Vibe = 'calm' | 'confident' | 'playful';
 export type Persona = 'genie1' | 'genie2';
 
