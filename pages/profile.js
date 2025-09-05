@@ -1,6 +1,7 @@
 // /pages/profile.js
 import { useEffect, useState } from "react";
 import { supabase } from "../src/supabaseClient"; // adjust if your client is in /lib
+import { get } from "../src/flowState"; // add this at the top
 
 export default function ProfilePage() {
   const [user, setUser] = useState(null);
@@ -232,6 +233,9 @@ function computeVisitStats(visits) {
   return { _streak, _weekCount, _last };
 }
 function displayName(u) {
+  const fsName = (get().firstName || "").trim();
+  if (fsName) return fsName;
+
   return (
     u?.user_metadata?.name ||
     u?.user_metadata?.full_name ||
