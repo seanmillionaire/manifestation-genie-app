@@ -1,7 +1,63 @@
 // /pages/profile.js
 import { useEffect, useState } from "react";
-import { supabase } from "../src/supabaseClient"; // adjust if your client is in /lib
-import { get as getFlowState } from "../src/flowState"; // adjust path if yours is /src
+import { supabase } from "../src/supabaseClient";
+import { get as getFlowState } from "../src/flowState";
+
+/* ----------------- helpers FIRST (avoid 'is not defined') ----------------- */
+
+function displayNameFromSources(user) {
+  // 1) Prefer the same source Chat uses
+  try {
+    const fsName = (getFlowState()?.firstName || "").trim();
+    if (fsName) return fsName;
+  } catch {}
+
+  // 2) Fallback to Supabase user metadata
+  return (
+    user?.user_metadata?.name ||
+    user?.user_metadata?.full_name ||
+    user?.user_metadata?.first_name ||
+    // 3) As a final fallback
+    "Manifestor"
+  );
+}
+
+function fallbackWishFromClient() {
+  try {
+    // A) Same field Chat uses
+    const fs = getFlowState?.();
+    const title = (fs?.currentWish?.wish || "").trim();
+    const note  = (fs?.currentWish?.block || "").trim();
+    const date  = fs?.currentWish?.date || null;
+    if (title) return [{ id: "flowstate", title, note, created_at: date }];
+
+    // B) Try common localStorage keys
+    if (typeof window !== "undefined") {
+      const lsTitle =
+        localStorage.getItem("mg_wish_title") ||
+        localStorage.getItem("mg_current_wish") ||
+        localStorage.getItem("wish") ||
+        "";
+      const lsNote =
+        localStorage.getItem("mg_wish_block") ||
+        localStorage.getItem("wish_block") ||
+        "";
+      if (lsTitle.trim()) {
+        return [
+          {
+            id: "localstorage",
+            title: lsTitle.trim(),
+            note: (lsNote || "").trim(),
+            created_at: null,
+          },
+        ];
+      }
+    }
+  } catch {}
+  return [];
+}
+
+/* -------------------------------- component -------------------------------- */
 
 export default function ProfilePage() {
   const [user, setUser] = useState(null);
@@ -41,68 +97,58 @@ export default function ProfilePage() {
         setWeekCount(_weekCount);
         setLastDate(_last);
 
-        // 2) wishlist
-// 2) wishlist (view → table), filter to me
-let wl = [];
-try {
-  const { data: wlView, error: wlErr } = await supabase
-    .from("user_questionnaire_wishlist")
-    .select("user_id, title, created_at")
-    .eq("user_id", u.id)
-    .order("created_at", { ascending: false });
+        // 2) wishlist (try view → table)
+        let wl = [];
+        try {
+          const { data: wlView, error: wlErr } = await supabase
+            .from("user_questionnaire_wishlist")
+            .select("user_id, title, created_at")
+            .eq("user_id", u.id)
+            .order("created_at", { ascending: false });
 
-  if (wlErr) {
-    const { data: wlTbl, error: wlTblErr } = await supabase
-      .from("wishes")
-      .select("id, title, note, created_at")
-      .eq("user_id", u.id)
-      .order("created_at", { ascending: false });
-    if (wlTblErr) console.warn("wishes table error:", wlTblErr);
-    wl = wlTbl || [];
-  } else {
-    wl = wlView || [];
-  }
-} catch (e) {
-  console.warn("wishlist fetch failed:", e);
-}
+          if (wlErr) {
+            const { data: wlTbl, error: wlTblErr } = await supabase
+              .from("wishes")
+              .select("id, title, note, created_at")
+              .eq("user_id", u.id)
+              .order("created_at", { ascending: false });
+            if (wlTblErr) console.warn("wishes table error:", wlTblErr);
+            wl = wlTbl || [];
+          } else {
+            wl = wlView || [];
+          }
+        } catch (e) {
+          console.warn("wishlist fetch failed:", e);
+        }
 
-/* 🆕 Fallback to FlowState/localStorage, with one retry after hydration.
-   This guarantees your chat wish appears immediately on Profile. */
-if (!wl || wl.length === 0) {
-  // first attempt
-  wl = fallbackWishFromClient();
-
-  // if still empty, wait a moment for _app to hydrate flowState, then try again
-  if (!wl || wl.length === 0) {
-    await new Promise((r) => setTimeout(r, 350));
-    wl = fallbackWishFromClient();
-  }
-
-  // backfill to DB once if we found a wish but user has none saved yet
-  if (wl && wl.length > 0 && wl[0]?.title) {
-    try {
-      const { data: existing } = await supabase
-        .from("wishes")
-        .select("id")
-        .eq("user_id", u.id)
-        .limit(1);
-      if (!existing || existing.length === 0) {
-        await supabase.from("wishes").insert({
-          user_id: u.id,
-          title: wl[0].title,
-          note: wl[0].note || null
-        });
-      }
-    } catch (e) {
-      console.warn("wishlist backfill failed:", e);
-    }
-  }
-}
-
-if (!alive) return;
-setWishes(wl);
-
-
+        // Fallback to FlowState/localStorage + backfill once
+        if (!wl || wl.length === 0) {
+          wl = fallbackWishFromClient();
+          if (!wl || wl.length === 0) {
+            await new Promise((r) => setTimeout(r, 350));
+            wl = fallbackWishFromClient();
+          }
+          if (wl && wl.length > 0 && wl[0]?.title) {
+            try {
+              const { data: existing } = await supabase
+                .from("wishes")
+                .select("id")
+                .eq("user_id", u.id)
+                .limit(1);
+              if (!existing || existing.length === 0) {
+                await supabase.from("wishes").insert({
+                  user_id: u.id,
+                  title: wl[0].title,
+                  note: wl[0].note || null,
+                });
+              }
+            } catch (e) {
+              console.warn("wishlist backfill failed:", e);
+            }
+          }
+        }
+        if (!alive) return;
+        setWishes(wl);
 
         // 3) wins
         const { data: wn, error: winsErr } = await supabase
@@ -156,7 +202,7 @@ setWishes(wl);
       <Card>
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
           <div style={{ fontSize: 18, fontWeight: 700 }}>
-            {displayName(user)}
+            {displayNameFromSources(user)}
           </div>
           <div style={{ fontSize: 15, color: "var(--muted)" }}>
             {user.email}
@@ -218,7 +264,7 @@ setWishes(wl);
   );
 }
 
-/* ---------- UI helpers ---------- */
+/* ------------------------------- UI helpers ------------------------------- */
 function PageWrap({ children }) {
   return (
     <div style={{ width: "min(1100px, 94vw)", margin: "32px auto 48px", padding: "0 4px" }}>
@@ -253,7 +299,7 @@ const rowItem = { border: "1px solid var(--border)", borderRadius: 10, padding: 
 const subMeta = { fontSize: 13, color: "var(--muted)", marginTop: 6 };
 const finePrint = { fontSize: 13, color: "var(--muted)", marginTop: 12 };
 
-/* ---------- logic helpers ---------- */
+/* ------------------------------ logic helpers ----------------------------- */
 function computeVisitStats(visits) {
   const set = new Set((visits || []).map((v) => v.visit_date));
   let _streak = 0;
@@ -266,50 +312,9 @@ function computeVisitStats(visits) {
   }
   const now = new Date();
   const start = new Date(now);
-  start.setDate(now.getDate() - now.getDay());
+  start.setDate(now.getDate() - now.getDay()); // Sunday
   const weekKey = start.toISOString().slice(0, 10);
   const _weekCount = (visits || []).filter((v) => v.visit_date >= weekKey).length;
   const _last = (visits || [])[0]?.visit_date ?? null;
   return { _streak, _weekCount, _last };
-}
-function displayName(u) {
-  const fsName = (get().firstName || "").trim();
-  if (fsName) return fsName;
-
-  return (
-    u?.user_metadata?.name ||
-    u?.user_metadata?.full_name ||
-    u?.user_metadata?.first_name ||
-    "Manifestor"
-  );
-}
-function fallbackWishFromClient() {
-  try {
-    // 1) Same source chat uses: flowState.currentWish
-    const fs = getFlowState?.();
-    const title = (fs?.currentWish?.wish || "").trim();
-    const note  = (fs?.currentWish?.block || "").trim();
-    const date  = fs?.currentWish?.date || null;
-    if (title) return [{ id: "flowstate", title, note, created_at: date }];
-
-    // 2) Common localStorage keys we use in the app
-    const lsTitle =
-      (typeof window !== "undefined" && (
-        localStorage.getItem("mg_wish_title") ||
-        localStorage.getItem("mg_current_wish") ||
-        localStorage.getItem("wish")
-      )) || "";
-    const lsNote =
-      (typeof window !== "undefined" && (
-        localStorage.getItem("mg_wish_block") ||
-        localStorage.getItem("wish_block")
-      )) || "";
-
-    if (lsTitle && lsTitle.trim()) {
-      return [{ id: "localstorage", title: lsTitle.trim(), note: (lsNote || "").trim(), created_at: null }];
-    }
-  } catch (e) {
-    // ignore
-  }
-  return [];
 }
