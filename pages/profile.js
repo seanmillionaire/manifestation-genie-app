@@ -93,7 +93,7 @@ export default function ProfilePage() {
       <PageWrap>
         <H1>Your Profile</H1>
         <Muted>This is your personal dashboard</Muted>
-      {/* USER INFO */}
+{/* USER INFO */}
 <Card>
   <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
     <div style={{ fontSize: 18, fontWeight: 700 }}>{user.user_metadata?.name || "Manifestor"}</div>
@@ -101,7 +101,6 @@ export default function ProfilePage() {
   </div>
 </Card>
 
-        <Card><Muted>Loading…</Muted></Card>
       </PageWrap>
     );
   }
