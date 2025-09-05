@@ -1,9 +1,9 @@
 // /pages/chat.js — SoftConfirm → Chat (intro → CTA → Exercise1 → DOB Numerology)
-// RX is skipped entirely.
+// RX is skipped entirely. Messages are stamped with id + reactions so Like works.
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/router";
-import { get, set, newId, pushThread, toPlainMessages } from "../src/flowState";
+import { get, set, newId, toPlainMessages } from "../src/flowState";
 import { supabase } from "../src/supabaseClient";
 import TweakChips from "../components/Confirm/TweakChips";
 import SoftConfirmBar from "../components/Confirm/SoftConfirmBar";
@@ -19,56 +19,13 @@ function escapeHTML(s = "") {
 function nl2br(s = "") { return s.replace(/\n/g, "<br/>"); }
 function pretty(o) { try { return JSON.stringify(o, null, 2); } catch { return String(o); } }
 
-// ensure every message has a stable id + reactions bucket
-function withMeta(m) {
-  return {
-    ...m,
-    id: m.id || Math.random().toString(36).slice(2),
-    reactions: m.reactions || { userLiked: false, genieLiked: false },
-  };
-}
-
-// toggle a user's "like" on a message by id (stored in flowState.thread)
-function toggleUserLike(msgId) {
-  const st = get();
-  const next = (st.thread || []).map((m) => {
-    const mm = withMeta(m);
-    if (mm.id === msgId) {
-      return { ...mm, reactions: { ...mm.reactions, userLiked: !mm.reactions?.userLiked } };
-    }
-    return mm;
-  });
-  set({ thread: next });
-}
-
-// Genie auto-likes a *user* message if it looks like a “good signal”
-function maybeGenieAutoLike(userText) {
-  const good =
-    /^done\b/i.test(userText) ||
-    /\b(thanks|thank you|got it|nice|awesome|great|yes)\b/i.test(userText);
-  if (!good) return;
-
-  const st = get();
-  const lastUser = [...(st.thread || [])].reverse().find((m) => m.role === "user");
-  if (!lastUser) return;
-
-  const next = (st.thread || []).map((m) => {
-    const mm = withMeta(m);
-    if (mm.id === lastUser.id) {
-      return { ...mm, reactions: { ...mm.reactions, genieLiked: true } };
-    }
-    return mm;
-  });
-  set({ thread: next });
-}
-
-/* confetti (client-only; no localStorage/sessionStorage) */
+/* confetti (client-only; no storage) */
 let _confetti = null;
 async function loadConfetti(){ try { const m = await import("canvas-confetti"); _confetti = m.default || m; } catch {} }
 async function popConfetti() {
   try {
     if (!_confetti) return;
-    const end = Date.now() + 800; // shorter tail so it doesn’t linger
+    const end = Date.now() + 800;
     (function frame(){
       _confetti({ particleCount: 8, angle: 60, spread: 70, origin: { x: 0 }});
       _confetti({ particleCount: 8, angle: 120, spread: 70, origin: { x: 1 }});
@@ -78,7 +35,25 @@ async function popConfetti() {
   } catch {}
 }
 
-/* component */
+/* message helpers — ensure every message has an id and reactions */
+function stampMessage(m) {
+  return {
+    id: m.id || newId(),
+    role: m.role || "assistant",
+    content: m.content || "",
+    reactions: {
+      userLiked: false,
+      genieLiked: false,
+      ...(m.reactions || {})
+    }
+  };
+}
+function addMessage(m) {
+  const st = get();
+  const next = [ ...(st.thread || []), stampMessage(m) ];
+  set({ thread: next });
+}
+
 export default function ChatPage(){
   const router = useRouter();
   const [S, setS] = useState(get());
@@ -89,7 +64,7 @@ export default function ChatPage(){
   const [lastChatPayload, setLastChatPayload] = useState(null);
   const listRef = useRef(null);
 
-  // UI stages: 'confirm' → 'chat'   (RX removed)
+  // UI stages: 'confirm' → 'chat'
   const [stage, setStage] = useState("confirm");
 
   // phases: 'intro' → 'exercise1' → 'dob' → 'work' → 'free'
@@ -110,9 +85,7 @@ export default function ChatPage(){
   useEffect(() => {
     (async () => {
       const cur = get();
-      // redirect to earlier steps if needed
       if (!cur.vibe) { router.replace("/vibe"); return; }
-      // ensure name is hydrated from Supabase (no local storage)
       await hydrateFirstNameFromSupabase();
       setS(get());
     })();
@@ -135,7 +108,7 @@ export default function ChatPage(){
     if (el && stage === "chat") el.scrollTop = el.scrollHeight;
   }, [S.thread, uiOffer, stage, showReadyCTA, pointsBurst]);
 
-  // if chat opens empty for any reason, kick off intro deterministically
+  // deterministic intro if thread is empty
   useEffect(() => {
     if (stage !== "chat") return;
     const empty = !Array.isArray(S.thread) || S.thread.length === 0;
@@ -172,7 +145,10 @@ export default function ChatPage(){
     return data?.reply || "I’m here.";
   }
 
-  function pushBubble(line){ pushThread({ role:"assistant", content: line }); setS(get()); }
+  function pushAssistant(line) {
+    addMessage({ role: "assistant", content: line });
+    setS(get());
+  }
 
   function autoIntroSequence(){
     const st = get();
@@ -181,13 +157,12 @@ export default function ChatPage(){
     const block = st.currentWish?.block || "what gets in the way";
     const micro = st.currentWish?.micro || null;
 
-    pushBubble(`Hey ${fn} — great to see you here.`);
+    pushAssistant(`Hey ${fn} — great to see you here.`);
     setTimeout(() => {
-      const recap = `I see your goal is “${wish}”, the snag is “${block}”, and your next tiny step is ${micro ? `“${micro}”` : "something we’ll set now"}.`;
-      pushBubble(recap);
+      pushAssistant(`I see your goal is “${wish}”, the snag is “${block}”, and your next tiny step is ${micro ? `“${micro}”` : "something we’ll set now"}.`);
     }, 700);
     setTimeout(() => {
-      pushBubble(`Ready to start manifesting?`);
+      pushAssistant(`Ready to start manifesting?`);
       setShowReadyCTA(true);
     }, 1300);
   }
@@ -207,7 +182,7 @@ export default function ChatPage(){
       ``,
       `Type **done** when you finish.`
     ].join("\n");
-    pushBubble(msg);
+    pushAssistant(msg);
   }
 
   async function awardPoints(amount = 50){
@@ -246,12 +221,12 @@ export default function ChatPage(){
     await popConfetti();
     await awardPoints(50);
 
-    pushBubble(`✨ Nice work. That small win wires momentum.`);
-    setTimeout(() => { pushBubble(`Let’s do one more quick alignment to lock this in.`); }, 500);
+    pushAssistant(`✨ Nice work. That small win wires momentum.`);
+    setTimeout(() => { pushAssistant(`Let’s do one more quick alignment to lock this in.`); }, 500);
 
     setTimeout(() => {
       setPhase("dob");
-      pushBubble(`Tell me your date of birth (MM/DD/YYYY). I’ll map the numerology to “${get().currentWish?.wish || "your goal"}” and give you 3 aligned moves.`);
+      pushAssistant(`Tell me your date of birth (MM/DD/YYYY). I’ll map the numerology to “${get().currentWish?.wish || "your goal"}” and give you 3 aligned moves.`);
     }, 1000);
   }
 
@@ -272,7 +247,7 @@ Context user's primary goal: "${wish}".
 Keep it upbeat, concise, and practical.`;
 
     const reply = await callGenie({ text: "Please analyze and advise.", systemHint });
-    pushBubble(reply);
+    pushAssistant(reply);
 
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -292,9 +267,43 @@ Keep it upbeat, concise, and practical.`;
     await popConfetti();
 
     setTimeout(() => {
-      pushBubble(`That’s a strong finish for today. Come back tomorrow for your next dose — or chat freely with me now.`);
+      pushAssistant(`That’s a strong finish for today. Come back tomorrow for your next dose — or chat freely with me now.`);
       setPhase("free");
     }, 500);
+  }
+
+  // LIKE: user toggles like by id
+  function toggleUserLike(msgId){
+    const st = get();
+    const next = (st.thread || []).map(m => {
+      if (m.id === msgId) {
+        const liked = !(m.reactions?.userLiked);
+        return {
+          ...m,
+          reactions: { ...(m.reactions||{}), userLiked: liked }
+        };
+      }
+      return m;
+    });
+    set({ thread: next });
+    setS(get());
+  }
+
+  // LIKE: Genie auto-likes a user's positive/“done” message
+  function maybeGenieAutoLike(userText){
+    const good = /^done\b/i.test(userText) || /\b(thanks|thank you|got it|nice|awesome|great|yes)\b/i.test(userText);
+    if (!good) return;
+    const st = get();
+    const lastUser = [...(st.thread||[])].reverse().find(m => m.role === "user");
+    if (!lastUser) return;
+    const next = (st.thread||[]).map(m => {
+      if (m.id === lastUser.id) {
+        return { ...m, reactions: { ...(m.reactions||{}), genieLiked: true } };
+      }
+      return m;
+    });
+    set({ thread: next });
+    setS(get());
   }
 
   async function send(){
@@ -303,19 +312,21 @@ Keep it upbeat, concise, and practical.`;
     setInput("");
     setThinking(true);
 
-    // push user message
-    pushThread({ role:"user", content: text });
+    // push user message with id + reactions
+    addMessage({ role: "user", content: text });
     setS(get());
 
     try {
+      // auto-like heuristics
+      maybeGenieAutoLike(text);
+
       if (phase === "exercise1") {
         if (/^done\b/i.test(text)) {
           await finishExercise1ThenAskDOB();
           setThinking(false);
-          maybeGenieAutoLike(text);
           return;
         } else {
-          pushBubble(`No rush. Do the 2-min reset, then type **done** when finished.`);
+          pushAssistant(`No rush. Do the 2-min reset, then type **done** when finished.`);
           setThinking(false);
           return;
         }
@@ -325,10 +336,9 @@ Keep it upbeat, concise, and practical.`;
         if (isDOB(text)) {
           await runNumerology(text);
           setThinking(false);
-          maybeGenieAutoLike(text);
           return;
         } else {
-          pushBubble(`Got it. Please send DOB like **MM/DD/YYYY** (e.g., 08/14/1990).`);
+          pushAssistant(`Got it. Please send DOB like **MM/DD/YYYY** (e.g., 08/14/1990).`);
           setThinking(false);
           return;
         }
@@ -352,10 +362,9 @@ Keep it upbeat, concise, and practical.`;
       } catch {}
 
       const reply = await callGenie({ text: combined });
-      pushBubble(reply);
-      maybeGenieAutoLike(text);
+      pushAssistant(reply);
     } catch {
-      pushBubble("The lamp flickered. Try again in a moment.");
+      pushAssistant("The lamp flickered. Try again in a moment.");
     } finally {
       setThinking(false);
     }
@@ -367,8 +376,7 @@ Keep it upbeat, concise, and practical.`;
 
   /* soft-confirm actions */
   function handleLooksRight() {
-    // Fresh chat boot every time; no device-specific carryover
-    set({ thread: [] });
+    set({ thread: [] });      // fresh chat
     setStage("chat");
     setPhase("intro");
     setShowReadyCTA(false);
@@ -509,7 +517,7 @@ Keep it upbeat, concise, and practical.`;
                   <SoftConfirmBar
                     outcome={parsed?.outcome}
                     block={parsed?.block}
-                    onLooksRight={handleLooksRight}   // ← go straight to chat
+                    onLooksRight={handleLooksRight}
                     onTweak={onTweak}
                   />
                 </div>
@@ -526,19 +534,16 @@ Keep it upbeat, concise, and practical.`;
                     border: "1px solid rgba(0,0,0,0.08)", borderRadius: 12, padding: 10, background: "#f8fafc"
                   }}
                 >
-                  {(S.thread || []).map((m) => {
-                    const mm = withMeta(m);
-                    return (
-                      <ChatBubble
-                        key={mm.id}
-                        id={mm.id}
-                        role={mm.role}
-                        content={nl2br(escapeHTML(mm.content || ""))}
-                        reactions={mm.reactions}
-                        onToggleUserLike={() => toggleUserLike(mm.id)}
-                      />
-                    );
-                  })}
+                  {(S.thread || []).map((m) => (
+                    <ChatBubble
+                      key={m.id}
+                      id={m.id}
+                      role={m.role}
+                      content={nl2br(escapeHTML(m.content || ""))}
+                      reactions={m.reactions}
+                      onToggleUserLike={() => toggleUserLike(m.id)}
+                    />
+                  ))}
 
                   {uiOffer ? (
                     <div style={{ marginTop: 8 }}>
