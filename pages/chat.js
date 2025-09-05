@@ -45,6 +45,17 @@ export default function ChatPage() {
   const [debugOn, setDebugOn] = useState(false);
   const [lastChatPayload, setLastChatPayload] = useState(null);
   const listRef = useRef(null);
+const { conversationId, setConversationId } = useGenieConversation();
+
+useEffect(() => {
+  async function hydrate() {
+    if (!conversationId) return;
+    const r = await fetch(`/api/history?conversationId=${conversationId}`);
+    const { messages } = await r.json();
+    setChatMessages(messages); // populate your UI state
+  }
+  hydrate();
+}, [conversationId]);
 
   // UI stages: 'confirm' → 'chat'   (RX removed)
   const [stage, setStage] = useState("confirm");
