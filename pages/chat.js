@@ -1,50 +1,53 @@
-// /pages/chat.js — Rx → (overlay) → Chat (intro bubbles → Ex1 → Ex2 numerology)
+// /pages/chat.js — staged flow: Rx → (overlay) → Chat (no confirm round 2)
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
 import { get, set, newId, pushThread, toPlainMessages } from '../src/flowState';
 import { supabase } from '../src/supabaseClient';
 import PrescriptionCard from "../components/ChatGenie/PrescriptionCard";
+import { detectBeliefFrom, recommendProduct } from "../src/engine/recommendProduct";
 import TweakChips from "../components/Confirm/TweakChips";
 import SoftConfirmBar from "../components/Confirm/SoftConfirmBar";
 import { parseAnswers, scoreConfidence, variantFromScore } from "../src/features/confirm/decision";
 import { prescribe } from "../src/engine/prescribe";
-import { detectBeliefFrom, recommendProduct } from "../src/engine/recommendProduct";
 
-/* ----------------------------- tiny helpers ----------------------------- */
-
-function escapeHTML(s=''){return s.replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
-function nl2br(s=''){ return s.replace(/\n/g, '<br/>'); }
-function pretty(o){ try { return JSON.stringify(o, null, 2); } catch { return String(o); } }
-function firstWord(v){ return v ? String(v).trim().split(/\s+/)[0] : ''; }
-function pickFirstName(src){
-  const c = [src?.first_name, src?.firstName, src?.display_name, src?.displayName, src?.name, src?.full_name, src?.fullName]
-    .map(firstWord).filter(Boolean);
-  for (const t0 of c){
-    const t = (t0||'').trim();
-    if (!t || t.toLowerCase()==='friend' || /[0-9_@]/.test(t)) continue;
-    return t[0].toUpperCase() + t.slice(1);
-  }
-  return '';
-}
-
-// light daily gating (HM card)
-const HM_LINK = "https://hypnoticmeditations.ai/b/l0kmb";
-function todayKey(){ return new Date().toISOString().slice(0,10); }
-function shouldShowOfferNow(){
+// Safe, client-only confetti loader
+let _confetti = null;
+function fireConfettiBurst() {
   try {
-    if (typeof window === 'undefined') return false;
-    const shownSession = sessionStorage.getItem('mg_offer_shown_session') === '1';
-    const shownDay = localStorage.getItem('mg_offer_day') === todayKey();
-    return !(shownSession || shownDay);
-  } catch { return true; }
-}
-function markOfferShown(){
-  try {
-    if (typeof window !== 'undefined') {
-      sessionStorage.setItem('mg_offer_shown_session', '1');
-      localStorage.setItem('mg_offer_day', todayKey());
-    }
+    if (!_confetti || typeof window === 'undefined') return;
+    const duration = 1500;
+    const end = Date.now() + duration;
+    (function frame() {
+      _confetti({
+        particleCount: 18,
+        startVelocity: 36,
+        spread: 360,
+        gravity: 0.9,
+        ticks: 180,
+        scalar: 1.1,
+        origin: { x: Math.random(), y: Math.random() * 0.2 + 0.1 }
+      });
+      if (Date.now() < end) requestAnimationFrame(frame);
+    })();
   } catch {}
+}
+
+/* ----------------------- helpers (pure / top-level) ----------------------- */
+
+// Loose “yes” detector (kept for completeness; not used in initial flow now)
+function isYesLoose(raw = '') {
+  const s = raw.trim().toLowerCase();
+  if (!s) return false;
+  const t = s.replace(/[.!?…\s]+$/g, '');
+  const DIRECT = [
+    'yes','y','yep','yeah','ok','okay','sure','ready','looks good','yes sir','ypu','yup',
+    'looks right','correct',"that's right",'sounds right','let’s go',"let's go"
+  ];
+  if (DIRECT.includes(t)) return true;
+  if (/^y(es)+\b/.test(t) || /\bok(ay)?\b/.test(t)) return true;
+  if (/\b(start|begin|go|proceed|continue|ready)\b/.test(t)) return true;
+  if (/\b(you know already|same|no change)\b/.test(t)) return true;
+  return false;
 }
 
 async function saveProgressToProfile({ supabase, step, details }) {
@@ -64,6 +67,71 @@ async function saveProgressToProfile({ supabase, step, details }) {
   } catch {}
 }
 
+// Parse "Goal: xxx | Block: yyy" (order free; partials allowed)
+function parseInlineUpdate(text, stateNow) {
+  if (!text) return null;
+  if (/^\s*(you know already|same|no change)\s*$/i.test(text)) {
+    return { ...stateNow.currentWish };
+  }
+  const goalMatch  = /goal\s*[:=\-]\s*([^|]+?)(?=$|\|)/i.exec(text);
+  const blockMatch = /block(?:er)?\s*[:=\-]\s*([^|]+?)(?=$|\|)/i.exec(text);
+  const microMatch = /micro\s*[:=\-]\s*([^|]+?)(?=$|\|)/i.exec(text);
+
+  if (!goalMatch && !blockMatch && !microMatch) {
+    const g2 = /(?:^|\s)goal\s+is\s+(.+)/i.exec(text);
+    const b2 = /(?:^|\s)block(?:er)?\s+is\s+(.+)/i.exec(text);
+    const m2 = /(?:^|\s)micro\s+is\s+(.+)/i.exec(text);
+    if (!g2 && !b2 && !m2) return null;
+    return {
+      ...stateNow.currentWish,
+      wish:  g2 ? g2[1].trim() : (stateNow.currentWish?.wish || null),
+      block: b2 ? b2[1].trim() : (stateNow.currentWish?.block || null),
+      micro: m2 ? m2[1].trim() : (stateNow.currentWish?.micro || null),
+    };
+  }
+  return {
+    ...stateNow.currentWish,
+    wish:  goalMatch  ? goalMatch[1].trim()  : (stateNow.currentWish?.wish || null),
+    block: blockMatch ? blockMatch[1].trim() : (stateNow.currentWish?.block || null),
+    micro: microMatch ? microMatch[1].trim() : (stateNow.currentWish?.micro || null),
+  };
+}
+
+// tiny utils
+function escapeHTML(s=''){return s.replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
+function nl2br(s=''){ return s.replace(/\n/g, '<br/>'); }
+function pretty(o){ try { return JSON.stringify(o, null, 2); } catch { return String(o); } }
+function pickFirstName(src){
+  const first = (v)=> v ? String(v).trim().split(/\s+/)[0] : '';
+  const cands = [src?.first_name, src?.firstName, src?.display_name, src?.displayName, src?.name, src?.full_name, src?.fullName]
+    .map(first).filter(Boolean);
+  for (const c of cands){
+    const t = c.trim();
+    if (!t) continue;
+    if (t.toLowerCase() === 'friend') continue;
+    if (/[0-9_@]/.test(t)) continue;
+    return t[0].toUpperCase() + t.slice(1);
+  }
+  return '';
+}
+
+// offer gating
+const HM_LINK = "https://hypnoticmeditations.ai/b/l0kmb";
+function todayKey(){ return new Date().toISOString().slice(0,10); }
+function shouldShowOfferNow(){
+  try {
+    if (typeof window === 'undefined') return false;
+    const shownSession = sessionStorage.getItem('mg_offer_shown_session') === '1';
+    const shownDay = localStorage.getItem('mg_offer_day') === todayKey();
+    return !(shownSession || shownDay);
+  } catch { return true; }
+}
+function markOfferShown(){
+  try { if (typeof window !== 'undefined') {
+    sessionStorage.setItem('mg_offer_shown_session', '1');
+    localStorage.setItem('mg_offer_day', todayKey());
+  }} catch {}
+}
 async function markWizardDoneToday(){
   try { localStorage.setItem('mg_wizard_day', todayKey()); } catch {}
   await saveProgressToProfile({
@@ -71,30 +139,6 @@ async function markWizardDoneToday(){
     step: 'wizard_done',
     details: { at: new Date().toISOString() }
   });
-}
-
-/* ------------------------ confetti (client-only) ------------------------ */
-let _confetti = null; // will be set by dynamic import
-
-async function bigConfettiShow(){
-  try {
-    if (!_confetti) return;
-    const end = Date.now() + 1500;
-    const colors = ['#FFD600', '#22c55e', '#60a5fa', '#f472b6', '#fbbf24', '#34d399'];
-
-    (function frame(){
-      _confetti({ particleCount: 8, angle: 60, spread: 70, origin: { x: 0 }, colors });
-      _confetti({ particleCount: 8, angle: 120, spread: 70, origin: { x: 1 }, colors });
-      if (Date.now() < end) requestAnimationFrame(frame);
-    })();
-
-    // three beefy bursts
-    for (let i=0;i<3;i++){
-      _confetti({ particleCount: 180, startVelocity: 52, spread: 360, ticks: 140, scalar: 1.1, origin: { y: 0.55 }});
-      // eslint-disable-next-line no-await-in-loop
-      await new Promise(r=>setTimeout(r, 180));
-    }
-  } catch {}
 }
 
 /* ------------------------------ component ------------------------------ */
@@ -108,22 +152,18 @@ export default function ChatPage(){
   const [debugOn, setDebugOn] = useState(false);
   const [lastChatPayload, setLastChatPayload] = useState(null);
   const listRef = useRef(null);
+  const confirmNudgesRef = useRef(0); // kept for free chat edge cases
 
-  // UI stages: 'confirm' (soft bar only) → 'rx' → 'chat'
+  // UI: 'confirm' (kept only for soft bar) → 'rx' → 'chat'
   const [stage, setStage] = useState('confirm');
 
-  // chat phases:
-  // 'intro' (three staggered bubbles with CTA) →
-  // 'exercise1' (2-min reset, waits for "done") →
-  // 'exercise2_dob' (asks DOB) →
-  // 'exercise2_work' (numerology analysis) →
-  // 'free'
-  const [phase, setPhase] = useState('free');
+  // chatScriptPhase: now goes 'exercise' → 'win' → 'free'
+  const [chatScriptPhase, setChatScriptPhase] = useState('free');
 
-  // overlay (launch chat)
+  // overlay separate from stage; covers current stage
   const [overlayVisible, setOverlayVisible] = useState(false);
 
-  // soft confirm (before chat)
+  // soft-confirm state
   const [confirmVariant, setConfirmVariant] = useState(null);
   const [parsed, setParsed] = useState({ outcome: null, block: null, state: null });
   const [firstRx, setFirstRx] = useState(null);
@@ -131,21 +171,126 @@ export default function ChatPage(){
 
   // dopamine UI
   const [pointsBurst, setPointsBurst] = useState(0);
-  const [showReadyCTA, setShowReadyCTA] = useState(false);
+  const [showWinCTA, setShowWinCTA] = useState(false);
 
-  // dynamic-confetti
+  // recap message (inside component so it can call setS)
+  function pushHumanRecap() {
+    const st = get();
+    const fn = st.firstName || 'Friend';
+    const wish  = st.currentWish?.wish  || 'your goal';
+    const block = st.currentWish?.block || 'what gets in the way';
+    const micro = st.currentWish?.micro || null;
+
+    const line = `Hey ${fn} — I’m with you. Your goal is “${wish}”, the snag is “${block}”, and your next tiny step is ${micro ? `“${micro}”` : 'set together now'}.`;
+    pushThread({ role:'assistant', content: line });
+    setS(get());
+  }
+  function pushLetsStart(fn='Friend'){
+    pushThread({ role:'assistant', content: `Alright ${fn}, let’s get started on manifesting this.` });
+    setS(get());
+  }
+  function pushFirstExercise(){
+    const st = get();
+    const goal = st.currentWish?.wish || 'your goal';
+    const msg = [
+      `Great — let’s get you a quick win now.`,
+      ``,
+      `🧠 2-Min Focus Reset`,
+      `1) Sit tall. Close your eyes.`,
+      `2) Inhale for 4… hold 2… exhale for 6. Do 6 breaths.`,
+      `3) On each exhale, picture taking the tiniest step toward “${goal}”.`,
+      ``,
+      `Type **done** when you finish.`
+    ].join('\n');
+    pushThread({ role:'assistant', content: msg });
+    setS(get());
+  }
+
+  async function heavyConfetti(){
+    try {
+      const confetti = (await import('canvas-confetti')).default;
+      const end = Date.now() + 850; // slightly faster cleanup
+      const colors = ['#FFD600', '#22c55e', '#60a5fa', '#f472b6', '#fbbf24', '#34d399'];
+
+      (function frame(){
+        confetti({ particleCount: 5, angle: 60, spread: 75, origin: { x: 0 }, colors });
+        confetti({ particleCount: 5, angle: 120, spread: 75, origin: { x: 1 }, colors });
+        if (Date.now() < end) requestAnimationFrame(frame);
+      })();
+
+      for (let i=0;i<3;i++){
+        confetti({ particleCount: 160, startVelocity: 46, spread: 360, ticks: 90, origin: { y: 0.6 } });
+        // eslint-disable-next-line no-await-in-loop
+        await new Promise(r=>setTimeout(r, 140));
+      }
+    } catch {}
+  }
+
+  async function awardPoints(amount = 50){
+    setPointsBurst(p => p + amount);
+    try {
+      const cur = parseInt(localStorage.getItem('mg_points') || '0', 10);
+      localStorage.setItem('mg_points', String(cur + amount));
+    } catch {}
+    await saveProgressToProfile({
+      supabase,
+      step: 'win_points',
+      details: { amount, at: new Date().toISOString() }
+    });
+    setTimeout(() => setPointsBurst(0), 1200);
+  }
+
+  async function finishExerciseAndWrap(){
+    await saveProgressToProfile({
+      supabase,
+      step: 'exercise_done',
+      details: { when: new Date().toISOString() }
+    });
+
+    // Dopamine: confetti + points
+    heavyConfetti();
+    awardPoints(50);
+
+    const msg = [
+      `✨ Nice work. That small win wires momentum.`,
+      ``,
+      `You can come back tomorrow for your next dose…`,
+      `or tap the button below if you wish to go further.`
+    ].join('\n');
+    fireConfettiBurst();
+
+    pushThread({ role:'assistant', content: msg });
+    setS(get());
+    setShowWinCTA(true);
+  }
+
+  function triggerExerciseOne(){
+    // Hand off to your existing exercise engine
+    set({ phase: 'exercise1', exerciseSeed: Date.now() });
+    router.push('/flow');
+  }
+
+  // Lazy-load confetti only on the client; never break SSR/builds
   useEffect(() => {
     let alive = true;
     (async () => {
       try {
         const m = await import('canvas-confetti');
         if (alive) _confetti = m.default || m;
-      } catch {}
+      } catch { /* no-op */ }
     })();
     return () => { alive = false; };
   }, []);
 
-  // boot + name hydrate
+  // auto-enable debug via ?debug=1
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const q = new URLSearchParams(window.location.search);
+      if (q.get('debug') === '1') setDebugOn(true);
+    }
+  }, []);
+
+  // boot + greet + pull name (soft confirm happens BEFORE chat; chat skips it)
   useEffect(() => {
     const cur = get();
     if (!cur.vibe) { router.replace('/vibe'); return; }
@@ -165,10 +310,18 @@ export default function ChatPage(){
         const { data: { session } } = await supabase.auth.getSession();
         const user = session?.user;
         if (user) {
-          const { data: p } = await supabase.from('profiles')
-            .select('first_name, full_name').eq('id', user.id).maybeSingle();
-          const { data: up } = await supabase.from('user_profile')
-            .select('first_name, full_name').eq('user_id', user.id).maybeSingle();
+          const { data: p } = await supabase
+            .from('profiles')
+            .select('first_name, full_name')
+            .eq('id', user.id)
+            .maybeSingle();
+
+          const { data: up } = await supabase
+            .from('user_profile')
+            .select('first_name, full_name')
+            .eq('user_id', user.id)
+            .maybeSingle();
+
           const best = pickFirstName({
             first_name: p?.first_name || up?.first_name,
             full_name: p?.full_name || up?.full_name,
@@ -186,25 +339,28 @@ export default function ChatPage(){
     })();
   }, [router]);
 
-  // derive confirm variant (used by SoftConfirmBar before chat)
+  // derive confirm variant (still used by SoftConfirmBar before chat)
   useEffect(() => {
     try {
-      const a = { goal: S?.currentWish?.wish || S?.prompt_spec?.prompt || null, blocker: S?.currentWish?.block || null };
+      const a = {
+        goal: S?.currentWish?.wish || S?.prompt_spec?.prompt || null,
+        blocker: S?.currentWish?.block || null
+      };
       const p = parseAnswers(a);
-      setParsed(p);
       const score = scoreConfidence(p);
+      setParsed(p);
       setConfirmVariant(variantFromScore(score));
     } catch {}
   }, [S?.currentWish, S?.prompt_spec]);
 
-  // keep scroll pinned during chat
+  // keep scroll pinned once chat is visible
   useEffect(() => {
     const el = listRef.current;
     if (el && stage === 'chat') el.scrollTop = el.scrollHeight;
-  }, [S.thread, uiOffer, stage, showReadyCTA, pointsBurst]);
+  }, [S.thread, uiOffer, stage, showWinCTA]);
 
-  // backend call
-  async function callGenie({ text, systemHint=null }) {
+  // central API to your backend
+  async function callGenie({ text }) {
     const stateNow = get();
     const payload = {
       userName: stateNow.firstName || null,
@@ -214,7 +370,6 @@ export default function ChatPage(){
         micro: stateNow.currentWish?.micro || null,
         vibe: stateNow.vibe || null,
         prompt_spec: stateNow.prompt_spec?.prompt || null,
-        systemHint, // <- optional steering for exercise 2
       },
       messages: toPlainMessages(stateNow.thread || []),
       text
@@ -222,116 +377,16 @@ export default function ChatPage(){
     setLastChatPayload(payload);
 
     const resp = await fetch('/api/chat', {
-      method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify(payload)
+      method:'POST',
+      headers:{ 'Content-Type':'application/json' },
+      body: JSON.stringify(payload)
     });
     if (!resp.ok) throw new Error('Genie API error');
     const data = await resp.json();
     return data?.reply || 'I’m here.';
   }
 
-  /* -------------------------- scripted helpers -------------------------- */
-
-  function pushBubble(line){ pushThread({ role:'assistant', content: line }); setS(get()); }
-
-  function autoIntroSequence(){
-    const st = get();
-    const fn = st.firstName || 'Friend';
-    const wish  = st.currentWish?.wish  || 'your goal';
-    const block = st.currentWish?.block || 'what gets in the way';
-    const micro = st.currentWish?.micro || null;
-
-    // 1) greet
-    pushBubble(`Hey ${fn} — great to see you here.`);
-    // 2) one-line recap
-    setTimeout(() => {
-      const recap = `I see your goal is “${wish}”, the snag is “${block}”, and your next tiny step is ${micro ? `“${micro}”` : 'something we’ll set now'}.`;
-      pushBubble(recap);
-    }, 700);
-    // 3) CTA bubble + button
-    setTimeout(() => {
-      pushBubble(`Ready to start manifesting?`);
-      setShowReadyCTA(true);
-    }, 1300);
-  }
-
-  function startExercise1(){
-    setShowReadyCTA(false);
-    setPhase('exercise1');
-    const st = get();
-    const goal = st.currentWish?.wish || 'your goal';
-    const msg = [
-      `Great — let’s get you a quick win now.`,
-      ``,
-      `🧠 2-Min Focus Reset`,
-      `1) Sit tall. Close your eyes.`,
-      `2) Inhale for 4… hold 2… exhale for 6. Do 6 breaths.`,
-      `3) On each exhale, picture taking the tiniest step toward “${goal}”.`,
-      ``,
-      `Type **done** when you finish.`
-    ].join('\n');
-    pushBubble(msg);
-  }
-
-  async function awardPoints(amount = 50){
-    setPointsBurst(p => p + amount);
-    try {
-      const cur = parseInt(localStorage.getItem('mg_points') || '0', 10);
-      localStorage.setItem('mg_points', String(cur + amount));
-    } catch {}
-    await saveProgressToProfile({ supabase, step: 'win_points', details: { amount, at: new Date().toISOString() } });
-    setTimeout(() => setPointsBurst(0), 1600);
-  }
-
-  async function finishExercise1ThenStart2(){
-    await saveProgressToProfile({ supabase, step: 'exercise_done', details: { when: new Date().toISOString() } });
-    bigConfettiShow();
-    awardPoints(50);
-
-    pushBubble(`✨ Nice work. That small win wires momentum.`);
-    setTimeout(() => {
-      pushBubble(`Let’s do one more quick alignment to lock this in.`);
-    }, 600);
-
-    // move to exercise 2 (ask DOB)
-    setTimeout(() => {
-      setPhase('exercise2_dob');
-      pushBubble(`Tell me your date of birth (MM/DD/YYYY). I’ll map the numerology to “${get().currentWish?.wish || 'your goal'}” and give you 3 aligned moves.`);
-    }, 1200);
-  }
-
-  function isDOB(s=''){
-    return /\b(0?[1-9]|1[0-2])[\/\-\.](0?[1-9]|[12][0-9]|3[01])[\/\-\.](19|20)\d{2}\b/.test(s.trim());
-  }
-
-  async function runExercise2WithDOB(dob){
-    setPhase('exercise2_work');
-    // steer Genie with a system hint — your /api/chat should consider this key if present
-    const wish = get().currentWish?.wish || 'my goal';
-    const systemHint =
-`You are a supportive manifestation coach. Use basic numerology with DOB: ${dob}.
-Context user's primary goal: "${wish}".
-1) Derive life path or core numerology quickly (no long tables).
-2) Explain 1-2 relevant traits in plain language (2-3 sentences).
-3) Give exactly 3 specific, doable actions for the next 24 hours, aligned to goal + numerology.
-Keep it upbeat, concise, and practical.`;
-
-    const reply = await callGenie({ text: 'Please analyze and advise.', systemHint });
-    pushBubble(reply);
-
-    // close day + bonus pop
-    await saveProgressToProfile({ supabase, step: 'exercise2_done', details: { dob, at: new Date().toISOString() } });
-    awardPoints(75);
-    bigConfettiShow();
-
-    // daily wrap
-    setTimeout(() => {
-      pushBubble(`That’s a strong finish for today. Come back tomorrow for your next dose — or chat freely with me now.`);
-      setPhase('free');
-    }, 600);
-  }
-
-  /* ---------------------------- send handler ---------------------------- */
-
+  // send handler (now main scripted path is exercise → done)
   async function send(){
     const text = input.trim();
     if (!text || thinking) return;
@@ -342,32 +397,27 @@ Keep it upbeat, concise, and practical.`;
     setS(get());
 
     try {
-      if (phase === 'exercise1') {
+      // ----- PHASE: exercise -----
+      if (chatScriptPhase === 'exercise') {
         if (/^done\b/i.test(text)) {
-          await finishExercise1ThenStart2();
-          setThinking(false);
+          setChatScriptPhase('win');
+          await finishExerciseAndWrap();
+          setChatScriptPhase('free');
           return;
         } else {
-          pushBubble(`No rush. Do the 2-min reset, then type **done** when finished.`);
-          setThinking(false);
+          pushThread({
+            role:'assistant',
+            content: `No rush. Do the 2-min reset, then type **done** when finished.`
+          });
+          setS(get());
           return;
         }
       }
 
-      if (phase === 'exercise2_dob') {
-        if (isDOB(text)) {
-          await runExercise2WithDOB(text);
-          setThinking(false);
-          return;
-        } else {
-          pushBubble(`Got it. Please send DOB like **MM/DD/YYYY** (e.g., 08/14/1990).`);
-          setThinking(false);
-          return;
-        }
-      }
-
-      // FREE CHAT
-      const combined = S?.prompt_spec?.prompt ? `${S.prompt_spec.prompt}\n\nUser: ${text}` : text;
+      // ----- FREE CHAT -----
+      const combined = S?.prompt_spec?.prompt
+        ? `${S.prompt_spec.prompt}\n\nUser: ${text}`
+        : text;
 
       try {
         const { goal, belief } = detectBeliefFrom(combined);
@@ -386,101 +436,65 @@ Keep it upbeat, concise, and practical.`;
       } catch {}
 
       const reply = await callGenie({ text: combined });
-      pushBubble(reply);
+      pushThread({ role:'assistant', content: reply });
+      setS(get());
     } catch {
-      pushBubble('The lamp flickered. Try again in a moment.');
+      pushThread({ role:'assistant', content: 'The lamp flickered. Try again in a moment.' });
+      setS(get());
     } finally {
       setThinking(false);
     }
   }
 
   function onKey(e){
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault(); send();
+    }
   }
 
-  /* -------------------------- staged handlers --------------------------- */
+  /* ---------------- staged handlers ---------------- */
+  function onLooksRight() {
+    const plan = prescribe(parsed || {});
+    setFirstRx(plan);
+    setStage('rx');
+    setTimeout(() => {
+      const el = document.getElementById("first-prescription");
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 0);
+  }
+  function onTweak() {  // <-- MISSING BEFORE (caused build failure)
+    setShowTweaks(true);
+  }
+  function onApplyTweaks(next){
+    setParsed({
+      outcome: next.outcome || parsed.outcome,
+      block: next.block || parsed.block,
+      state: (next.state ?? parsed.state) || null
+    });
+    setShowTweaks(false);
+    onLooksRight();
+  }
 
-/* --------------------------- staged handlers ---------------------------- */
-
-function onLooksRight() {
-  // mark the wizard as done for today (keeps your tracking consistent)
-  markWizardDoneToday();
-
-  // enter Chat right away (skip RX)
-  setStage('chat');
-  setOverlayVisible(false);
-
-  // we start in the exercise phase (no confirm round 2)
-  setChatScriptPhase('exercise');
-
-  // build a friendly recap and pace the bubbles
-  const st = get();
-  const fn    = st.firstName || 'Friend';
-  const wish  = st.currentWish?.wish  || 'your goal';
-  const block = st.currentWish?.block || '';
-  const micro = st.currentWish?.micro || '';
-
-  // 1) quick hello (human tone)
-  pushThread({ role: 'assistant', content: `hey ${fn} — glad you’re here.` });
-  setS(get());
-
-  // 2) reflect the goal (single short bubble)
-  setTimeout(() => {
-    pushThread({ role: 'assistant', content: `I’m hearing your main aim is “${wish}”.` });
-    setS(get());
-  }, 650);
-
-  // 3) (optional) mention the snag in one line
-  setTimeout(() => {
-    if (block && block.toLowerCase() !== 'nothing') {
-      pushThread({ role: 'assistant', content: `and the thing that trips it up is “${block}”.` });
-      setS(get());
-    }
-  }, 1200);
-
-  // 4) gentle “let’s begin” nudge
-  setTimeout(() => {
-    pushThread({ role: 'assistant', content: `alright ${fn}, let’s get started.` });
-    setS(get());
-  }, 1600);
-
-  // 5) start the 2-min reset (the part that waits for **done**)
-  setTimeout(() => {
-    const goal = get().currentWish?.wish || 'your goal';
-    const msg = [
-      `Great — let’s get you a quick win now.`,
-      ``,
-      `🧠 2-Min Focus Reset`,
-      `1) Sit tall. Close your eyes.`,
-      `2) Inhale for 4… hold 2… exhale for 6. Do 6 breaths.`,
-      `3) On each exhale, picture taking the tiniest step toward “${goal}”.`,
-      ``,
-      `Type **done** when you finish.`
-    ].join('\n');
-
-    pushThread({ role:'assistant', content: msg });
-    setS(get());
-  }, 2200);
-
-  // keep the scroll pinned as messages land
-  setTimeout(() => {
-    const el = listRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, 2300);
-}
-
-
-  // overlay tap → enter chat (intro bubbles with pacing)
+  // overlay tap → enter chat (now: greet → short line → exercise, with pacing)
   async function dismissOverlay(){
-    set({ thread: [] }); // fresh thread
-    await markWizardDoneToday();
+    // reset any old thread so we don't load a previous convo
+    set({ thread: [] });
 
+    // stamp wizard done for today
+    markWizardDoneToday();
+
+    // flip UI to chat now
     setStage('chat');
     setOverlayVisible(false);
 
-    // run the three intro bubbles with delays, then show CTA
-    setPhase('intro');
-    autoIntroSequence();
+    // set phase to exercise immediately (no confirm round 2)
+    setChatScriptPhase('exercise');
+
+    // staggered intro messages
+    const fn = get().firstName || 'Friend';
+    pushHumanRecap();
+    setTimeout(() => { pushLetsStart(fn); }, 700);
+    setTimeout(() => { pushFirstExercise(); }, 1500);
 
     setTimeout(() => {
       const el = listRef.current;
@@ -488,7 +502,7 @@ function onLooksRight() {
     }, 1600);
   }
 
-  /* ------------------------------- styles ------------------------------- */
+  // overlay styles + points pop
   const overlayStyles = `
 @keyframes popIn { 0% { transform: scale(.7); opacity: 0 } 60% { transform: scale(1.08); opacity:1 } 100% { transform: scale(1) } }
 @keyframes floaty { 0% { transform: translateY(0) } 50% { transform: translateY(-6px) } 100% { transform: translateY(0) } }
@@ -500,12 +514,11 @@ function onLooksRight() {
 }
 `;
 
-  /* -------------------------------- UI --------------------------------- */
   return (
     <>
       <style dangerouslySetInnerHTML={{__html: overlayStyles}} />
 
-      {/* Debug pill */}
+      {/* ---- DEBUG PILL + PANEL ---- */}
       <div style={{ display:'flex', justifyContent:'center', margin:'10px 0' }}>
         <button
           onClick={() => setDebugOn(v => !v)}
@@ -557,35 +570,40 @@ function onLooksRight() {
               <div style={{ fontSize:12, opacity:.8, marginBottom:6 }}>firstName</div>
               <pre style={{ margin:0, fontSize:12, whiteSpace:'pre-wrap' }}>{pretty(S.firstName)}</pre>
             </div>
+
             <div style={{ background:'#0f172a', padding:10, borderRadius:8 }}>
               <div style={{ fontSize:12, opacity:.8, marginBottom:6 }}>vibe</div>
               <pre style={{ margin:0, fontSize:12, whiteSpace:'pre-wrap' }}>{pretty(S.vibe)}</pre>
             </div>
+
             <div style={{ background:'#0f172a', padding:10, borderRadius:8 }}>
               <div style={{ fontSize:12, opacity:.8, marginBottom:6 }}>currentWish</div>
               <pre style={{ margin:0, fontSize:12, whiteSpace:'pre-wrap' }}>{pretty(S.currentWish)}</pre>
             </div>
+
             <div style={{ background:'#0f172a', padding:10, borderRadius:8 }}>
               <div style={{ fontSize:12, opacity:.8, marginBottom:6 }}>prompt_spec</div>
               <pre style={{ margin:0, fontSize:12, whiteSpace:'pre-wrap' }}>{pretty(S.prompt_spec)}</pre>
             </div>
+
             <div style={{ gridColumn:'1 / span 2', background:'#0f172a', padding:10, borderRadius:8 }}>
               <div style={{ fontSize:12, opacity:.8, marginBottom:6 }}>lastChatPayload → /api/chat</div>
               <pre style={{ margin:0, fontSize:12, overflowX:'auto' }}>
                 {pretty(lastChatPayload ?? { info: "No chat call yet. Send a message to populate lastChatPayload." })}
               </pre>
             </div>
+
             <div style={{ gridColumn:'1 / span 2', background:'#0f172a', padding:10, borderRadius:8 }}>
               <div style={{ fontSize:12, opacity:.8, marginBottom:6 }}>softConfirm</div>
               <pre style={{ margin:0, fontSize:12, whiteSpace:'pre-wrap' }}>
-                {pretty({ parsed, confirmVariant, firstRx, stage, overlayVisible, phase })}
+                {pretty({ parsed, confirmVariant, firstRx, stage, overlayVisible, chatScriptPhase })}
               </pre>
             </div>
           </div>
         </div>
       )}
 
-      {/* ---- Main Card ---- */}
+      {/* ---- Main Card (staged) ---- */}
       <div style={{ maxWidth: 980, margin: '12px auto', padding: '0 10px', position:'relative' }}>
         {/* points burst */}
         {pointsBurst > 0 && (
@@ -606,7 +624,7 @@ function onLooksRight() {
               <div style={{ fontWeight:900, fontSize:18 }}>Genie Chat</div>
             </div>
 
-            {/* Stage: confirm card appears BEFORE chat */}
+            {/* Stage: confirm card still appears BEFORE chat, unchanged */}
             {stage === 'confirm' && (
               <>
                 {showTweaks && (
@@ -632,7 +650,7 @@ function onLooksRight() {
               </>
             )}
 
-            {/* Stage: rx (prescription; button opens overlay to enter chat) */}
+            {/* Stage: rx (prescription only; the card button opens overlay) */}
             {stage === 'rx' && firstRx && (
               <div id="first-prescription" style={{ marginBottom: 8 }}>
                 <PrescriptionCard
@@ -708,7 +726,6 @@ function onLooksRight() {
 
                   {uiOffer ? (
                     <div style={{ marginTop: 8 }}>
-                      {/* reuse the card for offers */}
                       <PrescriptionCard
                         title={uiOffer.title}
                         why={uiOffer.why}
@@ -724,11 +741,11 @@ function onLooksRight() {
                   )}
                 </div>
 
-                {/* “Yes, I’m ready” CTA (shown at end of intro sequence) */}
-                {showReadyCTA && (
+                {/* Win CTA (appears after "done") */}
+                {showWinCTA && (
                   <div style={{ marginTop: 10, textAlign:'center' }}>
                     <button
-                      onClick={startExercise1}
+                      onClick={triggerExerciseOne}
                       style={{
                         appearance:'none',
                         padding:'12px 18px',
@@ -741,12 +758,11 @@ function onLooksRight() {
                         boxShadow:'0 8px 24px rgba(0,0,0,.18)'
                       }}
                     >
-                      Yes, I’m ready
+                      LET’S GO!
                     </button>
                   </div>
                 )}
 
-                {/* input row */}
                 <div style={{ display:'flex', gap:8, marginTop:10 }}>
                   <textarea
                     rows={1}
@@ -782,7 +798,7 @@ function onLooksRight() {
         </div>
       </div>
 
-      {/* Overlay that launches the chat */}
+      {/* Emoji overlay — shows above current stage; tap to continue */}
       {overlayVisible && (
         <div
           onClick={dismissOverlay}
