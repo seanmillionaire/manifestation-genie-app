@@ -1,6 +1,7 @@
 // components/Confirm/SoftConfirmBar.tsx
 import React from "react";
 import clsx from "clsx";
+import { useRouter } from "next/router";
 
 type Props = {
   outcome?: string | null;
@@ -15,6 +16,7 @@ const SoftConfirmBar: React.FC<Props> = ({
   onLooksRight,
   onTweak,
 }) => {
+  const router = useRouter();
   const o = (outcome || "").trim() || "your outcome";
   const b = (block || "").trim() || "a block";
 
@@ -46,12 +48,13 @@ const SoftConfirmBar: React.FC<Props> = ({
         <div className="min-w-0 flex-1">
           <p className="text-[15px] leading-snug text-slate-900 dark:text-slate-100">
             I read your notes: you want to <strong>“{o}”</strong>, but{" "}
-            <strong>“{b}”</strong> keeps holding you back. <br></br>If that’s right, I’ll prescribe
-            your first step. Confirm below.
+            <strong>“{b}”</strong> keeps holding you back. <br />If that’s right, I’ll
+            prescribe your first step. Confirm below.
           </p>
 
           {/* spaced buttons */}
           <div className="mt-3 flex flex-wrap items-center gap-3">
+            {/* YES button */}
             <button
               type="button"
               onClick={onLooksRight}
@@ -69,6 +72,22 @@ const SoftConfirmBar: React.FC<Props> = ({
               <span className="font-semibold">YES! Looks good</span>
             </button>
 
+            {/* EDIT button */}
+            <button
+              type="button"
+              onClick={() => router.push("/flow")}
+              aria-label="Edit answers"
+              className={clsx(
+                "inline-flex items-center justify-center",
+                "rounded-xl px-5 min-h-[44px] min-w-[44px]",
+                "bg-white text-slate-900 dark:bg-slate-800 dark:text-white",
+                "ring-1 ring-slate-300 dark:ring-slate-600",
+                "hover:bg-slate-50 dark:hover:bg-slate-700",
+                "focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/70"
+              )}
+            >
+              ✏️ <span className="ml-2 font-semibold">Edit</span>
+            </button>
           </div>
         </div>
       </div>
