@@ -10,7 +10,8 @@ import {
   type InputCtx,
   type Vibe,
   type Persona,
-} from "@/src/engine/exercises";
+} from "../../src/engine/exercises";
+
 
 // ---------- DOB numerology helpers (bug-fixed) ----------
 function toInt(n: string | number) {
