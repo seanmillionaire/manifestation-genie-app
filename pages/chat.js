@@ -583,17 +583,17 @@ function handleLooksRight() {
             {/* Stage: chat */}
             {stage === "chat" && (
               <>
-{/* --- Today Recap (with animated progress) --- */}
+{/* --- Today Recap (with circular progress) --- */}
 {(() => {
-  // Map the current phase → % complete
+  // Map phase → % complete
   const phaseToPct = (p) => {
     switch (p) {
-      case "intro": return 20;        // greeted + recap
-      case "exercise1": return 45;    // doing the 2-min reset
-      case "dob": return 65;          // numerology input
-      case "work": return 85;         // generating aligned actions
-      case "free": return 100;        // done for today (chat freely)
-      default: return 10;             // confirm or boot
+      case "intro":     return 20;
+      case "exercise1": return 45;
+      case "dob":       return 65;
+      case "work":      return 85;
+      case "free":      return 100;
+      default:          return 10;
     }
   };
   const pct = Math.max(0, Math.min(100, phaseToPct(phase)));
@@ -602,89 +602,94 @@ function handleLooksRight() {
   const block = S.currentSession?.block ?? S.currentWish?.block;
   const micro = S.currentSession?.micro ?? S.currentWish?.micro;
 
+  // Ring geometry (SVG units)
+  const R = 20;                            // radius
+  const C = 2 * Math.PI * R;               // circumference ≈ 125.66
+  const dash = C;
+  const offset = C * (1 - pct / 100);      // stroke-dashoffset for progress
+
   return (
     <div className="recap" aria-live="polite">
-      <div className="title">
-        {new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })} — Today’s Session
+      <div className="head">
+        <div className="title">
+          {new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}
+          {" — Today’s Session"}
+        </div>
+
+        {/* Circular Progress */}
+        <div className="ring" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct}
+             aria-label="Today's progress">
+          <svg className="svg" viewBox="0 0 48 48">
+            <defs>
+              <linearGradient id="ringGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%"   stopColor="#ffb74d" />
+                <stop offset="50%"  stopColor="#ff9800" />
+                <stop offset="100%" stopColor="#fb8c00" />
+              </linearGradient>
+            </defs>
+
+            {/* Track */}
+            <circle
+              cx="24" cy="24" r={R}
+              stroke="rgba(255,165,0,.25)"
+              strokeWidth="4"
+              fill="none"
+            />
+            {/* Progress */}
+            <circle
+              cx="24" cy="24" r={R}
+              stroke="url(#ringGrad)"
+              strokeWidth="5"
+              fill="none"
+              strokeLinecap="round"
+              strokeDasharray={dash}
+              strokeDashoffset={offset}
+              style={{ transition: "stroke-dashoffset 400ms ease" }}
+              transform="rotate(-90 24 24)"  // start at 12 o’clock
+            />
+          </svg>
+          <div className="pct">{pct}%</div>
+        </div>
       </div>
+
       {wish  ? <div><strong>Wish:</strong> {wish}</div>   : null}
       {block ? <div><strong>Block:</strong> {block}</div> : null}
       {micro ? <div><strong>Micro-step:</strong> {micro}</div> : null}
 
-      {/* Progress bar */}
-      <div className="progWrap" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct}
-           aria-label="Today's progress">
-        <div className="track">
-          <div className="fill" style={{ width: `${pct}%` }}>
-            <span className="shine" aria-hidden="true" />
-          </div>
-        </div>
-        <div className="pct">{pct}%</div>
-      </div>
-
       <style jsx>{`
         .recap {
           margin: 8px 0 12px;
-          padding: 10px 12px;
+          padding: 12px;
           border-radius: 10px;
           background: #fff8e6;
           border: 1px solid rgba(255,165,0,.35);
           font-size: 14px;
           line-height: 1.5;
         }
-        .title { font-weight: 800; margin-bottom: 4px; }
-
-        .progWrap {
+        .head {
           display: grid;
           grid-template-columns: 1fr auto;
           align-items: center;
-          gap: 10px;
-          margin-top: 10px;
+          gap: 12px;
+          margin-bottom: 6px;
         }
-        .track {
+        .title { font-weight: 800; }
+        .ring {
           position: relative;
-          height: 10px;
-          border-radius: 999px;
-          background: linear-gradient(180deg, #fff1cc, #ffe2a3);
-          border: 1px solid rgba(255,165,0,.35);
-          overflow: hidden;
+          width: 52px; height: 52px;
         }
-        .fill {
-          position: relative;
-          height: 100%;
-          border-radius: 999px;
-          background: linear-gradient(90deg, #ffb74d, #ff9800, #fb8c00);
-          box-shadow: 0 0 16px rgba(255,153,0,.45) inset;
-          transition: width 300ms ease; /* feels responsive but gentle */
-          will-change: width;
-        }
-        .shine {
-          position: absolute;
-          top: -40%;
-          left: -20%;
-          width: 35%;
-          height: 180%;
-          transform: skewX(-20deg);
-          background: linear-gradient(90deg, rgba(255,255,255,0), rgba(255,255,255,.7), rgba(255,255,255,0));
-          opacity: .6;
-          animation: shimmer 1.6s linear infinite;
-          mix-blend-mode: screen;
+        .svg {
+          display: block;
+          width: 52px; height: 52px;
+          filter: drop-shadow(0 0 8px rgba(255,153,0,.25));
         }
         .pct {
-          font-weight: 900;
-          font-size: 12px;
-          color: #9a6a00;
-          min-width: 36px;
-          text-align: right;
+          position: absolute; inset: 0;
+          display: grid; place-items: center;
+          font-weight: 900; font-size: 12px; color: #9a6a00;
         }
-
-        @keyframes shimmer {
-          0%   { transform: translateX(-120%) skewX(-20deg); }
-          100% { transform: translateX(220%)  skewX(-20deg); }
-        }
-
         @media (prefers-reduced-motion: reduce) {
-          .shine { animation: none; }
+          .svg circle[stroke-dashoffset] { transition: none !important; }
         }
       `}</style>
     </div>
