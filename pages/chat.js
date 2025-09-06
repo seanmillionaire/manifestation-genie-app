@@ -69,33 +69,36 @@ useEffect(() => {
     yesterday.setDate(yesterday.getDate() - 1);
     const yDate = yesterday.toISOString().slice(0, 10);
 
-    if (state.lastSessionDate === yDate) {
-      const fn = state.firstName && state.firstName !== "Friend" ? state.firstName : "Friend";
-      const wish = state?.currentWish?.wish || "your wish";
-      const booster = "🔑💰🚀";
+ if (state.lastSessionDate === yDate) {
+  const fn = state.firstName && state.firstName !== "Friend" ? state.firstName : "Friend";
+  const wish = state?.currentWish?.wish || "your wish";
+  const booster = "🔑💰🚀";
 
-      const msgs = [
-        {
-          id: newId(),
-          role: "assistant",
-          content: `🌟 Welcome back, ${fn}. I’ve kept the energy flowing from yesterday’s wish: **${wish}**.`,
-        },
-        {
-          id: newId(),
-          role: "assistant",
-          content: `✨ Did any signals or opportunities show up yesterday? (yes/no)`,
-        },
-        {
-          id: newId(),
-          role: "assistant",
-          content: `Today’s booster code: ${booster}. Type it to lock in abundance flow.`,
-        },
-      ];
+  const msgs = [
+    { id: newId(), role: "assistant", content: `🌟 Welcome back, ${fn}. I’ve kept the energy flowing from yesterday’s wish: **${wish}**.` },
+    { id: newId(), role: "assistant", content: `✨ Did any signals or opportunities show up yesterday? (yes/no)` },
+    { id: newId(), role: "assistant", content: `Today’s booster code: ${booster}. Type it to lock in abundance flow.` },
+  ];
 
-      set({ ...state, messages: msgs, lastSessionDate: today });
-      setS(get());
-      return; // Day 2 seeded — stop here
-    }
+  const today = new Date().toISOString().slice(0, 10);
+  const todaySession = {
+    wish:  state?.currentWish?.wish  || "",
+    block: state?.currentWish?.block || "",
+    micro: state?.currentWish?.micro || "",
+    date:  today,
+  };
+
+  set({
+    ...state,
+    currentSession: todaySession,  // recap bar has data
+    thread: msgs,                  // renderable by ChatBubble list
+    lastSessionDate: today,
+    day2: { phase: "reflect", booster }, // 👈 mark Day-2 flow
+  });
+  setS(get());
+  return; // stop; Day-2 seeded
+}
+
 
     // Otherwise start a brand-new day thread (Day 1 or gap days)
     startNewDaySession({
