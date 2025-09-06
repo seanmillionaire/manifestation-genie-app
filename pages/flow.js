@@ -28,37 +28,48 @@ export default function Flow() {
     setFirstName(n);
   }, []);
 
-  const can = wish.trim() && micro.trim();
+  // ✅ strict boolean; avoids autofill/hydration oddities
+  const can = wish.trim().length > 0 && micro.trim().length > 0;
 
-async function lock() {
-  const current = {
-    wish: wish.trim(),
-    block: block.trim(),
-    micro: micro.trim(),
-    vibe: S.vibe,
-    date: new Date().toISOString().slice(0, 10),
-  };
-  const steps = generateChecklist(current);
-  set({ currentWish: current, lastWish: current, steps, phase: 'checklist' });
+  // (Optional but helpful) sync browser-restored values after back/refresh
+  useEffect(() => {
+    const w = document.querySelector('textarea[placeholder*="State it simply"]')?.value || '';
+    const m = document.querySelector('input[placeholder*="Send it"]')?.value || '';
+    if (w && !wish) setWish(w);
+    if (m && !micro) setMicro(m);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // run once
 
-  // 🆕 save wish to Supabase for Profile
-  try {
-    const { data: { session } } = await supabase.auth.getSession();
-    const uid = session?.user?.id;
-    if (uid) {
-      await supabase.from("wishes").insert({
-        user_id: uid,
-        title: current.wish,
-        note: current.block || null
-      });
+  async function lock() {
+    if (!can) return; // extra safety
+
+    const current = {
+      wish: wish.trim(),
+      block: block.trim(),
+      micro: micro.trim(),
+      vibe: S.vibe,
+      date: new Date().toISOString().slice(0, 10),
+    };
+    const steps = generateChecklist(current);
+    set({ currentWish: current, lastWish: current, steps, phase: 'checklist' });
+
+    // 🆕 save wish to Supabase for Profile
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const uid = session?.user?.id;
+      if (uid) {
+        await supabase.from("wishes").insert({
+          user_id: uid,
+          title: current.wish,
+          note: current.block || null
+        });
+      }
+    } catch (err) {
+      console.error("Error saving wish:", err.message);
     }
-  } catch (err) {
-    console.error("Error saving wish:", err.message);
+
+    router.push('/checklist');
   }
-
-  router.push('/checklist');
-}
-
 
   return (
     <main style={{ width: 'min(900px, 94vw)', margin: '30px auto' }}>
@@ -119,6 +130,7 @@ async function lock() {
           />
 
           <button
+            type="button"               // ✅ prevents implicit submit/reload
             onClick={lock}
             disabled={!can}
             style={{
