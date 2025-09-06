@@ -199,6 +199,31 @@ export default function App({ Component, pageProps }) {
           html,body{ margin:0; padding:0; background:var(--bg); color:var(--text);
             font-family:Poppins,system-ui,Arial; min-height:100%; }
           *{ box-sizing:border-box }
+          
+          /* --- Start badge animation --- */
+@keyframes mg-pulse {
+  0% { transform: scale(1); opacity: .7; }
+  70% { transform: scale(1.9); opacity: 0; }
+  100% { transform: scale(2); opacity: 0; }
+}
+.mg-badge {
+  position: absolute; top: -6px; right: -10px;
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 20px; height: 20px; padding: 0 6px;
+  border-radius: 9999px; background: var(--green); color: #fff;
+  font-size: 12px; font-weight: 700; line-height: 1;
+  box-shadow: 0 0 0 2px #fff; /* keeps it crisp on white headers */
+}
+.mg-badge-ping {
+  position: absolute; inset: 0; border-radius: 9999px;
+  background: var(--green); opacity: .35;
+  animation: mg-pulse 1.4s cubic-bezier(.3,0,.7,1) infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .mg-badge-ping { animation: none; display: none; }
+}
+/* --- End badge animation --- */
+
           .pageWrap{ display:flex; flex-direction:column; min-height:100vh; }
           main{ flex:1; }
           a:focus-visible{ outline: 3px solid var(--brand); outline-offset:2px; border-radius:10px; }
