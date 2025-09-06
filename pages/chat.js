@@ -49,21 +49,42 @@ export default function ChatPage() {
   const listRef = useRef(null);
 const { conversationId, setConversationId } = useGenieConversation();
 const [booted, setBooted] = useState(false);
+  
 // --- ensure we're in a fresh "today" thread; seed first message if empty
+// pages/chat.js
 useEffect(() => {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = new Date().toISOString().slice(0,10);
   let S = get() || {};
 
-  // 1) if someone navigated here without Flow today, mint a new session
   if (!S.lastSessionDate || S.lastSessionDate !== today) {
-    startNewDaySession({
-      wish: S?.currentWish?.wish || "",
-      block: S?.currentWish?.block || "",
-      micro: S?.currentWish?.micro || "",
-      vibe: S?.vibe || null,
-    });
-    S = get();
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yDate = yesterday.toISOString().slice(0,10);
+
+    // if last session was exactly yesterday → Day 2 flow
+    if (S.lastSessionDate === yDate) {
+      // seed special Day 2 messages
+      const fn = S.firstName && S.firstName !== "Friend" ? S.firstName : "Friend";
+      const wish = S?.currentWish?.wish || "your wish";
+      const booster = "🔑💰🚀";
+
+      const msgs = [
+        { id: newId(), role: "assistant",
+          content: `🌟 Welcome back, ${fn}. I’ve kept the energy flowing from yesterday’s wish: **${wish}**.` },
+        { id: newId(), role: "assistant",
+          content: `✨ Did any signals or opportunities show up yesterday? (yes/no)` },
+        { id: newId(), role: "assistant",
+          content: `Today’s booster code: ${booster}. Type it to lock in abundance flow.` },
+      ];
+      set({ ...S, messages: msgs, lastSessionDate: today });
+      return;
+    }
+
+    // else → normal Day 1/new session logic
+    startNewDaySession({...});
   }
+}, []);
+
 
   // 2) seed a clear first assistant message for today if the thread is empty
   const msgs = Array.isArray(S.messages) ? S.messages : [];
