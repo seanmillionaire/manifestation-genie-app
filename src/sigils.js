@@ -1,79 +1,14 @@
 // /src/sigils.js
-// Personalized Sri-Yantra style sigils for Manifestation Genie.
-// No deps. Exports a dynamic builder + a random fallback for legacy calls.
+// Compact, chat-friendly sigils (ASCII-only for stable monospace).
+// Everything is user-derived: name/goal/dob come from args or localStorage.
+// API: getPersonalSigil({ name, dob, goal, tokens?, size: "mini" | "wide" })
 
-export const SIGILS = [
-  // Fallbacks (kept for safety). We’ll still prefer the dynamic Sri sigil below.
-  {
-    name: "moneySeal",
-    art: `
-$$$$$$$$$$$$$$$$
-M   O   N   E   Y
-8888888888888888
-∞∞∞∞∞∞∞∞∞∞∞∞∞∞∞∞
-M   O   N   E   Y
-$$$$$$$$$$$$$$$$
-`.trim(),
-    decree: "The word MONEY is carved into your field. It cannot leave you. 🔮"
-  },
-  {
-    name: "flowCircuit",
-    art: `
-8888888888888888
-F   L   O   W
-$∞$∞$∞$∞$∞$∞$∞$∞$
-F   L   O   W
-8888888888888888
-`.trim(),
-    decree: "FLOW has been branded into your orbit. The current is already moving. ⚡️"
-  },
-  {
-    name: "richSigil",
-    art: `
-♆♆♆♆♆♆♆♆♆♆
-R   I   C   H
-$$$$$$$$$$$$$
-8888888888888
-R   I   C   H
-♆♆♆♆♆♆♆♆♆♆
-`.trim(),
-    decree: "RICH is written across your timeline. It cannot be erased. 💎"
-  },
-  {
-    name: "paidPortal",
-    art: `
-∞∞∞∞∞∞∞∞∞∞
-P   A   I   D
-88888888888
-$   $   $   $
-88888888888
-P   A   I   D
-∞∞∞∞∞∞∞∞∞∞
-`.trim(),
-    decree: "PAID is already sealed. Every channel bends to it. 🌀"
-  },
-  {
-    name: "cashFlood",
-    art: `
-$$$$$$$$$$$$$$$$
-C   A   S   H
-8888888888888888
-∞∞∞∞∞∞∞∞∞∞∞∞∞∞∞∞
-C   A   S   H
-$$$$$$$$$$$$$$$$
-`.trim(),
-    decree: "CASH floods in without resistance. The seal is live. 🌊"
-  }
-];
-
-// ---------- helpers ----------
-const sp = (s="") => s.toUpperCase().split("").join(" ");
+// ---------- tiny utils ----------
 const numbersFrom = (t="") => (t.match(/\d+/g) || []).join("");
 function formatMoney(n) {
   try { return new Intl.NumberFormat("en-US").format(Number(n)); } catch { return String(n); }
 }
 function lifePath(dobStr) {
-  // Very light life-path: sum digits; keep 11/22/33 as master if hit on the way.
   if (!dobStr) return null;
   const ds = (dobStr.match(/\d/g) || []).map(Number);
   if (!ds.length) return null;
@@ -83,73 +18,211 @@ function lifePath(dobStr) {
   while (v > 9 && !master(v)) v = sum(String(v).split("").map(Number));
   return v;
 }
-function center(line, width=29) {
-  // crude center for monospaced-ish feel (emoji width varies; good enough)
-  const len = line.length;
-  if (len >= width) return line;
-  const pad = Math.floor((width - len)/2);
-  return " ".repeat(pad) + line + " ".repeat(Math.max(0,width - len - pad));
+function topGoalTokens(goal, max=3) {
+  if (!goal) return [];
+  const words = String(goal)
+    .replace(/[^\w\s$%-]/g,"")
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, max)
+    .map(w => w.toUpperCase().slice(0, 12));
+  return words;
+}
+function padCenter(str, width) {
+  const len = str.length;
+  if (len >= width) return str.slice(0, width);
+  const left = Math.floor((width - len) / 2);
+  const right = width - len - left;
+  return " ".repeat(left) + str + " ".repeat(right);
+}
+function getAmbientUser() {
+  // non-blocking, browser-only read of previously saved app state
+  try {
+    if (typeof window !== "undefined") {
+      const name = (localStorage.getItem("mg_first_name") || "").trim();
+      const goal = (localStorage.getItem("mg_goal") || localStorage.getItem("mg_intent") || "").trim();
+      const dob  = (localStorage.getItem("mg_dob") || "").trim();
+      return {
+        name: name || undefined,
+        goal: goal || undefined,
+        dob:  dob  || undefined
+      };
+    }
+  } catch {}
+  return {};
 }
 
-// Build the Sri-Yantra style personalized sigil
-export function getPersonalSigil({ name="Friend", dob=null, goal=null } = {}) {
-  const NAME = sp((name || "Friend").slice(0,18));
-  const GOAL = (goal || "my goal").trim();
-  const digits = numbersFrom(GOAL);
-  const money = digits ? `$${formatMoney(digits)}` : "$888,888";
-  const lp = lifePath(dob);
-  const lpLine = lp ? `✨${dob} → ${lp} ✨` : "✨ 8 8 8 ✨";
+// ---------- ASCII Sri builder (mini & wide) ----------
+function buildAsciiSri({ name = "Friend", tokens = [], size = "mini" } = {}) {
+  // mini is tight for chat; wide is roomier if you need it
+  const inner = size === "wide" ? 57 : 41; // characters inside the border
+  const top = "+" + "-".repeat(inner) + "+";
+  const line = (s = "") => "|" + padCenter(s, inner) + "|";
 
-  // triangle bands (Sri-Yantra vibe) + user data woven in
-  const topPalm = "🌴".repeat(17);
-  const jewelBand = "🏡💎⚡🔥🌌💰🌌🔥⚡💎🏡";
-  const triA = "🌺🔺🔻🔺🔻🔺🔻🔺🔻🔺🌺";
-  const nameLine = `💎🔻   ${NAME}   🔺💎`;
+  // Lotus ring (tight)
+  const lotus1 = size === "wide"
+    ? "*******************  *   *  *******************"
+    : "************* * * *************";
+  const lotus2 = size === "wide"
+    ? ". . . . . . . . .    .    . . . . . . . . ."
+    : ". . . . .   .   . . . . .";
 
-  const grid = [
-    "🏠🔺💎🔺   🌌   🔻💎🔻🏠",
-    "🌴⚡💰🌴🔥   🏡   🌴🔥💰🌴⚡",
-    "🏠🔻💎🔻   🌌   🔺💎🔺🏠",
+  // Interlocked triangles (tight)
+  const tri = size === "wide"
+    ? [
+        "              /\\     /\\     /\\              ",
+        "            \\/  \\  /\\  /\\  /  \\/            ",
+        "          /\\  \\/  \\/ \\/  \\/  \\/  /\\         ",
+        "            \\/ /\\   ( )   /\\ \\/             ",
+        "          /\\  \\/  \\ /\\ /  \\/  /\\            ",
+        "            \\/ /\\    (  )   /\\ \\/            ",
+        "          /\\  \\/  /  \\/  \\  \\/  /\\          ",
+        "            \\/  /\\   /\\   /\\  \\/            ",
+        "              \\/      \\/      \\/             ",
+      ]
+    : [
+        "        /\\   /\\   /\\        ",
+        "      \\/  \\ /\\ /\\  \\/      ",
+        "     /\\ \\/ \\/  \\/ \\/ /\\     ",
+        "      \\/ /\\  ( ) /\\ \\/      ",
+        "     /\\ \\/ \\ /\\ \\/ /\\       ",
+        "      \\/ /\\  ( ) /\\ \\/      ",
+        "     /\\  \\/  \\/  \\/  /\\     ",
+        "      \\/  /\\  /\\  /\\ \\/     ",
+        "        \\/    \\/    \\/      ",
+      ];
+
+  const carets = "^".repeat(inner - 2);
+  const vees   = "v".repeat(inner - 2);
+
+  const NAME = `< ${String(name).trim().toUpperCase()} >`;
+  const mantra = "* PROOF * FLOW * ORDER *";
+
+  const tokenLine = tokens.length
+    ? tokens.map(t => `[${String(t).trim()}]`).join(" ")
+    : null;
+
+  const midStack = size === "wide"
+    ? padCenter("777" + padCenter(NAME, 33) + "369", inner)
+    : padCenter("7 " + padCenter(NAME, 21) + " 9", inner);
+
+  const lines = [
+    top,
+    line(size === "wide"
+      ? "   1111            LOTUS RING            8888   "
+      : " 111  LOTUS RING  888 "),
+    line(lotus1),
+    line(lotus2),
+    line(""),
+    ...tri.map(t => line(t)),
+    line(""),
+    line(" " + carets.slice(0, inner - 2) + " "),
+    line(" " + vees.slice(0, inner - 2) + " "),
+    line(midStack),
+    line(" " + carets.slice(0, inner - 2) + " "),
+    line(" " + vees.slice(0, inner - 2) + " "),
+    line(""),
+    ...(tokenLine ? [line(padCenter(tokenLine, inner)), line("")] : []),
+    line(padCenter(mantra, inner)),
+    top
   ];
 
-  const wheel = [
-    "🌀🌀🌀🌀🌀🌀🌀",
-    "💎   🏡   💎",
-    "⚡   🔒   ⚡",
-    "💰   🏹   💰",
-    "🌴   🔥   🌴",
-    "🌀🌀🌀🌀🌀🌀🌀",
-  ];
+  return lines.map(s => s.replace(/\s+$/g, "")).join("\n");
+}
 
-  const footerA = "🏡🏡🏡   META → ORO → FLUJO   🏡🏡🏡";
-  const footerB = "🌴💰🌴   VENTA SELLADA 💎   🌴💰🌴";
-  const footerC = "⚡🔥⚡   ABUNDANCIA LIBERADA 🌌  ⚡🔥⚡";
+// ---------- compact ASCII fallbacks (kept; never mention founders) ----------
+export const SIGILS = [
+  {
+    name: "moneySealMini",
+    art: `
++---------------------------+
+|        M O N E Y          |
+|  $$$$$$$  $$$$$$$  $$$$$  |
+|   88888    88888    888   |
+|  $$$$$$$  $$$$$$$  $$$$$  |
+|        M O N E Y          |
++---------------------------+
+`.trim(),
+    decree: "MONEY is carved into your field. It cannot leave you."
+  },
+  {
+    name: "flowCircuitMini",
+    art: `
++---------------------------+
+|          F L O W          |
+|  8-8-8   8-8-8   8-8-8    |
+|  $-$-$   $-$-$   $-$-$    |
+|          F L O W          |
++---------------------------+
+`.trim(),
+    decree: "FLOW is branded into your orbit. The current is already moving."
+  },
+  {
+    name: "richSigilMini",
+    art: `
++---------------------------+
+|          R I C H          |
+|  $$$$$   88888   $$$$$    |
+|          R I C H          |
++---------------------------+
+`.trim(),
+    decree: "RICH is written across your timeline. It cannot be erased."
+  },
+  {
+    name: "paidPortalMini",
+    art: `
++---------------------------+
+|          P A I D          |
+|   $$$     888     $$$     |
+|          P A I D          |
++---------------------------+
+`.trim(),
+    decree: "PAID is already sealed. Every channel bends to it."
+  },
+  {
+    name: "cashFloodMini",
+    art: `
++---------------------------+
+|          C A S H          |
+|  $$$$$$$  $$$$$$$  $$$$$  |
+|          C A S H          |
++---------------------------+
+`.trim(),
+    decree: "CASH floods in without resistance. The seal is live."
+  }
+];
 
-  const art = [
-    topPalm,
-    center(jewelBand),
-    center(triA),
-    center(nameLine),
-    center(triA),
-    center(jewelBand),
-    "",
-    center(money),
-    center(lpLine),
-    "",
-    ...grid.map(center),
-    "",
-    ...wheel.map(center),
-    "",
-    footerA,
-    footerB,
-    footerC,
-    "",
-    topPalm
-  ].join("\n");
+// ---------- primary builders (no hard-coded founder tokens) ----------
+export function getPersonalSigil({
+  name,
+  dob,
+  goal,
+  tokens,           // optional explicit tokens; overrides auto-build
+  size = "mini"
+} = {}) {
+  const ambient = getAmbientUser();
+  const personName = (name || ambient.name || "Friend").slice(0, 18);
+  const personGoal = goal ?? ambient.goal ?? "";
 
-  const decree = `It is sealed. ${GOAL} is complete and paid. $ flows to ${name}. 🔮`;
+  // auto tokens: goal words, plus numeric $ from goal, plus Life Path (if dob present)
+  let autoTokens = topGoalTokens(personGoal, size === "wide" ? 4 : 3);
 
-  // Always return ASCII + decree together
+  const digits = numbersFrom(personGoal);
+  if (digits) autoTokens.push(`$${formatMoney(digits)}`);
+
+  const lpVal = lifePath(dob || ambient.dob);
+  if (lpVal) autoTokens.push(`LP:${lpVal}`);
+
+  // if caller passes tokens, use them; else use auto (may be empty; we skip the line if empty)
+  const finalTokens = Array.isArray(tokens) ? tokens.slice(0, size === "wide" ? 5 : 3) : autoTokens.slice(0, size === "wide" ? 5 : 3);
+
+  const art = buildAsciiSri({ name: personName, tokens: finalTokens, size });
+
+  const decree =
+    personGoal && personGoal.trim()
+      ? `It is sealed. “${personGoal.trim()}” completes and pays. $ flows to ${personName}.`
+      : `It is sealed. Flow returns on command. $ flows to ${personName}.`;
+
   return `${art}\n\n${decree}`;
 }
 
@@ -160,11 +233,17 @@ export function getRandomSigil() {
   return `${s.art}\n\n${s.decree}`;
 }
 
-// Smart chooser used by API: prefer personal; else fallback.
-export function getDynamicSigil({ name, dob, goal } = {}) {
-  // If we have any personal data, build the Sri-Yantra version.
-  if ((name && name.trim()) || (dob && /\d/.test(dob)) || (goal && goal.trim())) {
-    return getPersonalSigil({ name, dob, goal });
+// Smart chooser used by API: prefer personal ASCII; else fallback.
+export function getDynamicSigil({ name, dob, goal, tokens, size="mini" } = {}) {
+  const ambient = getAmbientUser();
+  const hasPersonal =
+    (name && name.trim()) ||
+    (goal && goal.trim()) ||
+    (dob && /\d/.test(dob)) ||
+    ambient.name || ambient.goal || ambient.dob;
+
+  if (hasPersonal) {
+    return getPersonalSigil({ name, dob, goal, tokens, size });
   }
   return getRandomSigil();
 }
