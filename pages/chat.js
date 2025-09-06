@@ -12,7 +12,7 @@ import { parseAnswers, scoreConfidence, variantFromScore } from "../src/features
 import { detectBeliefFrom, recommendProduct } from "../src/engine/recommendProduct";
 import { hydrateFirstNameFromSupabase } from "../src/userName";
 import ChatBubble from "../components/Chat/ChatBubble";
-
+import { startNewDaySession } from "../src/flowState";
 
 /* tiny utils */
 function escapeHTML(s = "") {
@@ -49,6 +49,47 @@ export default function ChatPage() {
   const listRef = useRef(null);
 const { conversationId, setConversationId } = useGenieConversation();
 const [booted, setBooted] = useState(false);
+// --- ensure we're in a fresh "today" thread; seed first message if empty
+useEffect(() => {
+  const today = new Date().toISOString().slice(0, 10);
+  let S = get() || {};
+
+  // 1) if someone navigated here without Flow today, mint a new session
+  if (!S.lastSessionDate || S.lastSessionDate !== today) {
+    startNewDaySession({
+      wish: S?.currentWish?.wish || "",
+      block: S?.currentWish?.block || "",
+      micro: S?.currentWish?.micro || "",
+      vibe: S?.vibe || null,
+    });
+    S = get();
+  }
+
+  // 2) seed a clear first assistant message for today if the thread is empty
+  const msgs = Array.isArray(S.messages) ? S.messages : [];
+  if (msgs.length === 0) {
+    const w = S?.currentSession?.wish || S?.currentWish?.wish || "";
+    const b = S?.currentSession?.block || S?.currentWish?.block || "";
+    const m = S?.currentSession?.micro || S?.currentWish?.micro || "";
+    const dateNice = new Date().toLocaleDateString(undefined, {
+      weekday: "long", month: "long", day: "numeric"
+    });
+
+    const first = {
+      id: `a-${Date.now()}`,
+      role: "assistant",
+      content: [
+        `✨ **${dateNice} — New Session**`,
+        w ? `**Today's wish:** ${w}` : null,
+        b ? `**Biggest block:** ${b}` : null,
+        m ? `**Your micro-step:** ${m}` : null,
+        `I'm with you—ready to move this forward right now. What feels like the very first nudge?`
+      ].filter(Boolean).join("\n"),
+    };
+
+    set({ ...S, messages: [first] });
+  }
+}, []);
 
 // hydrate existing conversation on refresh
 useEffect(() => {
@@ -556,6 +597,33 @@ function handleLooksRight() {
             {/* Stage: chat */}
             {stage === "chat" && (
               <>
+              {/* --- Today Recap (always visible) --- */}
+<div
+  style={{
+    margin: "8px 0 12px",
+    padding: "10px 12px",
+    borderRadius: 10,
+    background: "#fff8e6",
+    border: "1px solid rgba(255,165,0,.35)",
+    fontSize: 14,
+    lineHeight: 1.5,
+  }}
+  aria-live="polite"
+>
+  <div style={{ fontWeight: 800, marginBottom: 4 }}>
+    {new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })} — Today’s Session
+  </div>
+  { (S.currentSession?.wish ?? S.currentWish?.wish) ? (
+    <div><strong>Wish:</strong> {S.currentSession?.wish ?? S.currentWish?.wish}</div>
+  ) : null }
+  { (S.currentSession?.block ?? S.currentWish?.block) ? (
+    <div><strong>Block:</strong> {S.currentSession?.block ?? S.currentWish?.block}</div>
+  ) : null }
+  { (S.currentSession?.micro ?? S.currentWish?.micro) ? (
+    <div><strong>Micro-step:</strong> {S.currentSession?.micro ?? S.currentWish?.micro}</div>
+  ) : null }
+</div>
+
                 <div
                   ref={listRef}
                   style={{
