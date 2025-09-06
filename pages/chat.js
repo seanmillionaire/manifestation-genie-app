@@ -688,99 +688,108 @@ Keep it upbeat, concise, and practical.`;
             {/* Stage: chat */}
             {stage === "chat" && (
               <>
-                {/* --- Today Recap (compact + circular progress) --- */}
-                {(() => {
-                  let pct = 75;
-                  const d2phase = S.day2?.phase || null;
-                  if (d2phase === "affirm") pct = 78;
-                  if (d2phase === "done")   pct = 80;
+        {/* --- One-line Today Notification Bar --- */}
+{(() => {
+  // baseline 75; +3 while waiting affirmation; +5 after success
+  let pct = 75;
+  const d2phase = S.day2?.phase || null;
+  if (d2phase === "booster") pct = 78;
+  if (d2phase === "done")    pct = 80;
 
-                  const wish  = S.currentSession?.wish  ?? S.currentWish?.wish;
-                  const block = S.currentSession?.block ?? S.currentWish?.block;
-                  const micro = S.currentSession?.micro ?? S.currentWish?.micro;
+  const wish  = S.currentSession?.wish  ?? S.currentWish?.wish;
+  const block = S.currentSession?.block ?? S.currentWish?.block;
+  const micro = S.currentSession?.micro ?? S.currentWish?.micro;
 
-                  const R = 18;
-                  const C = 2 * Math.PI * R;
-                  const offset = C * (1 - pct / 100);
+  const dateNice = new Date().toLocaleDateString(undefined, {
+    weekday: "long", month: "long", day: "numeric",
+  });
 
-                  return (
-                    <div className="recap" aria-live="polite">
-                      <div className="left">
-                        <div className="title">
-                          {new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })} — Today
-                        </div>
-                        <div className="line">
-                          {wish  ? <span><strong>Wish:</strong> {wish}</span> : null}
-                          {block ? <span><strong>Block:</strong> {block}</span> : null}
-                          {micro ? <span><strong>Step:</strong> {micro}</span> : null}
-                        </div>
-                      </div>
+  const text = [
+    `${dateNice} — Today`,
+    wish  ? `Wish: ${wish}`   : null,
+    block ? `Block: ${block}` : null,
+    micro ? `Step: ${micro}`  : null,
+  ].filter(Boolean).join("  |  ");
 
-                      <div
-                        className={`ring ${ringGlow ? "glow" : ""}`}
-                        role="progressbar"
-                        aria-valuemin={0}
-                        aria-valuemax={100}
-                        aria-valuenow={pct}
-                        aria-label="Today's progress"
-                      >
-                        <svg className="svg" viewBox="0 0 44 44">
-                          <defs>
-                            <linearGradient id="ringGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-                              <stop offset="0%"   stopColor="#ffb74d" />
-                              <stop offset="50%"  stopColor="#ff9800" />
-                              <stop offset="100%" stopColor="#fb8c00" />
-                            </linearGradient>
-                          </defs>
-                          <circle cx="22" cy="22" r={R} stroke="#ffe0a3" strokeWidth="4" fill="none" />
-                          <circle
-                            cx="22" cy="22" r={R}
-                            stroke="url(#ringGrad)" strokeWidth="5" fill="none" strokeLinecap="round"
-                            strokeDasharray={C} strokeDashoffset={offset}
-                            transform="rotate(-90 22 22)"
-                            style={{ transition: "stroke-dashoffset 400ms ease" }}
-                          />
-                        </svg>
-                        <div className="pct">{pct}%</div>
-                      </div>
+  // ring math
+  const R = 14;
+  const C = 2 * Math.PI * R;
+  const offset = C * (1 - pct / 100);
 
-                      <style jsx>{`
-                        .ring.glow .svg { animation: ringPulse 1000ms ease-out both; }
-                        @keyframes ringPulse {
-                          0%   { transform: scale(1);   filter: drop-shadow(0 0 0 rgba(255,153,0,0)); }
-                          40%  { transform: scale(1.06); filter: drop-shadow(0 0 14px rgba(255,153,0,.45)); }
-                          100% { transform: scale(1);   filter: drop-shadow(0 0 0 rgba(255,153,0,0)); }
-                        }
-                        .recap {
-                          display: flex;
-                          align-items: center;
-                          justify-content: space-between;
-                          gap: 10px;
-                          padding: 6px 10px;
-                          border-radius: 8px;
-                          background: #fff8e6;
-                          border: 1px solid rgba(255,165,0,.35);
-                          font-size: 13px;
-                          line-height: 1.3;
-                          margin: 4px 0 8px;
-                        }
-                        .left { min-width: 0; }
-                        .title { font-weight: 700; margin-bottom: 2px; }
-                        .line {
-                          display: flex; gap: 8px; flex-wrap: nowrap;
-                          white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-                        }
-                        .line > span:not(:last-child)::after { content: " | "; opacity: .5; margin-left: 8px; }
-                        .ring { position: relative; width: 44px; height: 44px; flex: 0 0 auto; }
-                        .svg { display: block; width: 44px; height: 44px; filter: drop-shadow(0 0 6px rgba(255,153,0,.18)); }
-                        .pct { position: absolute; inset: 0; display: grid; place-items: center; font-weight: 800; font-size: 11px; color: #9a6a00; }
-                        @media (prefers-reduced-motion: reduce) {
-                          .svg circle[stroke-dashoffset] { transition: none !important; }
-                        }
-                      `}</style>
-                    </div>
-                  );
-                })()}
+  return (
+    <div className="notifBar" title={text} aria-live="polite">
+      <div className="notifText">{text}</div>
+
+      <div
+        className={`notifRing ${ringGlow ? "glow" : ""}`}
+        role="progressbar"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={pct}
+        aria-label="Today's progress"
+      >
+        <svg viewBox="0 0 36 36" className="svg">
+          <defs>
+            <linearGradient id="ringGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%"   stopColor="#ffb74d" />
+              <stop offset="50%"  stopColor="#ff9800" />
+              <stop offset="100%" stopColor="#fb8c00" />
+            </linearGradient>
+          </defs>
+          <circle cx="18" cy="18" r={R} stroke="#ffe0a3" strokeWidth="3" fill="none" />
+          <circle
+            cx="18" cy="18" r={R}
+            stroke="url(#ringGrad)" strokeWidth="4" fill="none" strokeLinecap="round"
+            strokeDasharray={C} strokeDashoffset={offset}
+            transform="rotate(-90 18 18)"
+            style={{ transition: "stroke-dashoffset 400ms ease" }}
+          />
+        </svg>
+      </div>
+
+      <style jsx>{`
+        .notifBar {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          padding: 4px 8px;
+          border-radius: 8px;
+          background: #fff8e6;
+          border: 1px solid rgba(255,165,0,.35);
+          font-size: 12px;
+          line-height: 1;
+          margin: 4px 0 8px;
+          white-space: nowrap;
+          overflow: hidden;
+        }
+        .notifText {
+          min-width: 0;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+        .notifRing {
+          width: 32px; height: 32px; flex: 0 0 auto; position: relative;
+          filter: drop-shadow(0 0 4px rgba(255,153,0,.15));
+        }
+        .notifRing.glow .svg { animation: ringPulse 900ms ease-out both; }
+        .svg { display: block; width: 32px; height: 32px; }
+        @keyframes ringPulse {
+          0%   { transform: scale(1);   filter: drop-shadow(0 0 0 rgba(255,153,0,0)); }
+          40%  { transform: scale(1.06); filter: drop-shadow(0 0 12px rgba(255,153,0,.45)); }
+          100% { transform: scale(1);   filter: drop-shadow(0 0 0 rgba(255,153,0,0)); }
+        }
+        @media (max-width: 480px) {
+          .notifBar { font-size: 11px; padding: 4px 6px; }
+          .notifRing { width: 28px; height: 28px; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .svg circle[stroke-dashoffset] { transition: none !important; }
+        }
+      `}</style>
+    </div>
+  );
+})()}
+
 
                 {/* Thread */}
                 <div
