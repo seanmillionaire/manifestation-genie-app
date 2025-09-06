@@ -473,21 +473,7 @@ function handleLooksRight() {
     <>
       <style dangerouslySetInnerHTML={{ __html: overlayStyles }} />
 
-      {/* Debug pill */}
-      <div style={{ display: "flex", justifyContent: "center", margin: "10px 0" }}>
-        <button
-          onClick={() => setDebugOn((v) => !v)}
-          style={{
-            fontSize: 12, fontWeight: 800, letterSpacing: .3,
-            background: debugOn ? "#dcfce7" : "#e5e7eb",
-            color: "#111", border: "1px solid rgba(0,0,0,0.15)",
-            borderRadius: 999, padding: "6px 10px", cursor: "pointer",
-          }}
-          aria-pressed={debugOn}
-        >
-          Debug: {debugOn ? "ON" : "OFF"}
-        </button>
-      </div>
+
 
       {debugOn && (
         <div style={{
@@ -702,6 +688,21 @@ function handleLooksRight() {
                 </div>
               </>
             )}
+                    {/* Debug pill */}
+      <div style={{ display: "flex", justifyContent: "center", margin: "10px 0" }}>
+        <button
+          onClick={() => setDebugOn((v) => !v)}
+          style={{
+            fontSize: 12, fontWeight: 800, letterSpacing: .3,
+            background: debugOn ? "#dcfce7" : "#e5e7eb",
+            color: "#111", border: "1px solid rgba(0,0,0,0.15)",
+            borderRadius: 999, padding: "6px 10px", cursor: "pointer",
+          }}
+          aria-pressed={debugOn}
+        >
+          Debug: {debugOn ? "ON" : "OFF"}
+        </button>
+      </div>
           </div>
         </div>
       </div>
