@@ -20,6 +20,13 @@ function escapeHTML(s = "") {
 }
 function nl2br(s = "") { return s.replace(/\n/g, "<br/>"); }
 function pretty(o) { try { return JSON.stringify(o, null, 2); } catch { return String(o); } }
+function isYesNo(s = "") {
+  return /^\s*(yes|y|no|n)\s*$/i.test(s);
+}
+function isBoosterTyped(s = "", code = "") {
+  // compare without spaces so "🔑 💰 🚀" still matches "🔑💰🚀"
+  return s.replace(/\s/g, "")?.includes(code.replace(/\s/g, ""));
+}
 
 /* confetti (client-only) */
 let _confetti = null;
