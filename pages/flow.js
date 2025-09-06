@@ -5,6 +5,7 @@ import { get, set } from '../src/flowState';
 import { generateChecklist } from '../src/checklistGen';
 import { supabase } from "../src/supabaseClient";
 import MagicalButton from "../components/Shared/MagicalButton";
+import { startNewDaySession } from "../src/flowState";
 
 export default function Flow() {
   const router = useRouter();
@@ -68,6 +69,13 @@ export default function Flow() {
     } catch (err) {
       console.error("Error saving wish:", err.message);
     }
+// 🔰 start a brand-new chat thread for today (clears old messages, stamps date)
+startNewDaySession({
+  wish: current.wish,
+  block: current.block,
+  micro: current.micro,
+  vibe: S.vibe,
+});
 
     router.push('/checklist');
   }
