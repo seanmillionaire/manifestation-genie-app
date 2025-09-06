@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
 import { get, set } from "../../src/flowState";
 
+import MagicalButton from "../components/Shared/MagicalButton";
+
 // --- helpers already in your file ---
 async function hydrateName() {
   try {
@@ -304,26 +306,10 @@ const startManifesting = () => {
 
 
           <div style={{ marginTop: 14 }}>
-            <button
-              onClick={startManifesting}
-              disabled={!agreedAt}
-              aria-disabled={!agreedAt}
-              style={{
-                width: "100%",
-                background: agreedAt ? "#facc15" : "rgba(250, 204, 21, .6)",
-                border: `1px solid ${agreedAt ? "#eab308" : "rgba(234, 179, 8, .6)"}`,
-                borderRadius: 12,
-                padding: "14px 18px",
-                fontWeight: 900,
-                fontSize: 16,
-                letterSpacing: 0.3,
-                minHeight: 48,
-                cursor: agreedAt ? "pointer" : "not-allowed",
-              }}
-              aria-label="Start Manifesting"
-            >
-              CLICK HERE TO START MANIFESTING »
-            </button>
+         <MagicalButton onClick={startManifesting} disabled={!agreedAt}>
+  CLICK HERE TO START MANIFESTING »
+</MagicalButton>
+
 
             {!agreedAt && (
               <p
