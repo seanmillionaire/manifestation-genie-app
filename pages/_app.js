@@ -191,7 +191,7 @@ export default function App({ Component, pageProps }) {
           /* --- Start badge animation --- */
 @keyframes mg-pulse {
   0% { transform: scale(1); opacity: .7; }
-  70% { transform: scale(1.9); opacity: 0; }
+  70% { transform: scale(1.1); opacity: 0; }
   100% { transform: scale(2); opacity: 0; }
 }
 .mg-badge {
