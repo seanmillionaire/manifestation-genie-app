@@ -19,29 +19,50 @@ const navLinks = [
   { href: '/profile', label: 'Profile' }
 ];
 
-function NavLink({ href, label, isActive }) {
+function NavLink({ href, label, isActive, count }) {
   return (
     <Link href={href} legacyBehavior>
       <a
-        aria-current={isActive ? 'page' : undefined}
+        aria-current={isActive ? "page" : undefined}
         style={{
-          padding: '10px 14px',
-          lineHeight: '24px',
+          position: "relative",
+          padding: "10px 14px",
+          lineHeight: "24px",
           borderRadius: 10,
           fontWeight: isActive ? 800 : 600,
-          textDecoration: 'none',
-          border: isActive ? `1px solid var(--brand)` : '1px solid transparent',
-          background: isActive ? 'var(--soft)' : 'transparent',
-          color: 'var(--text)',
-          whiteSpace: 'nowrap',
-          outlineOffset: 2
+          textDecoration: "none",
+          border: isActive ? `1px solid var(--brand)` : "1px solid transparent",
+          background: isActive ? "var(--soft)" : "transparent",
+          color: "var(--text)",
+          whiteSpace: "nowrap",
+          outlineOffset: 2,
         }}
       >
         {label}
+        {count !== undefined && count > 0 && (
+          <span
+            style={{
+              position: "absolute",
+              top: -2,
+              right: -6,
+              background: "red",
+              color: "white",
+              fontSize: 12,
+              fontWeight: 700,
+              borderRadius: "9999px",
+              padding: "2px 6px",
+              lineHeight: 1,
+            }}
+            aria-label={`${count} new notifications`}
+          >
+            {count}
+          </span>
+        )}
       </a>
     </Link>
-  )
+  );
 }
+
 
 function LogoHeader({ currentPath, isAuthed }) {
   return (
@@ -72,39 +93,40 @@ function LogoHeader({ currentPath, isAuthed }) {
             padding:'4px 0'
           }}
         >
-          {isAuthed ? (
-            navLinks.map(l => (
-              <NavLink
-                key={l.href}
-                href={l.href}
-                label={l.label}
-                isActive={
-                  currentPath === l.href ||
-                  (l.href !== '/' && currentPath.startsWith(l.href))
-                }
-              />
-            ))
-          ) : (
-            <>
-             
-              <Link href="/login" legacyBehavior>
-                <a
-                  style={{
-                    padding:'10px 16px',
-                    lineHeight:'24px',
-                    borderRadius:10,
-                    fontWeight:700,
-                    background:'var(--purple)',
-                    color:'#fff',
-                    whiteSpace:'nowrap'
-                  }}
-                  aria-label="Log in"
-                >
-                  Log In
-                </a>
-              </Link>
-            </>
-          )}
+{isAuthed ? (
+  navLinks.map((l) => (
+    <NavLink
+      key={l.href}
+      href={l.href}
+      label={l.label}
+      isActive={
+        currentPath === l.href ||
+        (l.href !== "/" && currentPath.startsWith(l.href))
+      }
+      count={l.label === "Start" ? 3 : undefined} // shows badge only on Start
+    />
+  ))
+) : (
+  <>
+    <Link href="/login" legacyBehavior>
+      <a
+        style={{
+          padding: "10px 16px",
+          lineHeight: "24px",
+          borderRadius: 10,
+          fontWeight: 700,
+          background: "var(--purple)",
+          color: "#fff",
+          whiteSpace: "nowrap",
+        }}
+        aria-label="Log in"
+      >
+        Log In
+      </a>
+    </Link>
+  </>
+)}
+
         </nav>
       </div>
     </div>
