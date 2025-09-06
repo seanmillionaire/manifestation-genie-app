@@ -1,4 +1,5 @@
 // /pages/chat.js — SoftConfirm → Chat (intro → CTA → Exercise1 → DOB Numerology)
+// Day-2 flow: greet msg1 → msg2 → (Yes/No below thread) → affirmation line → confetti
 // RX is skipped entirely. Like buttons removed.
 
 import { useEffect, useRef, useState } from "react";
@@ -20,6 +21,17 @@ function escapeHTML(s = "") {
 function nl2br(s = "") { return s.replace(/\n/g, "<br/>"); }
 function pretty(o) { try { return JSON.stringify(o, null, 2); } catch { return String(o); } }
 function isYesNo(s = "") { return /^\s*(yes|y|no|n)\s*$/i.test(s); }
+function norm(s = "") { return s.toLowerCase().replace(/\s+/g, " ").trim(); }
+
+/* affirmation validator: must be first-person + mention goal-ish */
+function isAffirmationOK(text = "", wish = "") {
+  const t = norm(text);
+  const w = norm(wish || "");
+  const hasFirstPerson = /\b(i\s+(now|can|do|am|see|have)|my)\b/.test(t);
+  const hasAchieve = /\b(achiev|see myself|see\s+me|receive|complete|sell|earn|land|finish)\b/.test(t);
+  const mentionsGoal = w ? t.includes(w) || w.split(" ").slice(0, 3).every(p => p && t.includes(p)) : true;
+  return hasFirstPerson && hasAchieve && mentionsGoal;
+}
 
 /* confetti (client-only) */
 let _confetti = null;
@@ -81,13 +93,13 @@ export default function ChatPage() {
     })();
   }, [router]);
 
-  // Day-seeding: Day 2 vs new day (robust + testable)
+  // Day-seeding: Day 2 vs new day (with test helpers)
   useEffect(() => {
     if (!router.isReady) return;
 
-    // reliable query read (router.query can be empty on first paint)
+    // robust query read
     const qs = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
-    const forceDay = qs?.get("forceDay");   // "2" to force day-2
+    const forceDay = qs?.get("forceDay");   // "2" → force day-2
     const doReset  = qs?.get("reset") === "1";
 
     const today = new Date().toISOString().slice(0, 10);
@@ -99,7 +111,7 @@ export default function ChatPage() {
       state = get();
     }
 
-    // If tester asked for Day-2, pretend we used the app yesterday
+    // Force Day-2 if asked
     if (forceDay === "2") {
       const yesterday = new Date();
       yesterday.setDate(yesterday.getDate() - 1);
@@ -107,18 +119,17 @@ export default function ChatPage() {
       state = { ...state, lastSessionDate: yDate };
     }
 
-    // If we haven't opened a session today…
+    // Not opened today?
     if (!state.lastSessionDate || state.lastSessionDate !== today) {
       const yesterday = new Date();
       yesterday.setDate(yesterday.getDate() - 1);
       const yDate = yesterday.toISOString().slice(0, 10);
 
-      // Day-2 scripted welcome if last session was yesterday (or forced)
+      // Day-2 scripted welcome (NO booster here)
       if (state.lastSessionDate === yDate) {
         const fn = state.firstName && state.firstName !== "Friend" ? state.firstName : "Friend";
         const wish = state?.currentWish?.wish || "your wish";
 
-        // Two messages only (no booster code)
         const msgs = [
           { id: newId(), role: "assistant", content: `🌟 Welcome back, ${fn}. I’ve kept the energy flowing from yesterday’s wish: **${wish}**.` },
           { id: newId(), role: "assistant", content: `✨ Did any signals or opportunities show up yesterday? (yes/no)` },
@@ -131,12 +142,14 @@ export default function ChatPage() {
           date:  today,
         };
 
+        const template = `I now see myself achieving ${todaySession.wish || "my goal"} today with the help of my Genie.`;
+
         set({
           ...state,
           currentSession: todaySession,
-          thread: msgs,                 // use thread (not messages)
+          thread: msgs,
           lastSessionDate: today,
-          day2: { phase: "reflect" },   // no booster step
+          day2: { phase: "reflect", template, wish: todaySession.wish || state?.currentWish?.wish || "" },
         });
         setS(get());
         setStage("chat");
@@ -145,7 +158,7 @@ export default function ChatPage() {
         return;
       }
 
-      // Otherwise: start a brand-new day thread
+      // New day
       startNewDaySession({
         wish:  state?.currentWish?.wish  || "",
         block: state?.currentWish?.block || "",
@@ -445,12 +458,12 @@ Keep it upbeat, concise, and practical.`;
     setS(get());
 
     try {
-      // --- Day-2 scripted interaction (NO booster step) ---
+      // --- Day-2 scripted interaction ---
       const stNow = get();
       if (stNow.day2 && stNow.day2.phase) {
         const d2 = stNow.day2;
 
-        // Reflection step (expects yes/no)
+        // 1) Reflection step (expects yes/no)
         if (d2.phase === "reflect") {
           if (!isYesNo(text)) {
             pushBubble(`Just a quick check-in — type **yes** or **no** ✨`);
@@ -458,17 +471,61 @@ Keep it upbeat, concise, and practical.`;
             return;
           }
           const saidYes = /^\s*(yes|y)\s*$/i.test(text);
-          pushBubble(saidYes ? `🔥 Love it. That’s momentum showing up.` : `All good — today we prime the signal. Keep going.`);
+          pushBubble(saidYes ? `🔥 Love it. That’s momentum showing up.` : `All good — today we prime the signal.`);
 
-          // Mark Day-2 complete; no booster
-          set({ ...get(), day2: { phase: "done" } });
+          // move to affirmation prompt
+          set({ ...get(), day2: { ...d2, phase: "affirm" } });
           setS(get());
 
-          // optional subtle celebration
+          const wish = d2.wish || get()?.currentSession?.wish || get()?.currentWish?.wish || "my goal";
+          const example = d2.template || `I now see myself achieving ${wish} today with the help of my Genie.`;
+
+          setTimeout(() => {
+            pushBubble(`Type this line to lock it in — **exactly in first person**:\n\n“${example}”`);
+          }, 350);
+
+          setThinking(false);
+          return;
+        }
+
+        // 2) Affirmation step (expects first-person finished statement incl. goal)
+        if (d2.phase === "affirm") {
+          const wish = d2.wish || get()?.currentSession?.wish || get()?.currentWish?.wish || "my goal";
+          if (!isAffirmationOK(text, wish)) {
+            pushBubble(`Almost there. Re-type in first person and include your goal. For example:\n\n“I now see myself achieving ${wish} today with the help of my Genie.”`);
+            setThinking(false);
+            return;
+          }
+
+          // mark done, celebrate, nudge ring
+          set({ ...get(), day2: { ...d2, phase: "done" } });
+          setS(get());
+          await popConfetti();
+          pushBubble(`Locked in. Keep your vibe high and take one aligned action — I’m amplifying you ✨`);
+          setPhase("free");
+
           setRingGlow(true);
           setTimeout(() => setRingGlow(false), 1100);
+          setTimeout(() => { const el = listRef.current; if (el) el.scrollTop = el.scrollHeight; }, 0);
 
-          setPhase("free");
+          // optional: persist an event
+          try {
+            const { data: { session } } = await supabase.auth.getSession();
+            const user = session?.user;
+            if (user) {
+              await supabase.from("user_progress").upsert(
+                {
+                  user_id: user.id,
+                  day_key: new Date().toISOString().slice(0, 10),
+                  step: "day2_affirm_done",
+                  details: { affirmation: text, at: new Date().toISOString() },
+                  updated_at: new Date().toISOString(),
+                },
+                { onConflict: "user_id,day_key" }
+              );
+            }
+          } catch {}
+
           setThinking(false);
           return;
         }
@@ -652,7 +709,7 @@ Keep it upbeat, concise, and practical.`;
               <>
                 {/* --- Today Recap (compact + circular progress) --- */}
                 {(() => {
-                  // baseline 75; subtle +5 once Day-2 completed
+                  // baseline 75; tiny nudge after Day-2 success
                   let pct = 75;
                   const d2phase = S.day2?.phase || null;
                   if (d2phase === "done") pct = 80;
@@ -784,14 +841,14 @@ Keep it upbeat, concise, and practical.`;
                   )}
                 </div>
 
-                {/* Day-2 quick reply chips → BELOW the thread (as requested) */}
+                {/* Day-2 quick reply chips — BELOW the thread */}
                 {S.day2?.phase === "reflect" && (
                   <div style={{ display: "flex", gap: 8, margin: "8px 0 8px", justifyContent: "flex-start" }}>
                     <button
                       type="button"
                       onClick={() => { setInput("yes"); send(); }}
                       style={{
-                        padding: "10px 14px",
+                        padding: "8px 12px",
                         borderRadius: 999,
                         border: "1px solid rgba(0,0,0,.15)",
                         background: "#ffffff",
@@ -806,7 +863,7 @@ Keep it upbeat, concise, and practical.`;
                       type="button"
                       onClick={() => { setInput("no"); send(); }}
                       style={{
-                        padding: "10px 14px",
+                        padding: "8px 12px",
                         borderRadius: 999,
                         border: "1px solid rgba(0,0,0,.15)",
                         background: "#ffffff",
@@ -820,7 +877,7 @@ Keep it upbeat, concise, and practical.`;
                   </div>
                 )}
 
-                {/* “Yes, I’m ready” CTA (Day-1 intro) */}
+                {/* “Yes, I’m ready” CTA (Day-1) */}
                 {showReadyCTA && (
                   <div style={{ marginTop: 10, textAlign: "center" }}>
                     <button
