@@ -87,7 +87,7 @@ async function lock() {
           }}
         >
           <label style={{ margin: '12px 0 6px', display: 'block', fontWeight: 600 }}>
-            What do you want to manifest?
+            What do you want to manifest? (please tell me all of the details)
           </label>
           <textarea
             rows={3}
