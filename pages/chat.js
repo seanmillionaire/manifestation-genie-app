@@ -20,9 +20,6 @@ function escapeHTML(s = "") {
 function nl2br(s = "") { return s.replace(/\n/g, "<br/>"); }
 function pretty(o) { try { return JSON.stringify(o, null, 2); } catch { return String(o); } }
 function isYesNo(s = "") { return /^\s*(yes|y|no|n)\s*$/i.test(s); }
-function isBoosterTyped(s = "", code = "") {
-  return s.replace(/\s/g, "").includes((code || "").replace(/\s/g, ""));
-}
 
 /* confetti (client-only) */
 let _confetti = null;
@@ -84,112 +81,109 @@ export default function ChatPage() {
     })();
   }, [router]);
 
-// Day-seeding: Day 2 vs new day (robust + testable)
-useEffect(() => {
-  if (!router.isReady) return;
+  // Day-seeding: Day 2 vs new day (robust + testable)
+  useEffect(() => {
+    if (!router.isReady) return;
 
-  // reliable query read (router.query can be empty on first paint)
-  const qs = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
-  const forceDay = qs?.get("forceDay");   // "2" to force day-2
-  const doReset  = qs?.get("reset") === "1";
+    // reliable query read (router.query can be empty on first paint)
+    const qs = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
+    const forceDay = qs?.get("forceDay");   // "2" to force day-2
+    const doReset  = qs?.get("reset") === "1";
 
-  const today = new Date().toISOString().slice(0, 10);
-  let state = get() || {};
+    const today = new Date().toISOString().slice(0, 10);
+    let state = get() || {};
 
-  // Optional: developer reset to see the seeding again
-  if (doReset) {
-    set({ ...state, thread: [], messages: [], lastSessionDate: null, day2: null });
-    state = get();
-  }
+    // Optional: developer reset to see the seeding again
+    if (doReset) {
+      set({ ...state, thread: [], messages: [], lastSessionDate: null, day2: null });
+      state = get();
+    }
 
-  // If tester asked for Day-2, pretend we used the app yesterday
-  if (forceDay === "2") {
-    const yesterday = new Date();
-    yesterday.setDate(yesterday.getDate() - 1);
-    const yDate = yesterday.toISOString().slice(0, 10);
-    // We only mutate our local view here; the logic below will write to FlowState.
-    state = { ...state, lastSessionDate: yDate };
-  }
+    // If tester asked for Day-2, pretend we used the app yesterday
+    if (forceDay === "2") {
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+      const yDate = yesterday.toISOString().slice(0, 10);
+      state = { ...state, lastSessionDate: yDate };
+    }
 
-  // If we haven't opened a session today…
-  if (!state.lastSessionDate || state.lastSessionDate !== today) {
-    const yesterday = new Date();
-    yesterday.setDate(yesterday.getDate() - 1);
-    const yDate = yesterday.toISOString().slice(0, 10);
+    // If we haven't opened a session today…
+    if (!state.lastSessionDate || state.lastSessionDate !== today) {
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+      const yDate = yesterday.toISOString().slice(0, 10);
 
-    // Day-2 scripted welcome if last session was yesterday (or forced)
-    if (state.lastSessionDate === yDate) {
-      const fn = state.firstName && state.firstName !== "Friend" ? state.firstName : "Friend";
-      const wish = state?.currentWish?.wish || "your wish";
-      const booster = "🔑💰🚀";
+      // Day-2 scripted welcome if last session was yesterday (or forced)
+      if (state.lastSessionDate === yDate) {
+        const fn = state.firstName && state.firstName !== "Friend" ? state.firstName : "Friend";
+        const wish = state?.currentWish?.wish || "your wish";
 
-      const msgs = [
-        { id: newId(), role: "assistant", content: `🌟 Welcome back, ${fn}. I’ve kept the energy flowing from yesterday’s wish: **${wish}**.` },
-        { id: newId(), role: "assistant", content: `✨ Did any signals or opportunities show up yesterday? (yes/no)` },
-        { id: newId(), role: "assistant", content: `Today’s booster code: ${booster}. Type it to lock in abundance flow.` },
-      ];
+        // Two messages only (no booster code)
+        const msgs = [
+          { id: newId(), role: "assistant", content: `🌟 Welcome back, ${fn}. I’ve kept the energy flowing from yesterday’s wish: **${wish}**.` },
+          { id: newId(), role: "assistant", content: `✨ Did any signals or opportunities show up yesterday? (yes/no)` },
+        ];
 
-      const todaySession = {
+        const todaySession = {
+          wish:  state?.currentWish?.wish  || "",
+          block: state?.currentWish?.block || "",
+          micro: state?.currentWish?.micro || "",
+          date:  today,
+        };
+
+        set({
+          ...state,
+          currentSession: todaySession,
+          thread: msgs,                 // use thread (not messages)
+          lastSessionDate: today,
+          day2: { phase: "reflect" },   // no booster step
+        });
+        setS(get());
+        setStage("chat");
+        setPhase("free");
+        setShowReadyCTA(false);
+        return;
+      }
+
+      // Otherwise: start a brand-new day thread
+      startNewDaySession({
         wish:  state?.currentWish?.wish  || "",
         block: state?.currentWish?.block || "",
         micro: state?.currentWish?.micro || "",
-        date:  today,
-      };
-
-      set({
-        ...state,
-        currentSession: todaySession,
-        thread: msgs,                 // use thread (not messages)
-        lastSessionDate: today,
-        day2: { phase: "reflect", booster },
+        vibe:  state?.vibe || null,
       });
-      setS(get());
-      setStage("chat");               // make sure we’re showing the chat
-      setPhase("free");
-      setShowReadyCTA(false);
-      return;
+      state = get();
     }
 
-    // Otherwise: start a brand-new day thread
-    startNewDaySession({
-      wish:  state?.currentWish?.wish  || "",
-      block: state?.currentWish?.block || "",
-      micro: state?.currentWish?.micro || "",
-      vibe:  state?.vibe || null,
-    });
-    state = get();
-  }
+    // If no thread yet, seed a clear first assistant msg
+    const threadNow = Array.isArray(state.thread) ? state.thread : [];
+    if (threadNow.length === 0) {
+      const w = state?.currentSession?.wish  || state?.currentWish?.wish  || "";
+      const b = state?.currentSession?.block || state?.currentWish?.block || "";
+      const m = state?.currentSession?.micro || state?.currentWish?.micro || "";
+      const dateNice = new Date().toLocaleDateString(undefined, {
+        weekday: "long", month: "long", day: "numeric",
+      });
 
-  // If no thread yet, seed a clear first assistant msg
-  const threadNow = Array.isArray(state.thread) ? state.thread : [];
-  if (threadNow.length === 0) {
-    const w = state?.currentSession?.wish  || state?.currentWish?.wish  || "";
-    const b = state?.currentSession?.block || state?.currentWish?.block || "";
-    const m = state?.currentSession?.micro || state?.currentWish?.micro || "";
-    const dateNice = new Date().toLocaleDateString(undefined, {
-      weekday: "long", month: "long", day: "numeric",
-    });
+      const first = {
+        id: `a-${Date.now()}`,
+        role: "assistant",
+        content: [
+          `✨ **${dateNice} — New Session**`,
+          w ? `**Today's wish:** ${w}` : null,
+          b ? `**Biggest block:** ${b}` : null,
+          m ? `**Your micro-step:** ${m}` : null,
+          `I'm with you—ready to move this forward right now. What feels like the very first nudge?`,
+        ].filter(Boolean).join("\n"),
+      };
 
-    const first = {
-      id: `a-${Date.now()}`,
-      role: "assistant",
-      content: [
-        `✨ **${dateNice} — New Session**`,
-        w ? `**Today's wish:** ${w}` : null,
-        b ? `**Biggest block:** ${b}` : null,
-        m ? `**Your micro-step:** ${m}` : null,
-        `I'm with you—ready to move this forward right now. What feels like the very first nudge?`,
-      ].filter(Boolean).join("\n"),
-    };
-
-    set({ ...state, thread: [first] });
-    setS(get());
-    setStage("chat");
-    setPhase("free");
-    setShowReadyCTA(false);
-  }
-}, [router.isReady]);
-
+      set({ ...state, thread: [first] });
+      setS(get());
+      setStage("chat");
+      setPhase("free");
+      setShowReadyCTA(false);
+    }
+  }, [router.isReady]);
 
   // hydrate existing conversation on refresh (server history)
   useEffect(() => {
@@ -451,12 +445,12 @@ Keep it upbeat, concise, and practical.`;
     setS(get());
 
     try {
-      // --- Day-2 scripted interaction ---
+      // --- Day-2 scripted interaction (NO booster step) ---
       const stNow = get();
       if (stNow.day2 && stNow.day2.phase) {
         const d2 = stNow.day2;
 
-        // 1) Reflection step (expects yes/no)
+        // Reflection step (expects yes/no)
         if (d2.phase === "reflect") {
           if (!isYesNo(text)) {
             pushBubble(`Just a quick check-in — type **yes** or **no** ✨`);
@@ -464,53 +458,17 @@ Keep it upbeat, concise, and practical.`;
             return;
           }
           const saidYes = /^\s*(yes|y)\s*$/i.test(text);
-          pushBubble(saidYes ? `🔥 Love it. That’s momentum showing up.` : `All good — today we prime the signal.`);
+          pushBubble(saidYes ? `🔥 Love it. That’s momentum showing up.` : `All good — today we prime the signal. Keep going.`);
 
-          // move to booster prompt
-          set({ ...get(), day2: { ...d2, phase: "booster" } });
+          // Mark Day-2 complete; no booster
+          set({ ...get(), day2: { phase: "done" } });
           setS(get());
-          pushBubble(`Type today’s booster code to lock it: ${d2.booster}`);
-          setThinking(false);
-          return;
-        }
 
-        // 2) Booster step (expects the emoji sequence)
-        if (d2.phase === "booster") {
-          if (!isBoosterTyped(text, d2.booster)) {
-            pushBubble(`Close — type the exact booster: ${d2.booster}`);
-            setThinking(false);
-            return;
-          }
-
-          // mark done, celebrate, nudge ring
-          set({ ...get(), day2: { ...d2, phase: "done" } });
-          setS(get());
-          await popConfetti();
-          pushBubble(`Keep your vibe high and take one aligned action. I’ll be here to amplify tomorrow ✨`);
-          setPhase("free");
-
+          // optional subtle celebration
           setRingGlow(true);
           setTimeout(() => setRingGlow(false), 1100);
-          setTimeout(() => { const el = listRef.current; if (el) el.scrollTop = el.scrollHeight; }, 0);
 
-          // optional: persist an event
-          try {
-            const { data: { session } } = await supabase.auth.getSession();
-            const user = session?.user;
-            if (user) {
-              await supabase.from("user_progress").upsert(
-                {
-                  user_id: user.id,
-                  day_key: new Date().toISOString().slice(0, 10),
-                  step: "day2_booster_done",
-                  details: { booster: d2.booster, at: new Date().toISOString() },
-                  updated_at: new Date().toISOString(),
-                },
-                { onConflict: "user_id,day_key" }
-              );
-            }
-          } catch {}
-
+          setPhase("free");
           setThinking(false);
           return;
         }
@@ -694,11 +652,10 @@ Keep it upbeat, concise, and practical.`;
               <>
                 {/* --- Today Recap (compact + circular progress) --- */}
                 {(() => {
-                  // baseline 75; +3 while waiting booster; +5 after success
+                  // baseline 75; subtle +5 once Day-2 completed
                   let pct = 75;
                   const d2phase = S.day2?.phase || null;
-                  if (d2phase === "booster") pct = 78;
-                  if (d2phase === "done")    pct = 80;
+                  if (d2phase === "done") pct = 80;
 
                   const wish  = S.currentSession?.wish  ?? S.currentWish?.wish;
                   const block = S.currentSession?.block ?? S.currentWish?.block;
@@ -787,42 +744,6 @@ Keep it upbeat, concise, and practical.`;
                   );
                 })()}
 
-                {/* Day-2 quick reply chips */}
-                {S.day2?.phase === "reflect" && (
-                  <div style={{ display: "flex", gap: 8, margin: "6px 0 8px" }}>
-                    <button
-                      type="button"
-                      onClick={() => { setInput("yes"); send(); }}
-                      style={{
-                        padding: "8px 12px",
-                        borderRadius: 999,
-                        border: "1px solid rgba(0,0,0,.15)",
-                        background: "#ffffff",
-                        cursor: "pointer",
-                        fontWeight: 800,
-                      }}
-                      aria-label="Yes, I noticed signals or opportunities"
-                    >
-                      Yes
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => { setInput("no"); send(); }}
-                      style={{
-                        padding: "8px 12px",
-                        borderRadius: 999,
-                        border: "1px solid rgba(0,0,0,.15)",
-                        background: "#ffffff",
-                        cursor: "pointer",
-                        fontWeight: 800,
-                      }}
-                      aria-label="No, I didn’t notice signals yet"
-                    >
-                      No
-                    </button>
-                  </div>
-                )}
-
                 {/* Thread */}
                 <div
                   ref={listRef}
@@ -863,7 +784,43 @@ Keep it upbeat, concise, and practical.`;
                   )}
                 </div>
 
-                {/* “Yes, I’m ready” CTA */}
+                {/* Day-2 quick reply chips → BELOW the thread (as requested) */}
+                {S.day2?.phase === "reflect" && (
+                  <div style={{ display: "flex", gap: 8, margin: "8px 0 8px", justifyContent: "flex-start" }}>
+                    <button
+                      type="button"
+                      onClick={() => { setInput("yes"); send(); }}
+                      style={{
+                        padding: "10px 14px",
+                        borderRadius: 999,
+                        border: "1px solid rgba(0,0,0,.15)",
+                        background: "#ffffff",
+                        cursor: "pointer",
+                        fontWeight: 800,
+                      }}
+                      aria-label="Yes, I noticed signals or opportunities"
+                    >
+                      Yes
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setInput("no"); send(); }}
+                      style={{
+                        padding: "10px 14px",
+                        borderRadius: 999,
+                        border: "1px solid rgba(0,0,0,.15)",
+                        background: "#ffffff",
+                        cursor: "pointer",
+                        fontWeight: 800,
+                      }}
+                      aria-label="No, I didn’t notice signals yet"
+                    >
+                      No
+                    </button>
+                  </div>
+                )}
+
+                {/* “Yes, I’m ready” CTA (Day-1 intro) */}
                 {showReadyCTA && (
                   <div style={{ marginTop: 10, textAlign: "center" }}>
                     <button
