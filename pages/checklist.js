@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import { get, set } from '../src/flowState';
-import MagicalButton from "../components/Shared/MagicalButton";
+import MagicalButton from '../components/Shared/MagicalButton';
 
 export default function ChecklistPage() {
   const router = useRouter();
@@ -44,7 +44,7 @@ export default function ChecklistPage() {
           border: '1px solid rgba(0,0,0,0.08)',
           borderRadius: 12,
           padding: 12,
-          background: '#fafafa'
+          background: '#fafafa',
         }}
       >
         <div
@@ -52,7 +52,7 @@ export default function ChecklistPage() {
             background: 'white',
             border: '1px solid rgba(0,0,0,0.10)',
             borderRadius: 12,
-            padding: '14px 16px'
+            padding: '14px 16px',
           }}
         >
           {/* ultra-clear, manifestor-style primer */}
@@ -62,7 +62,7 @@ export default function ChecklistPage() {
               borderRadius: 12,
               background: 'rgba(0,0,0,0.03)',
               border: '1px solid rgba(0,0,0,0.08)',
-              marginBottom: 12
+              marginBottom: 12,
             }}
           >
             <ol style={{ margin: 0, paddingLeft: 18, lineHeight: 1.6 }}>
@@ -78,9 +78,9 @@ export default function ChecklistPage() {
             </ol>
           </div>
 
-         <MagicalButton onClick={goChat}}>
-  ✨ I’m ready → NEXT STEP
-</MagicalButton>
+          <MagicalButton onClick={goChat}>
+            ✨ I’m ready → NEXT STEP
+          </MagicalButton>
         </div>
       </section>
     </main>
