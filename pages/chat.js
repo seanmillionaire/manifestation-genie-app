@@ -434,14 +434,11 @@ Keep it upbeat, concise, and practical.`;
   }
 
   // 🔧 UPDATED: allow an override text so chips can auto-send
-  async function send(textOverride = null) {
-    const textRaw = (textOverride ?? input).trim();
-    if (!textRaw || thinking) return;
-
-    // only clear the textbox when the user typed (not when chip overrides)
-    if (textOverride === null) setInput("");
-
-    setThinking(true);
+async function send(textOverride = null) {
+  const text = (textOverride ?? input).trim();
+  if (!text || thinking) return;
+  setInput("");
+  setThinking(true);
 
     pushThread({ role: "user", content: textRaw, id: newId() });
     setS(get());
