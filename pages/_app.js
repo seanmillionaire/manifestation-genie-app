@@ -40,28 +40,16 @@ function NavLink({ href, label, isActive, count }) {
       >
         {label}
         {count !== undefined && count > 0 && (
-          <span
-            style={{
-              position: "absolute",
-              top: -2,
-              right: -6,
-              background: "red",
-              color: "white",
-              fontSize: 12,
-              fontWeight: 700,
-              borderRadius: "9999px",
-              padding: "2px 6px",
-              lineHeight: 1,
-            }}
-            aria-label={`${count} new notifications`}
-          >
-            {count}
+          <span className="mg-badge" aria-label={`${count} new notifications`}>
+            <span className="mg-badge-ping" aria-hidden="true" />
+            {count > 99 ? "99+" : count}
           </span>
         )}
       </a>
     </Link>
   );
 }
+
 
 
 function LogoHeader({ currentPath, isAuthed }) {
@@ -103,7 +91,7 @@ function LogoHeader({ currentPath, isAuthed }) {
         currentPath === l.href ||
         (l.href !== "/" && currentPath.startsWith(l.href))
       }
-      count={l.label === "Start" ? 3 : undefined} // shows badge only on Start
+      count={l.label === "Start" ? 3 : undefined}
     />
   ))
 ) : (
