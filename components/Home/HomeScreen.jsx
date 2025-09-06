@@ -1,8 +1,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
 import { get, set } from "../../src/flowState";
-
-import MagicalButton from "../components/Shared/MagicalButton";
+import MagicalButton from "../Shared/MagicalButton";
 
 // --- helpers already in your file ---
 async function hydrateName() {
