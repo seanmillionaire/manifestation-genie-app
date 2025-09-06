@@ -4,7 +4,7 @@
 import { getRandomSigil } from "../../src/sigils";
 import { ensureConversation, saveTurn } from "../../src/lib/history";
 import { getRandomWowLine, shouldPopWow } from "../../src/wowlines";
-
+import { getDynamicSigil } from "../../src/sigils";
 /* ---------------- System Prompt ---------------- */
 
 function sysPrompt({ userName, vibe, wantStoryFlag, promptSpecText }) {
@@ -72,6 +72,20 @@ function stripSeedRepeats(messages = []) {
     })
     .map(m => ({ role: m.role === "user" ? "user" : "assistant", content: String(m.content || "") }));
 }
+function findDOBIn(messages = [], alsoLookIn = "") {
+  const rx = /\b(0?[1-9]|1[0-2])[/\-\.](0?[1-9]|[12][0-9]|3[01])[/\-\.](19|20)\d{2}\b/;
+  const all = [...messages.map(m => m.content || ""), String(alsoLookIn || "")];
+  for (let i = all.length - 1; i >= 0; i--) {
+    const hit = all[i] && all[i].match(rx);
+    if (hit) return hit[0];
+  }
+  return null;
+}
+function goalFrom(context = {}, messages = []) {
+  if (context?.wish && String(context.wish).trim()) return String(context.wish).trim();
+  const last = [...messages].reverse().find(m => m.role === "user" && /goal|wish|want/i.test(m.content || ""));
+  return last ? last.content : null;
+}
 
 function userLikelyProvidedIntent(messages = []) {
   const lastUser = [...messages].reverse().find(m => m.role === "user");
@@ -128,10 +142,33 @@ export default async function handler(req, res) {
     const alreadyGaveIntent = userLikelyProvidedIntent(
       cleanedHistory.concat(text ? [{ role: "user", content: String(text) }] : [])
     );
+// 🔮 SIGIL INTERCEPT — banked ASCII only, no links; prefer personalized Sri-Yantra
+const rawText = String(text || "");
+const lastUserMessage = rawText.toLowerCase();
+const sigilTriggers = [
+  "sigil","seal","ritual","wish","888","money","flow","rich","paid","cash",
+  "what else","more","next","continue","ok","done"
+];
+const lastAssistant = [...cleanedHistory].reverse().find(m => m.role === "assistant");
+const lastWasQuestion = !!(lastAssistant && /\?\s*$/.test(lastAssistant.content || ""));
+const shortPing = rawText.trim().split(/\s+/).length <= 3;
 
-    /* ---- SIGIL INTERCEPT (single source of truth) ---- */
-    const rawText = String(text || "");
-    const lastUserMessage = rawText.toLowerCase();
+if (sigilTriggers.some(w => lastUserMessage.includes(w)) || (lastWasQuestion && shortPing)) {
+  const dob = findDOBIn(cleanedHistory, rawText);
+  const goal = goalFrom(context, cleanedHistory);
+  const sigil = getDynamicSigil({ name: userName || "Friend", dob, goal });
+  if (text && typeof saveTurn === "function") {
+    await saveTurn({
+      conversationId: convoId,
+      messages: [
+        { role: "user", content: text },
+        { role: "assistant", content: sigil }
+      ]
+    }).catch(()=>{});
+  }
+  return res.status(200).json({ reply: sigil, conversationId: convoId });
+}
+
 
     // expanded nudges so “what else” etc. also fire
     const sigilTriggers = [
