@@ -79,3 +79,34 @@ export function toPlainMessages(thread){
     s.replace(/<br\s*\/?>/gi, '\n').replace(/<\/?[^>]+(>|$)/g,'').replace(/\s+/g,' ').trim();
   return (thread || []).map(m => ({ role: m.role, content: strip(m.content || '') }));
 }
+// --- Daily session bootstrap: create a brand-new chat thread for today ---
+export function startNewDaySession(meta = {}) {
+  const s = (typeof get === "function" ? get() : {}) || {};
+  const todayISO = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+  const id = typeof newId === "function" ? newId() : `${Date.now()}`;
+
+  // derive today's intent data from meta or currentWish
+  const base = s.currentWish || {};
+  const current = {
+    id,
+    date: todayISO,
+    wish: (meta.wish ?? base.wish ?? "").trim(),
+    block: (meta.block ?? base.block ?? "").trim(),
+    micro: (meta.micro ?? base.micro ?? "").trim(),
+    vibe: meta.vibe ?? s.vibe ?? null,
+    createdAt: new Date().toISOString(),
+  };
+
+  // NOTE: keep any historical threads list if you have one; we just
+  // set the "active" thread id + session stamp and clear live messages.
+  set({
+    ...s,
+    threadId: id,                 // 👈 chat.js should read this to scope messages
+    lastSessionDate: todayISO,    // 👈 useful to detect day rollover
+    currentSession: current,      // 👈 quick access for headers/recap card
+    messages: [],                 // 👈 start fresh UI buffer for today
+    phase: "chat",
+  });
+
+  return id;
+}
