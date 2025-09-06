@@ -85,6 +85,21 @@ a:hover{color:var(--green)}
 .accent-magic{ color:var(--purple) }
 
 /* ===== Brand glow (use on titles like “Manifestation Genie”) ===== */
+
+@keyframes pop {
+  0%,100% { transform: scale(1); }
+  50%     { transform: scale(1.03); }
+}
+@keyframes shimmer {
+  0%   { transform: translateX(-120%) skewX(-20deg); }
+  100% { transform: translateX(220%)  skewX(-20deg); }
+}
+@keyframes twinkle {
+  0%   { opacity: 0; transform: translateY(0) scale(.8); }
+  50%  { opacity: 1; transform: translateY(-4px) scale(1); }
+  100% { opacity: 0; transform: translateY(0) scale(.8); }
+}
+
 @keyframes mg-aura {
   0%,100%{ text-shadow:
     0 0 10px rgba(255,215,0,0.30),
