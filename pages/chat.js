@@ -4,7 +4,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useGenieConversation } from "../src/hooks/useGenieConversation";
 import { useRouter } from "next/router";
-import { get, set, newId, pushThread, toPlainMessages } from "../src/flowState";
+import { get, set, newId, pushThread, toPlainMessages, startNewDaySession } from "../src/flowState";
 import { supabase } from "../src/supabaseClient";
 import TweakChips from "../components/Confirm/TweakChips";
 import SoftConfirmBar from "../components/Confirm/SoftConfirmBar";
@@ -12,7 +12,6 @@ import { parseAnswers, scoreConfidence, variantFromScore } from "../src/features
 import { detectBeliefFrom, recommendProduct } from "../src/engine/recommendProduct";
 import { hydrateFirstNameFromSupabase } from "../src/userName";
 import ChatBubble from "../components/Chat/ChatBubble";
-import { startNewDaySession } from "../src/flowState";
 
 /* tiny utils */
 function escapeHTML(s = "") {
@@ -20,17 +19,16 @@ function escapeHTML(s = "") {
 }
 function nl2br(s = "") { return s.replace(/\n/g, "<br/>"); }
 function pretty(o) { try { return JSON.stringify(o, null, 2); } catch { return String(o); } }
-function isYesNo(s = "") {
-  return /^\s*(yes|y|no|n)\s*$/i.test(s);
-}
+function isYesNo(s = "") { return /^\s*(yes|y|no|n)\s*$/i.test(s); }
 function isBoosterTyped(s = "", code = "") {
-  // compare without spaces so "🔑 💰 🚀" still matches "🔑💰🚀"
-  return s.replace(/\s/g, "")?.includes(code.replace(/\s/g, ""));
+  return s.replace(/\s/g, "").includes((code || "").replace(/\s/g, ""));
 }
 
 /* confetti (client-only) */
 let _confetti = null;
-async function loadConfetti() { try { const m = await import("canvas-confetti"); _confetti = m.default || m; } catch {} }
+async function loadConfetti() {
+  try { const m = await import("canvas-confetti"); _confetti = m.default || m; } catch {}
+}
 async function popConfetti() {
   try {
     if (!_confetti) return;
@@ -54,128 +52,9 @@ export default function ChatPage() {
   const [debugOn, setDebugOn] = useState(false);
   const [lastChatPayload, setLastChatPayload] = useState(null);
   const listRef = useRef(null);
-const { conversationId, setConversationId } = useGenieConversation();
-const [booted, setBooted] = useState(false);
-  
-// --- ensure we're in a fresh "today" thread; seed first message if empty
-useEffect(() => {
-  const today = new Date().toISOString().slice(0, 10);
-  let state = get() || {};
-
-  // If we haven't opened a session today…
-  if (!state.lastSessionDate || state.lastSessionDate !== today) {
-    // Check if yesterday was the last session → Day 2 experience
-    const yesterday = new Date();
-    yesterday.setDate(yesterday.getDate() - 1);
-    const yDate = yesterday.toISOString().slice(0, 10);
-
- if (state.lastSessionDate === yDate) {
-  const fn = state.firstName && state.firstName !== "Friend" ? state.firstName : "Friend";
-  const wish = state?.currentWish?.wish || "your wish";
-  const booster = "🔑💰🚀";
-
-  const msgs = [
-    { id: newId(), role: "assistant", content: `🌟 Welcome back, ${fn}. I’ve kept the energy flowing from yesterday’s wish: **${wish}**.` },
-    { id: newId(), role: "assistant", content: `✨ Did any signals or opportunities show up yesterday? (yes/no)` },
-    { id: newId(), role: "assistant", content: `Today’s booster code: ${booster}. Type it to lock in abundance flow.` },
-  ];
-
-  const today = new Date().toISOString().slice(0, 10);
-  const todaySession = {
-    wish:  state?.currentWish?.wish  || "",
-    block: state?.currentWish?.block || "",
-    micro: state?.currentWish?.micro || "",
-    date:  today,
-  };
-
-  set({
-    ...state,
-    currentSession: todaySession,  // recap bar has data
-    thread: msgs,                  // renderable by ChatBubble list
-    lastSessionDate: today,
-    day2: { phase: "reflect", booster }, // 👈 mark Day-2 flow
-  });
-  setS(get());
-  return; // stop; Day-2 seeded
-}
-
-
-    // Otherwise start a brand-new day thread (Day 1 or gap days)
-    startNewDaySession({
-      wish: state?.currentWish?.wish || "",
-      block: state?.currentWish?.block || "",
-      micro: state?.currentWish?.micro || "",
-      vibe: state?.vibe || null,
-    });
-
-    state = get(); // refresh local snapshot
-  }
-
-  // Seed a clear first assistant message for today if the thread is empty
-  const msgs = Array.isArray(state.messages) ? state.messages : [];
-  if (msgs.length === 0) {
-    const w = state?.currentSession?.wish || state?.currentWish?.wish || "";
-    const b = state?.currentSession?.block || state?.currentWish?.block || "";
-    const m = state?.currentSession?.micro || state?.currentWish?.micro || "";
-    const dateNice = new Date().toLocaleDateString(undefined, {
-      weekday: "long",
-      month: "long",
-      day: "numeric",
-    });
-
-    const first = {
-      id: `a-${Date.now()}`,
-      role: "assistant",
-      content: [
-        `✨ **${dateNice} — New Session**`,
-        w ? `**Today's wish:** ${w}` : null,
-        b ? `**Biggest block:** ${b}` : null,
-        m ? `**Your micro-step:** ${m}` : null,
-        `I'm with you—ready to move this forward right now. What feels like the very first nudge?`,
-      ]
-        .filter(Boolean)
-        .join("\n"),
-    };
-
-    set({ ...state, messages: [first] });
-    setS(get());
-  }
-}, []);
-
-
-
-// hydrate existing conversation on refresh
-useEffect(() => {
-  async function hydrate() {
-    // if we don't have a conversation yet, nothing to hydrate
-    if (!conversationId) { setBooted(true); return; }
-
-    try {
-      const r = await fetch(`/api/history?conversationId=${conversationId}`);
-      const { messages } = await r.json();
-
-      const thread = (messages || []).map(m => ({
-        id: newId(),
-        role: m.role,
-        content: m.content,
-      }));
-
-      if (thread.length > 0) {
-        set({ thread });   // write into FlowState
-        setS(get());
-        setStage("chat");  // ⬅️ jump straight to chat
-        setPhase("free");
-        setShowReadyCTA(false);
-      }
-    } catch (_) {
-      // ignore; still allow app to render
-    } finally {
-      setBooted(true);
-    }
-  }
-  hydrate();
-}, [conversationId]);
-
+  const { conversationId } = useGenieConversation();
+  const [booted, setBooted] = useState(false);
+  const [ringGlow, setRingGlow] = useState(false);
 
   // UI stages: 'confirm' → 'chat'   (RX removed)
   const [stage, setStage] = useState("confirm");
@@ -195,6 +74,7 @@ useEffect(() => {
   /* init */
   useEffect(() => { loadConfetti(); }, []);
 
+  // Gate: must have a vibe; hydrate name
   useEffect(() => {
     (async () => {
       const cur = get();
@@ -203,6 +83,111 @@ useEffect(() => {
       setS(get());
     })();
   }, [router]);
+
+  // Day-seeding: Day 2 vs new day
+  useEffect(() => {
+    const today = new Date().toISOString().slice(0, 10);
+    let state = get() || {};
+
+    if (!state.lastSessionDate || state.lastSessionDate !== today) {
+      // Check if last session was yesterday → Day-2 script
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+      const yDate = yesterday.toISOString().slice(0, 10);
+
+      if (state.lastSessionDate === yDate) {
+        const fn = state.firstName && state.firstName !== "Friend" ? state.firstName : "Friend";
+        const wish = state?.currentWish?.wish || "your wish";
+        const booster = "🔑💰🚀";
+
+        const msgs = [
+          { id: newId(), role: "assistant", content: `🌟 Welcome back, ${fn}. I’ve kept the energy flowing from yesterday’s wish: **${wish}**.` },
+          { id: newId(), role: "assistant", content: `✨ Did any signals or opportunities show up yesterday? (yes/no)` },
+          { id: newId(), role: "assistant", content: `Today’s booster code: ${booster}. Type it to lock in abundance flow.` },
+        ];
+
+        const todaySession = {
+          wish:  state?.currentWish?.wish  || "",
+          block: state?.currentWish?.block || "",
+          micro: state?.currentWish?.micro || "",
+          date:  today,
+        };
+
+        set({
+          ...state,
+          currentSession: todaySession,
+          thread: msgs,                 // use 'thread' for ChatBubble list rendering
+          lastSessionDate: today,
+          day2: { phase: "reflect", booster },
+        });
+        setS(get());
+        return; // Day-2 seeded; stop
+      }
+
+      // Otherwise: start a brand-new day thread
+      startNewDaySession({
+        wish: state?.currentWish?.wish || "",
+        block: state?.currentWish?.block || "",
+        micro: state?.currentWish?.micro || "",
+        vibe: state?.vibe || null,
+      });
+      state = get();
+    }
+
+    // If no messages yet, add a deterministic opener
+    const msgs = Array.isArray(state.messages) ? state.messages : [];
+    if (msgs.length === 0 && (!Array.isArray(state.thread) || state.thread.length === 0)) {
+      const w = state?.currentSession?.wish || state?.currentWish?.wish || "";
+      const b = state?.currentSession?.block || state?.currentWish?.block || "";
+      const m = state?.currentSession?.micro || state?.currentWish?.micro || "";
+      const dateNice = new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
+
+      const first = {
+        id: `a-${Date.now()}`,
+        role: "assistant",
+        content: [
+          `✨ **${dateNice} — New Session**`,
+          w ? `**Today's wish:** ${w}` : null,
+          b ? `**Biggest block:** ${b}` : null,
+          m ? `**Your micro-step:** ${m}` : null,
+          `I'm with you—ready to move this forward right now. What feels like the very first nudge?`,
+        ].filter(Boolean).join("\n"),
+      };
+
+      set({ ...state, thread: [first] });
+      setS(get());
+    }
+  }, []);
+
+  // hydrate existing conversation on refresh (server history)
+  useEffect(() => {
+    async function hydrate() {
+      if (!conversationId) { setBooted(true); return; }
+      try {
+        const r = await fetch(`/api/history?conversationId=${conversationId}`);
+        const { messages } = await r.json();
+
+        const thread = (messages || []).map(m => ({
+          id: newId(),
+          role: m.role,
+          content: m.content,
+        }));
+
+        if (thread.length > 0) {
+          set({ thread });
+          setS(get());
+          setStage("chat");
+          setPhase("free");
+          setShowReadyCTA(false);
+        }
+      } catch {
+        // ignore
+      } finally {
+        setBooted(true);
+      }
+    }
+    hydrate();
+  }, [conversationId]);
 
   // derive confirm variant
   useEffect(() => {
@@ -221,51 +206,45 @@ useEffect(() => {
     if (el && stage === "chat") el.scrollTop = el.scrollHeight;
   }, [S.thread, uiOffer, stage, showReadyCTA, pointsBurst]);
 
-  // deterministic intro on empty thread
-useEffect(() => {
-  if (stage !== "chat") return;
+  // deterministic intro on empty thread (first-time)
+  useEffect(() => {
+    if (stage !== "chat") return;
+    const empty = !Array.isArray(S.thread) || S.thread.length === 0;
 
-  const empty = !Array.isArray(S.thread) || S.thread.length === 0;
+    if (empty && !conversationId && phase !== "intro") {
+      setPhase("intro");
+      setShowReadyCTA(false);
+      autoIntroSequence();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stage, S.thread, conversationId]);
 
-  // If we already have a conversation id, hydration will fill the thread.
-  // Do NOT run the intro in that case.
-  if (empty && !conversationId && phase !== "intro") {
-    setPhase("intro");
-    setShowReadyCTA(false);
-    autoIntroSequence();
+  /* soft-confirm actions */
+  function handleLooksRight() {
+    const hasExisting = Array.isArray(get().thread) && get().thread.length > 0;
+    if (!hasExisting && !conversationId) {
+      set({ thread: [] });
+      setPhase("intro");
+      setShowReadyCTA(false);
+      autoIntroSequence();
+    } else {
+      setPhase("free");
+      setShowReadyCTA(false);
+    }
+    setStage("chat");
   }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-}, [stage, S.thread, conversationId]);
 
-/* soft-confirm actions */
-function handleLooksRight() {
-  const hasExisting = Array.isArray(get().thread) && get().thread.length > 0;
-  if (!hasExisting && !conversationId) {
-    set({ thread: [] });
-    setPhase("intro");
-    setShowReadyCTA(false);
-    autoIntroSequence();
-  } else {
-    setPhase("free");
-    setShowReadyCTA(false);
+  function onTweak() { setShowTweaks(true); }
+
+  function onApplyTweaks(next) {
+    setParsed({
+      outcome: next?.outcome ?? parsed.outcome,
+      block:   next?.block   ?? parsed.block,
+      state:  (next?.state ?? parsed.state) || null,
+    });
+    setShowTweaks(false);
+    handleLooksRight();
   }
-  setStage("chat");
-}
-
-// 🔧 bring these back
-function onTweak() {
-  setShowTweaks(true);
-}
-
-function onApplyTweaks(next) {
-  setParsed({
-    outcome: next?.outcome ?? parsed.outcome,
-    block:   next?.block   ?? parsed.block,
-    state:  (next?.state ?? parsed.state) || null,
-  });
-  setShowTweaks(false);
-  handleLooksRight();
-}
 
   async function callGenie({ text, systemHint = null }) {
     const stateNow = get();
@@ -443,69 +422,71 @@ Keep it upbeat, concise, and practical.`;
 
     try {
       // --- Day-2 scripted interaction ---
-const stNow = get();
-if (stNow.day2 && stNow.day2.phase) {
-  const d2 = stNow.day2;
+      const stNow = get();
+      if (stNow.day2 && stNow.day2.phase) {
+        const d2 = stNow.day2;
 
-  // 1) Reflection step (expects yes/no)
-  if (d2.phase === "reflect") {
-    if (!isYesNo(text)) {
-      pushBubble(`Just a quick check-in — type **yes** or **no** ✨`);
-      setThinking(false);
-      return;
-    }
-    const saidYes = /^\s*(yes|y)\s*$/i.test(text);
-    pushBubble(saidYes ? `🔥 Love it. That’s momentum showing up.` : `All good — today we prime the signal.`);
+        // 1) Reflection step (expects yes/no)
+        if (d2.phase === "reflect") {
+          if (!isYesNo(text)) {
+            pushBubble(`Just a quick check-in — type **yes** or **no** ✨`);
+            setThinking(false);
+            return;
+          }
+          const saidYes = /^\s*(yes|y)\s*$/i.test(text);
+          pushBubble(saidYes ? `🔥 Love it. That’s momentum showing up.` : `All good — today we prime the signal.`);
 
-    // move to booster prompt
-    set({ ...get(), day2: { ...d2, phase: "booster" } });
-    setS(get());
-    pushBubble(`Type today’s booster code to lock it: ${d2.booster}`);
-    setThinking(false);
-    return;
-  }
+          // move to booster prompt
+          set({ ...get(), day2: { ...d2, phase: "booster" } });
+          setS(get());
+          pushBubble(`Type today’s booster code to lock it: ${d2.booster}`);
+          setThinking(false);
+          return;
+        }
 
-  // 2) Booster step (expects the emoji sequence)
-  if (d2.phase === "booster") {
-    if (!isBoosterTyped(text, d2.booster)) {
-      pushBubble(`Close — type the exact booster: ${d2.booster}`);
-      setThinking(false);
-      return;
-    }
+        // 2) Booster step (expects the emoji sequence)
+        if (d2.phase === "booster") {
+          if (!isBoosterTyped(text, d2.booster)) {
+            pushBubble(`Close — type the exact booster: ${d2.booster}`);
+            setThinking(false);
+            return;
+          }
 
-    // success!
-    pushBubble(`✅ Booster locked. Abundance channel is active. 🌊💸`);
+          // mark done, celebrate, nudge ring
+          set({ ...get(), day2: { ...d2, phase: "done" } });
+          setS(get());
+          await popConfetti();
+          pushBubble(`Keep your vibe high and take one aligned action. I’ll be here to amplify tomorrow ✨`);
+          setPhase("free");
 
-    // optional: persist an event
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const user = session?.user;
-      if (user) {
-        await supabase.from("user_progress").upsert(
-          {
-            user_id: user.id,
-            day_key: new Date().toISOString().slice(0, 10),
-            step: "day2_booster_done",
-            details: { booster: d2.booster, at: new Date().toISOString() },
-            updated_at: new Date().toISOString(),
-          },
-          { onConflict: "user_id,day_key" }
-        );
+          setRingGlow(true);
+          setTimeout(() => setRingGlow(false), 1100);
+          setTimeout(() => { const el = listRef.current; if (el) el.scrollTop = el.scrollHeight; }, 0);
+
+          // optional: persist an event
+          try {
+            const { data: { session } } = await supabase.auth.getSession();
+            const user = session?.user;
+            if (user) {
+              await supabase.from("user_progress").upsert(
+                {
+                  user_id: user.id,
+                  day_key: new Date().toISOString().slice(0, 10),
+                  step: "day2_booster_done",
+                  details: { booster: d2.booster, at: new Date().toISOString() },
+                  updated_at: new Date().toISOString(),
+                },
+                { onConflict: "user_id,day_key" }
+              );
+            }
+          } catch {}
+
+          setThinking(false);
+          return;
+        }
       }
-    } catch {}
 
-    // mark done and celebrate
-    set({ ...get(), day2: { ...d2, phase: "done" } });
-    setS(get());
-    await popConfetti();
-
-    pushBubble(`Keep your vibe high and take one aligned action. I’ll be here to amplify tomorrow ✨`);
-    setPhase("free");
-    setThinking(false);
-    return;
-  }
-}
-
+      // Exercise flow
       if (phase === "exercise1") {
         if (/^done\b/i.test(text)) {
           await finishExercise1ThenAskDOB();
@@ -560,23 +541,6 @@ if (stNow.day2 && stNow.day2.phase) {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
   }
 
-  /* soft-confirm actions */
-function handleLooksRight() {
-  const hasExisting = Array.isArray(get().thread) && get().thread.length > 0;
-  // Only clear for a true first-time boot (no existing thread + no convo)
-  if (!hasExisting && !conversationId) {
-    set({ thread: [] });
-    setPhase("intro");
-    setShowReadyCTA(false);
-    autoIntroSequence();
-  } else {
-    setPhase("free");
-    setShowReadyCTA(false);
-  }
-  setStage("chat");
-}
-
-
   const overlayStyles = `
 @keyframes pointsPop {
   0% { transform: translate(-50%, 10px) scale(.9); opacity: 0 }
@@ -589,8 +553,6 @@ function handleLooksRight() {
   return (
     <>
       <style dangerouslySetInnerHTML={{ __html: overlayStyles }} />
-
-
 
       {debugOn && (
         <div style={{
@@ -700,130 +662,138 @@ function handleLooksRight() {
             {/* Stage: chat */}
             {stage === "chat" && (
               <>
+                {/* --- Today Recap (compact + circular progress) --- */}
+                {(() => {
+                  // baseline 75; +3 while waiting booster; +5 after success
+                  let pct = 75;
+                  const d2phase = S.day2?.phase || null;
+                  if (d2phase === "booster") pct = 78;
+                  if (d2phase === "done")    pct = 80;
 
+                  const wish  = S.currentSession?.wish  ?? S.currentWish?.wish;
+                  const block = S.currentSession?.block ?? S.currentWish?.block;
+                  const micro = S.currentSession?.micro ?? S.currentWish?.micro;
 
-              {/* --- Today Recap (compact + circular 75%) --- */}
-{(() => {
-// 75% default; bump while/after Day-2 ritual
-let pct = 75;
-const d2phase = S.day2?.phase || null;
-if (d2phase === "booster") pct = 78; // small nudge while waiting for booster
-if (d2phase === "done")    pct = 80; // after booster success
+                  const R = 18;
+                  const C = 2 * Math.PI * R;
+                  const offset = C * (1 - pct / 100);
 
+                  return (
+                    <div className="recap" aria-live="polite">
+                      <div className="left">
+                        <div className="title">
+                          {new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })} — Today
+                        </div>
+                        <div className="line">
+                          {wish  ? <span><strong>Wish:</strong> {wish}</span> : null}
+                          {block ? <span><strong>Block:</strong> {block}</span> : null}
+                          {micro ? <span><strong>Step:</strong> {micro}</span> : null}
+                        </div>
+                      </div>
 
-  const wish  = S.currentSession?.wish  ?? S.currentWish?.wish;
-  const block = S.currentSession?.block ?? S.currentWish?.block;
-  const micro = S.currentSession?.micro ?? S.currentWish?.micro;
+                      <div
+                        className={`ring ${ringGlow ? "glow" : ""}`}
+                        role="progressbar"
+                        aria-valuemin={0}
+                        aria-valuemax={100}
+                        aria-valuenow={pct}
+                        aria-label="Today's progress"
+                      >
+                        <svg className="svg" viewBox="0 0 44 44">
+                          <defs>
+                            <linearGradient id="ringGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                              <stop offset="0%"   stopColor="#ffb74d" />
+                              <stop offset="50%"  stopColor="#ff9800" />
+                              <stop offset="100%" stopColor="#fb8c00" />
+                            </linearGradient>
+                          </defs>
+                          <circle cx="22" cy="22" r={R} stroke="#ffe0a3" strokeWidth="4" fill="none" />
+                          <circle
+                            cx="22" cy="22" r={R}
+                            stroke="url(#ringGrad)" strokeWidth="5" fill="none" strokeLinecap="round"
+                            strokeDasharray={C} strokeDashoffset={offset}
+                            transform="rotate(-90 22 22)"
+                            style={{ transition: "stroke-dashoffset 400ms ease" }}
+                          />
+                        </svg>
+                        <div className="pct">{pct}%</div>
+                      </div>
 
-  // ring geometry
-  const R = 18;                      // radius (smaller)
-  const C = 2 * Math.PI * R;
-  const offset = C * (1 - pct / 100);
+                      <style jsx>{`
+                        .ring.glow .svg { animation: ringPulse 1000ms ease-out both; }
+                        @keyframes ringPulse {
+                          0%   { transform: scale(1);   filter: drop-shadow(0 0 0 rgba(255,153,0,0)); }
+                          40%  { transform: scale(1.06); filter: drop-shadow(0 0 14px rgba(255,153,0,.45)); }
+                          100% { transform: scale(1);   filter: drop-shadow(0 0 0 rgba(255,153,0,0)); }
+                        }
+                        .recap {
+                          display: flex;
+                          align-items: center;
+                          justify-content: space-between;
+                          gap: 10px;
+                          padding: 6px 10px;
+                          border-radius: 8px;
+                          background: #fff8e6;
+                          border: 1px solid rgba(255,165,0,.35);
+                          font-size: 13px;
+                          line-height: 1.3;
+                          margin: 4px 0 8px;
+                        }
+                        .left { min-width: 0; }
+                        .title { font-weight: 700; margin-bottom: 2px; }
+                        .line {
+                          display: flex; gap: 8px; flex-wrap: nowrap;
+                          white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+                        }
+                        .line > span:not(:last-child)::after { content: " | "; opacity: .5; margin-left: 8px; }
+                        .ring { position: relative; width: 44px; height: 44px; flex: 0 0 auto; }
+                        .svg { display: block; width: 44px; height: 44px; filter: drop-shadow(0 0 6px rgba(255,153,0,.18)); }
+                        .pct { position: absolute; inset: 0; display: grid; place-items: center; font-weight: 800; font-size: 11px; color: #9a6a00; }
+                        @media (prefers-reduced-motion: reduce) {
+                          .svg circle[stroke-dashoffset] { transition: none !important; }
+                        }
+                      `}</style>
+                    </div>
+                  );
+                })()}
 
-  return (
-    <div className="recap" aria-live="polite">
-      {/* left: date + one-line recap */}
-      <div className="left">
-        <div className="title">
-          {new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })} — Today
-        </div>
-        <div className="line">
-          {wish  ? <span><strong>Wish:</strong> {wish}</span> : null}
-          {block ? <span><strong>Block:</strong> {block}</span> : null}
-          {micro ? <span><strong>Step:</strong> {micro}</span> : null}
-        </div>
-      </div>
+                {/* Day-2 quick reply chips */}
+                {S.day2?.phase === "reflect" && (
+                  <div style={{ display: "flex", gap: 8, margin: "6px 0 8px" }}>
+                    <button
+                      type="button"
+                      onClick={() => { setInput("yes"); send(); }}
+                      style={{
+                        padding: "8px 12px",
+                        borderRadius: 999,
+                        border: "1px solid rgba(0,0,0,.15)",
+                        background: "#ffffff",
+                        cursor: "pointer",
+                        fontWeight: 800,
+                      }}
+                      aria-label="Yes, I noticed signals or opportunities"
+                    >
+                      Yes
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setInput("no"); send(); }}
+                      style={{
+                        padding: "8px 12px",
+                        borderRadius: 999,
+                        border: "1px solid rgba(0,0,0,.15)",
+                        background: "#ffffff",
+                        cursor: "pointer",
+                        fontWeight: 800,
+                      }}
+                      aria-label="No, I didn’t notice signals yet"
+                    >
+                      No
+                    </button>
+                  </div>
+                )}
 
-      {/* right: compact ring */}
-      <div className="ring" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct} aria-label="Today's progress">
-        <svg className="svg" viewBox="0 0 44 44">
-          <defs>
-            <linearGradient id="ringGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-              <stop offset="0%"   stopColor="#ffb74d" />
-              <stop offset="50%"  stopColor="#ff9800" />
-              <stop offset="100%" stopColor="#fb8c00" />
-            </linearGradient>
-          </defs>
-          <circle cx="22" cy="22" r={R} stroke="#ffe0a3" strokeWidth="4" fill="none" />
-          <circle
-            cx="22" cy="22" r={R}
-            stroke="url(#ringGrad)" strokeWidth="5" fill="none" strokeLinecap="round"
-            strokeDasharray={C} strokeDashoffset={offset}
-            transform="rotate(-90 22 22)"
-            style={{ transition: "stroke-dashoffset 400ms ease" }}
-          />
-        </svg>
-        <div className="pct">{pct}%</div>
-      </div>
-
-      <style jsx>{`
-        .recap {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 10px;
-          padding: 6px 10px;                 /* tighter */
-          border-radius: 8px;
-          background: #fff8e6;
-          border: 1px solid rgba(255,165,0,.35);
-          font-size: 13px;                    /* smaller */
-          line-height: 1.3;                   /* compact */
-          margin: 4px 0 8px;                  /* less vertical space */
-        }
-        .left { min-width: 0; }               /* allow ellipsis */
-        .title { font-weight: 700; margin-bottom: 2px; }
-        .line {
-          display: flex; gap: 8px; flex-wrap: nowrap;
-          white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-        }
-        .line > span:not(:last-child)::after { content: " | "; opacity: .5; margin-left: 8px; }
-        .ring { position: relative; width: 44px; height: 44px; flex: 0 0 auto; }
-        .svg { display: block; width: 44px; height: 44px; filter: drop-shadow(0 0 6px rgba(255,153,0,.18)); }
-        .pct { position: absolute; inset: 0; display: grid; place-items: center; font-weight: 800; font-size: 11px; color: #9a6a00; }
-        @media (prefers-reduced-motion: reduce) {
-          .svg circle[stroke-dashoffset] { transition: none !important; }
-        }
-      `}</style>
-    </div>
-  );
-})()}
-
-{/* Day-2 quick reply chips */}
-{S.day2?.phase === "reflect" && (
-  <div style={{ display: "flex", gap: 8, margin: "6px 0 8px" }}>
-    <button
-      type="button"
-      onClick={() => { setInput("yes"); send(); }}
-      style={{
-        padding: "8px 12px",
-        borderRadius: 999,
-        border: "1px solid rgba(0,0,0,.15)",
-        background: "#ffffff",
-        cursor: "pointer",
-        fontWeight: 800,
-      }}
-      aria-label="Yes, I noticed signals or opportunities"
-    >
-      Yes
-    </button>
-    <button
-      type="button"
-      onClick={() => { setInput("no"); send(); }}
-      style={{
-        padding: "8px 12px",
-        borderRadius: 999,
-        border: "1px solid rgba(0,0,0,.15)",
-        background: "#ffffff",
-        cursor: "pointer",
-        fontWeight: 800,
-      }}
-      aria-label="No, I didn’t notice signals yet"
-    >
-      No
-    </button>
-  </div>
-)}
-
+                {/* Thread */}
                 <div
                   ref={listRef}
                   style={{
@@ -902,21 +872,22 @@ if (d2phase === "done")    pct = 80; // after booster success
                 </div>
               </>
             )}
-                    {/* Debug pill */}
-      <div style={{ display: "flex", justifyContent: "center", margin: "10px 0" }}>
-        <button
-          onClick={() => setDebugOn((v) => !v)}
-          style={{
-            fontSize: 12, fontWeight: 800, letterSpacing: .3,
-            background: debugOn ? "#dcfce7" : "#e5e7eb",
-            color: "#111", border: "1px solid rgba(0,0,0,0.15)",
-            borderRadius: 999, padding: "6px 10px", cursor: "pointer",
-          }}
-          aria-pressed={debugOn}
-        >
-          Debug: {debugOn ? "ON" : "OFF"}
-        </button>
-      </div>
+          </div>
+
+          {/* Debug pill at the bottom */}
+          <div style={{ display: "flex", justifyContent: "center", margin: "6px 0 12px" }}>
+            <button
+              onClick={() => setDebugOn((v) => !v)}
+              style={{
+                fontSize: 12, fontWeight: 800, letterSpacing: .3,
+                background: debugOn ? "#dcfce7" : "#e5e7eb",
+                color: "#111", border: "1px solid rgba(0,0,0,0.15)",
+                borderRadius: 999, padding: "6px 10px", cursor: "pointer",
+              }}
+              aria-pressed={debugOn}
+            >
+              Debug: {debugOn ? "ON" : "OFF"}
+            </button>
           </div>
         </div>
       </div>
