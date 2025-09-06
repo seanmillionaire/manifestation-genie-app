@@ -20,9 +20,6 @@ function escapeHTML(s = "") {
 function nl2br(s = "") { return s.replace(/\n/g, "<br/>"); }
 function pretty(o) { try { return JSON.stringify(o, null, 2); } catch { return String(o); } }
 function isYesNo(s = "") { return /^\s*(yes|y|no|n)\s*$/i.test(s); }
-function isBoosterTyped(s = "", code = "") {
-  return s.replace(/\s/g, "").includes((code || "").replace(/\s/g, ""));
-}
 
 /* confetti (client-only) */
 let _confetti = null;
@@ -115,12 +112,10 @@ export default function ChatPage() {
       if (state.lastSessionDate === yDate) {
         const fn = state.firstName && state.firstName !== "Friend" ? state.firstName : "Friend";
         const wish = state?.currentWish?.wish || "your wish";
-        const booster = "🔑💰🚀";
 
         const msgs = [
           { id: newId(), role: "assistant", content: `🌟 Welcome back, ${fn}. I’ve kept the energy flowing from yesterday’s wish: **${wish}**.` },
           { id: newId(), role: "assistant", content: `✨ Did any signals or opportunities show up yesterday? (yes/no)` },
-          { id: newId(), role: "assistant", content: `Today’s booster code: ${booster}. Type it to lock in abundance flow.` },
         ];
 
         const todaySession = {
@@ -135,7 +130,12 @@ export default function ChatPage() {
           currentSession: todaySession,
           thread: msgs,
           lastSessionDate: today,
-          day2: { phase: "reflect", booster },
+          // Day-2 path with affirmation (no emoji booster)
+          day2: {
+            phase: "reflect",
+            template: `I now see myself achieving ${wish} today with the help of the Genie.`,
+            doneAt: null,
+          },
         });
         setS(get());
         setStage("chat");
@@ -433,90 +433,88 @@ Keep it upbeat, concise, and practical.`;
     }, 500);
   }
 
-  // 🔧 UPDATED: allow an override text so chips can auto-send
-// allow an override text so chips can auto-send
-async function send(textOverride = null) {
-  const text = (textOverride ?? input).trim();
-  if (!text || thinking) return;
-  setInput("");
-  setThinking(true);
+  // ✅ Unified, async send — supports auto-send chips via textOverride
+  async function send(textOverride = null) {
+    const text = (textOverride ?? input).trim();
+    if (!text || thinking) return;
+    setInput("");
+    setThinking(true);
 
-  pushThread({ role: "user", content: text, id: newId() }); // <- text (not textRaw)
-  setS(get());
+    pushThread({ role: "user", content: text, id: newId() });
+    setS(get());
 
-  try {
-    const stNow = get();
-    if (stNow.day2 && stNow.day2.phase) {
-      const d2 = stNow.day2;
+    try {
+      // --- Day-2 scripted interaction (reflect → affirm → done) ---
+      const stNow = get();
+      if (stNow.day2 && stNow.day2.phase && stNow.day2.doneAt !== new Date().toISOString().slice(0, 10)) {
+        const d2 = stNow.day2;
 
-      // 1) reflection
-      if (d2.phase === "reflect") {
-        if (!isYesNo(text)) {
-          pushBubble(`Just a quick check-in — type **yes** or **no** ✨`);
-          setThinking(false);
-          return;
-        }
-        const saidYes = /^\s*(yes|y)\s*$/i.test(text);
-        pushBubble(saidYes ? `🔥 Love it. That’s momentum showing up.` : `All good — today we prime the signal.`);
+        // 1) Reflection step (expects yes/no)
+        if (d2.phase === "reflect") {
+          if (!isYesNo(text)) {
+            pushBubble(`Just a quick check-in — type **yes** or **no** ✨`);
+            setThinking(false);
+            return;
+          }
+          const saidYes = /^\s*(yes|y)\s*$/i.test(text);
+          pushBubble(saidYes ? `🔥 Love it. That’s momentum showing up.` : `All good — today we prime the signal.`);
 
-        set({ ...get(), day2: { ...d2, phase: "booster" } });
-        setS(get());
-        pushBubble(`Type today’s booster code to lock it: ${d2.booster}`);
-        setThinking(false);
-        return;
-      }
-
-      // 2) booster
-      if (d2.phase === "booster") {
-        if (!isBoosterTyped(text, d2.booster)) {
-          pushBubble(`Close — type the exact booster: ${d2.booster}`);
+          // move to affirmation prompt
+          const wish = (get().currentSession?.wish ?? get().currentWish?.wish) || "my goal";
+          const template = `I now see myself achieving ${wish} today with the help of the Genie.`;
+          set({ ...get(), day2: { ...d2, phase: "affirm", template } });
+          setS(get());
+          pushBubble(`Type this to lock in your focus (exactly):\n\n**${template}**`);
           setThinking(false);
           return;
         }
 
-        set({ ...get(), day2: { ...d2, phase: "done" } });
-        setS(get());
-        await popConfetti();
-        pushBubble(`Keep your vibe high and take one aligned action. I’ll be here to amplify tomorrow ✨`);
-        setPhase("free");
+        // 2) Affirmation step (expects exact text)
+        if (d2.phase === "affirm") {
+          const target = (d2.template || "").replace(/\s+/g, " ").trim();
+          const said   = text.replace(/\s+/g, " ").trim();
+          if (said !== target) {
+            pushBubble(`So close — type it **exactly** like this:\n\n**${target}**`);
+            setThinking(false);
+            return;
+          }
 
-        setRingGlow(true);
-        setTimeout(() => setRingGlow(false), 1100);
+          // mark done, celebrate, nudge ring, and do not re-prompt again today
+          const today = new Date().toISOString().slice(0, 10);
+          set({ ...get(), day2: { ...d2, phase: "done", doneAt: today } });
+          setS(get());
+          await popConfetti();
+          pushBubble(`Locked in. Keep your vibe high and take one aligned action. I’ll be here to amplify tomorrow ✨`);
+          setPhase("free");
 
-        // persist event (unchanged)...
-        // ...
-        setThinking(false);
-        return;
+          setRingGlow(true);
+          setTimeout(() => setRingGlow(false), 1100);
+
+          // optional: persist an event
+          try {
+            const { data: { session } } = await supabase.auth.getSession();
+            const user = session?.user;
+            if (user) {
+              await supabase.from("user_progress").upsert(
+                {
+                  user_id: user.id,
+                  day_key: today,
+                  step: "day2_affirm_done",
+                  details: { text: d2.template, at: new Date().toISOString() },
+                  updated_at: new Date().toISOString(),
+                },
+                { onConflict: "user_id,day_key" }
+              );
+            }
+          } catch {}
+          setThinking(false);
+          return;
+        }
       }
-    }
-
-    // exercise / dob / free chat paths — replace textRaw with text
-    if (phase === "exercise1") {
-      if (/^done\b/i.test(text)) { await finishExercise1ThenAskDOB(); setThinking(false); return; }
-      pushBubble(`No rush. Do the 2-min reset, then type **done** when finished.`);
-      setThinking(false);
-      return;
-    }
-    if (phase === "dob") {
-      if (isDOB(text)) { await runNumerology(text); setThinking(false); return; }
-      pushBubble(`Got it. Please send DOB like **MM/DD/YYYY** (e.g., 08/14/1990).`);
-      setThinking(false);
-      return;
-    }
-
-    const combined = S?.prompt_spec?.prompt ? `${S.prompt_spec.prompt}\n\nUser: ${text}` : text;
-    // ... rest unchanged
-  } catch {
-    pushBubble("The lamp flickered. Try again in a moment.");
-  } finally {
-    setThinking(false);
-  }
-}
-
 
       // Exercise flow
       if (phase === "exercise1") {
-        if (/^done\b/i.test(textRaw)) {
+        if (/^done\b/i.test(text)) {
           await finishExercise1ThenAskDOB();
           setThinking(false);
           return;
@@ -528,8 +526,8 @@ async function send(textOverride = null) {
       }
 
       if (phase === "dob") {
-        if (isDOB(textRaw)) {
-          await runNumerology(textRaw);
+        if (isDOB(text)) {
+          await runNumerology(text);
           setThinking(false);
           return;
         } else {
@@ -540,7 +538,7 @@ async function send(textOverride = null) {
       }
 
       // FREE CHAT
-      const combined = S?.prompt_spec?.prompt ? `${S.prompt_spec.prompt}\n\nUser: ${textRaw}` : textRaw;
+      const combined = S?.prompt_spec?.prompt ? `${S.prompt_spec.prompt}\n\nUser: ${text}` : text;
 
       try {
         const { goal, belief } = detectBeliefFrom(combined);
@@ -694,8 +692,8 @@ async function send(textOverride = null) {
                 {(() => {
                   let pct = 75;
                   const d2phase = S.day2?.phase || null;
-                  if (d2phase === "booster") pct = 78;
-                  if (d2phase === "done")    pct = 80;
+                  if (d2phase === "affirm") pct = 78;
+                  if (d2phase === "done")   pct = 80;
 
                   const wish  = S.currentSession?.wish  ?? S.currentWish?.wish;
                   const block = S.currentSession?.block ?? S.currentWish?.block;
@@ -784,42 +782,6 @@ async function send(textOverride = null) {
                   );
                 })()}
 
-                {/* Day-2 quick reply chips — auto-send now */}
-                {S.day2?.phase === "reflect" && (
-                  <div style={{ display: "flex", gap: 8, margin: "6px 0 8px" }}>
-                    <button
-                      type="button"
-                      onClick={() => send("yes")}
-                      style={{
-                        padding: "8px 12px",
-                        borderRadius: 999,
-                        border: "1px solid rgba(0,0,0,.15)",
-                        background: "#ffffff",
-                        cursor: "pointer",
-                        fontWeight: 800,
-                      }}
-                      aria-label="Yes, I noticed signals or opportunities"
-                    >
-                      Yes
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => send("no")}
-                      style={{
-                        padding: "8px 12px",
-                        borderRadius: 999,
-                        border: "1px solid rgba(0,0,0,.15)",
-                        background: "#ffffff",
-                        cursor: "pointer",
-                        fontWeight: 800,
-                      }}
-                      aria-label="No, I didn’t notice signals yet"
-                    >
-                      No
-                    </button>
-                  </div>
-                )}
-
                 {/* Thread */}
                 <div
                   ref={listRef}
@@ -859,6 +821,42 @@ async function send(textOverride = null) {
                     <div style={{ opacity: .7, fontStyle: "italic", marginTop: 6 }}>Genie is thinking…</div>
                   )}
                 </div>
+
+                {/* Day-2 quick reply chips — BELOW the thread, auto-send */}
+                {S.day2?.phase === "reflect" && (
+                  <div style={{ display: "flex", gap: 8, margin: "6px 0 8px" }}>
+                    <button
+                      type="button"
+                      onClick={() => send("yes")}
+                      style={{
+                        padding: "8px 12px",
+                        borderRadius: 999,
+                        border: "1px solid rgba(0,0,0,.15)",
+                        background: "#ffffff",
+                        cursor: "pointer",
+                        fontWeight: 800,
+                      }}
+                      aria-label="Yes, I noticed signals or opportunities"
+                    >
+                      Yes
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => send("no")}
+                      style={{
+                        padding: "8px 12px",
+                        borderRadius: 999,
+                        border: "1px solid rgba(0,0,0,.15)",
+                        background: "#ffffff",
+                        cursor: "pointer",
+                        fontWeight: 800,
+                      }}
+                      aria-label="No, I didn’t notice signals yet"
+                    >
+                      No
+                    </button>
+                  </div>
+                )}
 
                 {/* “Yes, I’m ready” CTA */}
                 {showReadyCTA && (
