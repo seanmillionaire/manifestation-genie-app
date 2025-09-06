@@ -84,92 +84,112 @@ export default function ChatPage() {
     })();
   }, [router]);
 
-  // Day-seeding: Day 2 vs new day
-  useEffect(() => {
-    const today = new Date().toISOString().slice(0, 10);
-    let state = get() || {};
-// --- TEST HOOK: force Day-2 experience with ?forceDay=2
-if (typeof window !== "undefined" && router?.query?.forceDay === "2") {
+// Day-seeding: Day 2 vs new day (robust + testable)
+useEffect(() => {
+  if (!router.isReady) return;
+
+  // reliable query read (router.query can be empty on first paint)
+  const qs = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
+  const forceDay = qs?.get("forceDay");   // "2" to force day-2
+  const doReset  = qs?.get("reset") === "1";
+
   const today = new Date().toISOString().slice(0, 10);
-  const yesterday = new Date(); yesterday.setDate(yesterday.getDate() - 1);
-  const yDate = yesterday.toISOString().slice(0, 10);
+  let state = get() || {};
 
-  // Pretend we used the app yesterday so Day-2 path triggers
-  state = { ...state, lastSessionDate: yDate };
-  // Re-run the Day-2 branch by falling through to your existing logic
-}
+  // Optional: developer reset to see the seeding again
+  if (doReset) {
+    set({ ...state, thread: [], messages: [], lastSessionDate: null, day2: null });
+    state = get();
+  }
 
-    if (!state.lastSessionDate || state.lastSessionDate !== today) {
-      // Check if last session was yesterday → Day-2 script
-      const yesterday = new Date();
-      yesterday.setDate(yesterday.getDate() - 1);
-      const yDate = yesterday.toISOString().slice(0, 10);
+  // If tester asked for Day-2, pretend we used the app yesterday
+  if (forceDay === "2") {
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yDate = yesterday.toISOString().slice(0, 10);
+    // We only mutate our local view here; the logic below will write to FlowState.
+    state = { ...state, lastSessionDate: yDate };
+  }
 
-      if (state.lastSessionDate === yDate) {
-        const fn = state.firstName && state.firstName !== "Friend" ? state.firstName : "Friend";
-        const wish = state?.currentWish?.wish || "your wish";
-        const booster = "🔑💰🚀";
+  // If we haven't opened a session today…
+  if (!state.lastSessionDate || state.lastSessionDate !== today) {
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yDate = yesterday.toISOString().slice(0, 10);
 
-        const msgs = [
-          { id: newId(), role: "assistant", content: `🌟 Welcome back, ${fn}. I’ve kept the energy flowing from yesterday’s wish: **${wish}**.` },
-          { id: newId(), role: "assistant", content: `✨ Did any signals or opportunities show up yesterday? (yes/no)` },
-          { id: newId(), role: "assistant", content: `Today’s booster code: ${booster}. Type it to lock in abundance flow.` },
-        ];
+    // Day-2 scripted welcome if last session was yesterday (or forced)
+    if (state.lastSessionDate === yDate) {
+      const fn = state.firstName && state.firstName !== "Friend" ? state.firstName : "Friend";
+      const wish = state?.currentWish?.wish || "your wish";
+      const booster = "🔑💰🚀";
 
-        const todaySession = {
-          wish:  state?.currentWish?.wish  || "",
-          block: state?.currentWish?.block || "",
-          micro: state?.currentWish?.micro || "",
-          date:  today,
-        };
+      const msgs = [
+        { id: newId(), role: "assistant", content: `🌟 Welcome back, ${fn}. I’ve kept the energy flowing from yesterday’s wish: **${wish}**.` },
+        { id: newId(), role: "assistant", content: `✨ Did any signals or opportunities show up yesterday? (yes/no)` },
+        { id: newId(), role: "assistant", content: `Today’s booster code: ${booster}. Type it to lock in abundance flow.` },
+      ];
 
-        set({
-          ...state,
-          currentSession: todaySession,
-          thread: msgs,                 // use 'thread' for ChatBubble list rendering
-          lastSessionDate: today,
-          day2: { phase: "reflect", booster },
-        });
-        setS(get());
-        return; // Day-2 seeded; stop
-      }
-
-      // Otherwise: start a brand-new day thread
-      startNewDaySession({
-        wish: state?.currentWish?.wish || "",
+      const todaySession = {
+        wish:  state?.currentWish?.wish  || "",
         block: state?.currentWish?.block || "",
         micro: state?.currentWish?.micro || "",
-        vibe: state?.vibe || null,
-      });
-      state = get();
-    }
-
-    // Seed a clear first assistant message for today if the thread is empty
-    const threadNow = Array.isArray(state.thread) ? state.thread : [];
-    if (threadNow.length === 0) {
-      const w = state?.currentSession?.wish  || state?.currentWish?.wish  || "";
-      const b = state?.currentSession?.block || state?.currentWish?.block || "";
-      const m = state?.currentSession?.micro || state?.currentWish?.micro || "";
-      const dateNice = new Date().toLocaleDateString(undefined, {
-        weekday: "long", month: "long", day: "numeric",
-      });
-
-      const first = {
-        id: `a-${Date.now()}`,
-        role: "assistant",
-        content: [
-          `✨ **${dateNice} — New Session**`,
-          w ? `**Today's wish:** ${w}` : null,
-          b ? `**Biggest block:** ${b}` : null,
-          m ? `**Your micro-step:** ${m}` : null,
-          `I'm with you—ready to move this forward right now. What feels like the very first nudge?`,
-        ].filter(Boolean).join("\n"),
+        date:  today,
       };
 
-      set({ ...state, thread: [first] });
+      set({
+        ...state,
+        currentSession: todaySession,
+        thread: msgs,                 // use thread (not messages)
+        lastSessionDate: today,
+        day2: { phase: "reflect", booster },
+      });
       setS(get());
+      setStage("chat");               // make sure we’re showing the chat
+      setPhase("free");
+      setShowReadyCTA(false);
+      return;
     }
-  }, []);
+
+    // Otherwise: start a brand-new day thread
+    startNewDaySession({
+      wish:  state?.currentWish?.wish  || "",
+      block: state?.currentWish?.block || "",
+      micro: state?.currentWish?.micro || "",
+      vibe:  state?.vibe || null,
+    });
+    state = get();
+  }
+
+  // If no thread yet, seed a clear first assistant msg
+  const threadNow = Array.isArray(state.thread) ? state.thread : [];
+  if (threadNow.length === 0) {
+    const w = state?.currentSession?.wish  || state?.currentWish?.wish  || "";
+    const b = state?.currentSession?.block || state?.currentWish?.block || "";
+    const m = state?.currentSession?.micro || state?.currentWish?.micro || "";
+    const dateNice = new Date().toLocaleDateString(undefined, {
+      weekday: "long", month: "long", day: "numeric",
+    });
+
+    const first = {
+      id: `a-${Date.now()}`,
+      role: "assistant",
+      content: [
+        `✨ **${dateNice} — New Session**`,
+        w ? `**Today's wish:** ${w}` : null,
+        b ? `**Biggest block:** ${b}` : null,
+        m ? `**Your micro-step:** ${m}` : null,
+        `I'm with you—ready to move this forward right now. What feels like the very first nudge?`,
+      ].filter(Boolean).join("\n"),
+    };
+
+    set({ ...state, thread: [first] });
+    setS(get());
+    setStage("chat");
+    setPhase("free");
+    setShowReadyCTA(false);
+  }
+}, [router.isReady]);
+
 
   // hydrate existing conversation on refresh (server history)
   useEffect(() => {
