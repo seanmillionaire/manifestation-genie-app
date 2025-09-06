@@ -134,32 +134,31 @@ export default function ChatPage() {
       state = get();
     }
 
-     // Seed a clear first assistant message for today if the thread is empty
-  const threadNow = Array.isArray(state.thread) ? state.thread : [];
-  if (threadNow.length === 0) {
-    const w = state?.currentSession?.wish  || state?.currentWish?.wish  || "";
-    const b = state?.currentSession?.block || state?.currentWish?.block || "";
-    const m = state?.currentSession?.micro || state?.currentWish?.micro || "";
-    const dateNice = new Date().toLocaleDateString(undefined, {
-      weekday: "long", month: "long", day: "numeric",
-    });
+    // Seed a clear first assistant message for today if the thread is empty
+    const threadNow = Array.isArray(state.thread) ? state.thread : [];
+    if (threadNow.length === 0) {
+      const w = state?.currentSession?.wish  || state?.currentWish?.wish  || "";
+      const b = state?.currentSession?.block || state?.currentWish?.block || "";
+      const m = state?.currentSession?.micro || state?.currentWish?.micro || "";
+      const dateNice = new Date().toLocaleDateString(undefined, {
+        weekday: "long", month: "long", day: "numeric",
+      });
 
-    const first = {
-      id: `a-${Date.now()}`,
-      role: "assistant",
-      content: [
-        `✨ **${dateNice} — New Session**`,
-        w ? `**Today's wish:** ${w}` : null,
-        b ? `**Biggest block:** ${b}` : null,
-        m ? `**Your micro-step:** ${m}` : null,
-        `I'm with you—ready to move this forward right now. What feels like the very first nudge?`,
-      ].filter(Boolean).join("\n"),
-    };
+      const first = {
+        id: `a-${Date.now()}`,
+        role: "assistant",
+        content: [
+          `✨ **${dateNice} — New Session**`,
+          w ? `**Today's wish:** ${w}` : null,
+          b ? `**Biggest block:** ${b}` : null,
+          m ? `**Your micro-step:** ${m}` : null,
+          `I'm with you—ready to move this forward right now. What feels like the very first nudge?`,
+        ].filter(Boolean).join("\n"),
+      };
 
-    set({ ...state, thread: [first] }); // 👈 use thread, not messages
-    setS(get());
-  }
-
+      set({ ...state, thread: [first] });
+      setS(get());
+    }
   }, []);
 
   // hydrate existing conversation on refresh (server history)
@@ -236,9 +235,7 @@ export default function ChatPage() {
     }
     setStage("chat");
   }
-
   function onTweak() { setShowTweaks(true); }
-
   function onApplyTweaks(next) {
     setParsed({
       outcome: next?.outcome ?? parsed.outcome,
