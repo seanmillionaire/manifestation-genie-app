@@ -145,9 +145,7 @@ export default async function handler(req, res) {
     const shortPing = rawText.trim().split(/\s+/).length <= 3;
 
     if (sigilTriggers.some(w => lastUserMessage.includes(w)) || (lastWasQuestion && shortPing)) {
-       const dob = findDOBIn(cleanedHistory, text);
- const goal = goalFrom(context, cleanedHistory);
- const sigil = getDynamicSigil({ name: userName || "Friend", dob, goal });
+      const sigil = getRandomSigil();
       await saveTurn({
         conversationId: convoId,
         messages: [
