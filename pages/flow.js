@@ -4,6 +4,7 @@ import { useRouter } from 'next/router';
 import { get, set } from '../src/flowState';
 import { generateChecklist } from '../src/checklistGen';
 import { supabase } from "../src/supabaseClient";
+import MagicalButton from "../components/Shared/MagicalButton";
 
 export default function Flow() {
   const router = useRouter();
