@@ -63,7 +63,7 @@ async function lock() {
   return (
     <main style={{ width: 'min(900px, 94vw)', margin: '30px auto' }}>
       <h1 style={{ fontSize: 28, fontWeight: 900, margin: '0 0 12px' }}>
-        Your manifestation plan for today
+        Your manifestation roadmap for today
       </h1>
 
       <p className="text-sm text-black/60 h-5" aria-live="polite">
@@ -87,7 +87,7 @@ async function lock() {
           }}
         >
           <label style={{ margin: '12px 0 6px', display: 'block', fontWeight: 600 }}>
-            What do you desire to call in?
+            What do you want to manifest?
           </label>
           <textarea
             rows={3}
@@ -98,7 +98,7 @@ async function lock() {
           />
 
           <label style={{ margin: '12px 0 6px', display: 'block', fontWeight: 600 }}>
-            What’s the block in the way?
+            What's your biggest challenge?
           </label>
           <textarea
             rows={2}
@@ -109,7 +109,7 @@ async function lock() {
           />
 
           <label style={{ margin: '12px 0 6px', display: 'block', fontWeight: 600 }}>
-            What aligned step can you take right now?
+            What small step can you take right now?
           </label>
           <input
             style={input}
