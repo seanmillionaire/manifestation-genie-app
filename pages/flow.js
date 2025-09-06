@@ -132,7 +132,7 @@ async function lock() {
               width: '100%',
             }}
           >
-            ✨ Start my manifestation →
+            ✨ Begin the magic →
           </button>
         </div>
       </section>
