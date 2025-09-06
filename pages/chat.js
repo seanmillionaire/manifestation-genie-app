@@ -51,49 +51,66 @@ const { conversationId, setConversationId } = useGenieConversation();
 const [booted, setBooted] = useState(false);
   
 // --- ensure we're in a fresh "today" thread; seed first message if empty
-// pages/chat.js
 useEffect(() => {
-  const today = new Date().toISOString().slice(0,10);
-  let S = get() || {};
+  const today = new Date().toISOString().slice(0, 10);
+  let state = get() || {};
 
-  if (!S.lastSessionDate || S.lastSessionDate !== today) {
+  // If we haven't opened a session today…
+  if (!state.lastSessionDate || state.lastSessionDate !== today) {
+    // Check if yesterday was the last session → Day 2 experience
     const yesterday = new Date();
     yesterday.setDate(yesterday.getDate() - 1);
-    const yDate = yesterday.toISOString().slice(0,10);
+    const yDate = yesterday.toISOString().slice(0, 10);
 
-    // if last session was exactly yesterday → Day 2 flow
-    if (S.lastSessionDate === yDate) {
-      // seed special Day 2 messages
-      const fn = S.firstName && S.firstName !== "Friend" ? S.firstName : "Friend";
-      const wish = S?.currentWish?.wish || "your wish";
+    if (state.lastSessionDate === yDate) {
+      const fn = state.firstName && state.firstName !== "Friend" ? state.firstName : "Friend";
+      const wish = state?.currentWish?.wish || "your wish";
       const booster = "🔑💰🚀";
 
       const msgs = [
-        { id: newId(), role: "assistant",
-          content: `🌟 Welcome back, ${fn}. I’ve kept the energy flowing from yesterday’s wish: **${wish}**.` },
-        { id: newId(), role: "assistant",
-          content: `✨ Did any signals or opportunities show up yesterday? (yes/no)` },
-        { id: newId(), role: "assistant",
-          content: `Today’s booster code: ${booster}. Type it to lock in abundance flow.` },
+        {
+          id: newId(),
+          role: "assistant",
+          content: `🌟 Welcome back, ${fn}. I’ve kept the energy flowing from yesterday’s wish: **${wish}**.`,
+        },
+        {
+          id: newId(),
+          role: "assistant",
+          content: `✨ Did any signals or opportunities show up yesterday? (yes/no)`,
+        },
+        {
+          id: newId(),
+          role: "assistant",
+          content: `Today’s booster code: ${booster}. Type it to lock in abundance flow.`,
+        },
       ];
-      set({ ...S, messages: msgs, lastSessionDate: today });
-      return;
+
+      set({ ...state, messages: msgs, lastSessionDate: today });
+      setS(get());
+      return; // Day 2 seeded — stop here
     }
 
-    // else → normal Day 1/new session logic
-    startNewDaySession({...});
+    // Otherwise start a brand-new day thread (Day 1 or gap days)
+    startNewDaySession({
+      wish: state?.currentWish?.wish || "",
+      block: state?.currentWish?.block || "",
+      micro: state?.currentWish?.micro || "",
+      vibe: state?.vibe || null,
+    });
+
+    state = get(); // refresh local snapshot
   }
-}, []);
 
-
-  // 2) seed a clear first assistant message for today if the thread is empty
-  const msgs = Array.isArray(S.messages) ? S.messages : [];
+  // Seed a clear first assistant message for today if the thread is empty
+  const msgs = Array.isArray(state.messages) ? state.messages : [];
   if (msgs.length === 0) {
-    const w = S?.currentSession?.wish || S?.currentWish?.wish || "";
-    const b = S?.currentSession?.block || S?.currentWish?.block || "";
-    const m = S?.currentSession?.micro || S?.currentWish?.micro || "";
+    const w = state?.currentSession?.wish || state?.currentWish?.wish || "";
+    const b = state?.currentSession?.block || state?.currentWish?.block || "";
+    const m = state?.currentSession?.micro || state?.currentWish?.micro || "";
     const dateNice = new Date().toLocaleDateString(undefined, {
-      weekday: "long", month: "long", day: "numeric"
+      weekday: "long",
+      month: "long",
+      day: "numeric",
     });
 
     const first = {
@@ -104,13 +121,18 @@ useEffect(() => {
         w ? `**Today's wish:** ${w}` : null,
         b ? `**Biggest block:** ${b}` : null,
         m ? `**Your micro-step:** ${m}` : null,
-        `I'm with you—ready to move this forward right now. What feels like the very first nudge?`
-      ].filter(Boolean).join("\n"),
+        `I'm with you—ready to move this forward right now. What feels like the very first nudge?`,
+      ]
+        .filter(Boolean)
+        .join("\n"),
     };
 
-    set({ ...S, messages: [first] });
+    set({ ...state, messages: [first] });
+    setS(get());
   }
 }, []);
+
+
 
 // hydrate existing conversation on refresh
 useEffect(() => {
