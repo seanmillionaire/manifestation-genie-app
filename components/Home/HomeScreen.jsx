@@ -222,7 +222,7 @@ const startManifesting = () => {
           </div>
 
           <div style={{ fontSize: 14, lineHeight: 1.6 }}>
-            <strong>Pinky promise:</strong> I use Manifestation Genie for good vibes only—uplifting
+            <strong>Pinky promise:</strong> I will use Manifestation Genie for good vibes only—uplifting
             myself and others. No harm, no coercion, no shady wishes. I own my choices. This is
             spiritual self-help, not medical, legal, or financial advice.
           </div>
