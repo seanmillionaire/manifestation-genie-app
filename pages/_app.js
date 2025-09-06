@@ -40,16 +40,28 @@ function NavLink({ href, label, isActive, count }) {
       >
         {label}
         {count !== undefined && count > 0 && (
-          <span className="mg-badge" aria-label={`${count} new notifications`}>
-            <span className="mg-badge-ping" aria-hidden="true" />
-            {count > 99 ? "99+" : count}
+          <span
+            style={{
+              position: "absolute",
+              top: -2,
+              right: -6,
+              background: "red",
+              color: "white",
+              fontSize: 12,
+              fontWeight: 700,
+              borderRadius: "9999px",
+              padding: "2px 6px",
+              lineHeight: 1,
+            }}
+            aria-label={`${count} new notifications`}
+          >
+            {count}
           </span>
         )}
       </a>
     </Link>
   );
 }
-
 
 
 function LogoHeader({ currentPath, isAuthed }) {
@@ -91,7 +103,7 @@ function LogoHeader({ currentPath, isAuthed }) {
         currentPath === l.href ||
         (l.href !== "/" && currentPath.startsWith(l.href))
       }
-      count={l.label === "Start" ? 3 : undefined}
+      count={l.label === "Start" ? 3 : undefined} // shows badge only on Start
     />
   ))
 ) : (
@@ -191,7 +203,7 @@ export default function App({ Component, pageProps }) {
           /* --- Start badge animation --- */
 @keyframes mg-pulse {
   0% { transform: scale(1); opacity: .7; }
-  70% { transform: scale(1.1); opacity: 0; }
+  70% { transform: scale(1.9); opacity: 0; }
   100% { transform: scale(2); opacity: 0; }
 }
 .mg-badge {
