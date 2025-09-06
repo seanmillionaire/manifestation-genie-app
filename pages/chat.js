@@ -788,6 +788,41 @@ if (d2phase === "done")    pct = 80; // after booster success
   );
 })()}
 
+{/* Day-2 quick reply chips */}
+{S.day2?.phase === "reflect" && (
+  <div style={{ display: "flex", gap: 8, margin: "6px 0 8px" }}>
+    <button
+      type="button"
+      onClick={() => { setInput("yes"); send(); }}
+      style={{
+        padding: "8px 12px",
+        borderRadius: 999,
+        border: "1px solid rgba(0,0,0,.15)",
+        background: "#ffffff",
+        cursor: "pointer",
+        fontWeight: 800,
+      }}
+      aria-label="Yes, I noticed signals or opportunities"
+    >
+      Yes
+    </button>
+    <button
+      type="button"
+      onClick={() => { setInput("no"); send(); }}
+      style={{
+        padding: "8px 12px",
+        borderRadius: 999,
+        border: "1px solid rgba(0,0,0,.15)",
+        background: "#ffffff",
+        cursor: "pointer",
+        fontWeight: 800,
+      }}
+      aria-label="No, I didn’t notice signals yet"
+    >
+      No
+    </button>
+  </div>
+)}
 
                 <div
                   ref={listRef}
