@@ -130,23 +130,10 @@ export default function Flow() {
             placeholder="Send it. Start it. Claim it."
           />
 
-          <button
-            type="button"               // ✅ prevents implicit submit/reload
-            onClick={lock}
-            disabled={!can}
-            style={{
-              marginTop: 14,
-              padding: '12px 16px',
-              borderRadius: 14,
-              border: 0,
-              background: can ? '#ffd600' : '#ffe680',
-              fontWeight: 900,
-              cursor: can ? 'pointer' : 'not-allowed',
-              width: '100%',
-            }}
-          >
-            ✨ Begin the magic →
-          </button>
+     <MagicalButton onClick={lock} disabled={!can}>
+  ✨ Begin the magic →
+</MagicalButton>
+
         </div>
       </section>
     </main>
