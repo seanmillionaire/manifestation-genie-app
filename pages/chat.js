@@ -88,6 +88,16 @@ export default function ChatPage() {
   useEffect(() => {
     const today = new Date().toISOString().slice(0, 10);
     let state = get() || {};
+// --- TEST HOOK: force Day-2 experience with ?forceDay=2
+if (typeof window !== "undefined" && router?.query?.forceDay === "2") {
+  const today = new Date().toISOString().slice(0, 10);
+  const yesterday = new Date(); yesterday.setDate(yesterday.getDate() - 1);
+  const yDate = yesterday.toISOString().slice(0, 10);
+
+  // Pretend we used the app yesterday so Day-2 path triggers
+  state = { ...state, lastSessionDate: yDate };
+  // Re-run the Day-2 branch by falling through to your existing logic
+}
 
     if (!state.lastSessionDate || state.lastSessionDate !== today) {
       // Check if last session was yesterday → Day-2 script
