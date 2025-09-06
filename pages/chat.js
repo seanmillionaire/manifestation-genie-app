@@ -442,6 +442,70 @@ Keep it upbeat, concise, and practical.`;
     setS(get());
 
     try {
+      // --- Day-2 scripted interaction ---
+const stNow = get();
+if (stNow.day2 && stNow.day2.phase) {
+  const d2 = stNow.day2;
+
+  // 1) Reflection step (expects yes/no)
+  if (d2.phase === "reflect") {
+    if (!isYesNo(text)) {
+      pushBubble(`Just a quick check-in — type **yes** or **no** ✨`);
+      setThinking(false);
+      return;
+    }
+    const saidYes = /^\s*(yes|y)\s*$/i.test(text);
+    pushBubble(saidYes ? `🔥 Love it. That’s momentum showing up.` : `All good — today we prime the signal.`);
+
+    // move to booster prompt
+    set({ ...get(), day2: { ...d2, phase: "booster" } });
+    setS(get());
+    pushBubble(`Type today’s booster code to lock it: ${d2.booster}`);
+    setThinking(false);
+    return;
+  }
+
+  // 2) Booster step (expects the emoji sequence)
+  if (d2.phase === "booster") {
+    if (!isBoosterTyped(text, d2.booster)) {
+      pushBubble(`Close — type the exact booster: ${d2.booster}`);
+      setThinking(false);
+      return;
+    }
+
+    // success!
+    pushBubble(`✅ Booster locked. Abundance channel is active. 🌊💸`);
+
+    // optional: persist an event
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const user = session?.user;
+      if (user) {
+        await supabase.from("user_progress").upsert(
+          {
+            user_id: user.id,
+            day_key: new Date().toISOString().slice(0, 10),
+            step: "day2_booster_done",
+            details: { booster: d2.booster, at: new Date().toISOString() },
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "user_id,day_key" }
+        );
+      }
+    } catch {}
+
+    // mark done and celebrate
+    set({ ...get(), day2: { ...d2, phase: "done" } });
+    setS(get());
+    await popConfetti();
+
+    pushBubble(`Keep your vibe high and take one aligned action. I’ll be here to amplify tomorrow ✨`);
+    setPhase("free");
+    setThinking(false);
+    return;
+  }
+}
+
       if (phase === "exercise1") {
         if (/^done\b/i.test(text)) {
           await finishExercise1ThenAskDOB();
