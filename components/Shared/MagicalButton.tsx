@@ -6,66 +6,123 @@ type Props = {
 
 export default function MagicalButton({ disabled, onClick, children }: Props) {
   return (
-    <div className="relative w-full isolate">
-      {!disabled && (
-        <div
-          className="pointer-events-none absolute -inset-2 rounded-2xl blur-xl 
-                     bg-gradient-to-r from-orange-400 via-orange-500 to-orange-600 
-                     animate-[auraPulse_2s_ease-in-out_infinite]"
-          aria-hidden="true"
-        />
-      )}
+    <div className="wrap">
+      {!disabled && <div className="aura" aria-hidden="true" />}
 
       <button
         type="button"
         onClick={onClick}
         disabled={disabled}
-        className={[
-          "relative z-10 w-full min-h-[64px] rounded-2xl px-6 text-lg font-black tracking-tight",
-          "outline-none focus-visible:ring-4 focus-visible:ring-orange-400/60",
-          disabled
-            ? "bg-orange-200 text-orange-800 cursor-not-allowed"
-            : "bg-gradient-to-r from-orange-400 via-orange-500 to-orange-600 text-white shadow-xl animate-[pop_1.4s_ease-in-out_infinite]",
-        ].join(" ")}
+        className={`btn ${disabled ? "btn--disabled" : "btn--live"}`}
       >
-        <span className="relative flex items-center justify-center gap-2">
-          {!disabled && (
-            <span
-              className="pointer-events-none absolute inset-0 overflow-hidden rounded-2xl"
-              aria-hidden="true"
-            >
-              {/* shimmer sweep */}
-              <span className="absolute top-0 left-0 h-full w-1/3 -skew-x-12 opacity-40
-                               bg-white animate-[shimmer_1.6s_linear_infinite]" />
-            </span>
-          )}
-          {children}
-        </span>
+        {!disabled && (
+          <span className="shimmer" aria-hidden="true">
+            <span className="bar" />
+          </span>
+        )}
+
+        {!disabled && (
+          <>
+            <span className="glitter g1" aria-hidden="true" />
+            <span className="glitter g2" aria-hidden="true" />
+            <span className="glitter g3" aria-hidden="true" />
+            <span className="glitter g4" aria-hidden="true" />
+          </>
+        )}
+
+        <span className="label">{children}</span>
       </button>
 
-      {/* sparkles */}
-      {!disabled && (
-        <>
-          <Sparkle className="left-3 top-2" delay="0s" />
-          <Sparkle className="right-4 -bottom-2" delay=".5s" />
-          <Sparkle className="-left-2 bottom-4" delay="1s" />
-          <Sparkle className="right-2 top-0" delay="1.5s" />
-        </>
-      )}
-    </div>
-  );
-}
+      <style jsx>{`
+        /* tokens */
+        :root{
+          --h:64px;            /* big tap target */
+          --r:18px;
+          --o1:#ff9f1a;        /* orange gradient */
+          --o2:#ff7a00;
+          --o3:#ff5607;
+          --text:#140a00;
+          --ring:rgba(255,152,0,.55);
+        }
 
-function Sparkle({ className = "", delay = "0s" }) {
-  return (
-    <span
-      aria-hidden="true"
-      style={{ animationDelay: delay }}
-      className={[
-        "pointer-events-none absolute h-3 w-3 rounded-full bg-white",
-        "shadow-[0_0_24px_rgba(255,255,255,0.9)] animate-[twinkle_1.8s_ease-in-out_infinite]",
-        className,
-      ].join(" ")}
-    />
+        .wrap{ position:relative; width:100%; isolation:isolate; }
+
+        .aura{
+          position:absolute; inset:-10px;
+          border-radius:calc(var(--r) + 10px);
+          background: radial-gradient(60% 80% at 50% 0%,
+            rgba(255,200,120,.55), rgba(255,140,0,.35), transparent 70%);
+          filter: blur(16px);
+          animation: auraPulse 2s ease-in-out infinite;
+          pointer-events:none;
+        }
+
+        .btn{
+          position:relative;
+          display:inline-flex; align-items:center; justify-content:center;
+          gap:12px; width:100%;
+          min-height:var(--h); padding:14px 22px;
+          border:0; border-radius:var(--r);
+          font-weight:900; font-size:20px; letter-spacing:.1px;
+          cursor:pointer; outline:none;
+          transition: transform .15s ease, box-shadow .15s ease, opacity .15s ease;
+          user-select:none;
+        }
+
+        .btn--live{
+          color:#fff;
+          background-image: linear-gradient(90deg, var(--o1), var(--o2), var(--o3));
+          box-shadow: 0 10px 28px rgba(255,120,0,.5), 0 2px 0 rgba(0,0,0,.08) inset;
+          animation: pop 1.4s ease-in-out infinite;
+        }
+        .btn--live:hover{ transform: translateY(-1px) scale(1.02); }
+        .btn--live:active{ transform: translateY(0) scale(.99); }
+
+        .btn--disabled{
+          background:#ffd9a6; color:#7a3d00; cursor:not-allowed; opacity:.85;
+          box-shadow:none;
+        }
+
+        .btn:focus-visible{ box-shadow: 0 0 0 4px var(--ring); }
+
+        /* shimmer sweep */
+        .shimmer{ position:absolute; inset:0; overflow:hidden; border-radius:var(--r); pointer-events:none; }
+        .bar{
+          position:absolute; top:-25%; left:-35%;
+          width:45%; height:150%; transform: skewX(-20deg);
+          background: linear-gradient(90deg, rgba(255,255,255,0) 0%,
+                                     rgba(255,255,255,.75) 50%,
+                                     rgba(255,255,255,0) 100%);
+          mix-blend-mode: screen;
+          animation: shimmer 1.6s linear infinite;
+        }
+
+        /* glitter bits */
+        .glitter{
+          position:absolute; width:10px; height:10px; border-radius:50%;
+          background:#fff; box-shadow:0 0 22px rgba(255,255,255,.95);
+          pointer-events:none; animation: sparkle 1.6s ease-in-out infinite;
+        }
+        .g1{ left:14px;  top:10px;   animation-delay:0s; }
+        .g2{ right:16px; bottom:12px;animation-delay:.4s; }
+        .g3{ left:-6px;  bottom:18px;animation-delay:.8s; }
+        .g4{ right:6px;  top:-8px;   animation-delay:1.2s; }
+
+        /* keyframes */
+        @keyframes pop{ 0%,100%{ transform:scale(1);} 50%{ transform:scale(1.04);} }
+        @keyframes auraPulse{ 0%,100%{ opacity:.7; filter:blur(16px);} 50%{ opacity:1; filter:blur(22px);} }
+        @keyframes shimmer{ 0%{ transform:translateX(-120%) skewX(-20deg);} 100%{ transform:translateX(220%) skewX(-20deg);} }
+        @keyframes sparkle{
+          0%{ opacity:0; transform: translateY(0) scale(.7) rotate(0deg); }
+          50%{ opacity:1; transform: translateY(-6px) scale(1) rotate(15deg); }
+          100%{ opacity:0; transform: translateY(0) scale(.7) rotate(0deg); }
+        }
+
+        /* respect reduced motion */
+        @media (prefers-reduced-motion: reduce){
+          .aura,.bar,.glitter,.btn--live{ animation:none !important; }
+        }
+      `}</style>
+    </div>
   );
 }
