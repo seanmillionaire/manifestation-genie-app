@@ -583,110 +583,82 @@ function handleLooksRight() {
             {/* Stage: chat */}
             {stage === "chat" && (
               <>
-{/* --- Today Recap (with circular progress) --- */}
+
+
+              {/* --- Today Recap (compact + circular 75%) --- */}
 {(() => {
-  // Map phase → % complete
-  const phaseToPct = (p) => {
-    switch (p) {
-      case "intro":     return 20;
-      case "exercise1": return 45;
-      case "dob":       return 65;
-      case "work":      return 85;
-      case "free":      return 100;
-      default:          return 10;
-    }
-  };
-const pct = 75;
+  // fixed 75% for now (can wire to phase later)
+  const pct = 75;
+
   const wish  = S.currentSession?.wish  ?? S.currentWish?.wish;
   const block = S.currentSession?.block ?? S.currentWish?.block;
   const micro = S.currentSession?.micro ?? S.currentWish?.micro;
 
-  // Ring geometry (SVG units)
-  const R = 20;                            // radius
-  const C = 2 * Math.PI * R;               // circumference ≈ 125.66
-  const dash = C;
-  const offset = C * (1 - pct / 100);      // stroke-dashoffset for progress
+  // ring geometry
+  const R = 18;                      // radius (smaller)
+  const C = 2 * Math.PI * R;
+  const offset = C * (1 - pct / 100);
 
   return (
     <div className="recap" aria-live="polite">
-      <div className="head">
+      {/* left: date + one-line recap */}
+      <div className="left">
         <div className="title">
-          {new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}
-          {" — Today’s Session"}
+          {new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })} — Today
         </div>
-
-        {/* Circular Progress */}
-        <div className="ring" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct}
-             aria-label="Today's progress">
-          <svg className="svg" viewBox="0 0 48 48">
-            <defs>
-              <linearGradient id="ringGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-                <stop offset="0%"   stopColor="#ffb74d" />
-                <stop offset="50%"  stopColor="#ff9800" />
-                <stop offset="100%" stopColor="#fb8c00" />
-              </linearGradient>
-            </defs>
-
-            {/* Track */}
-            <circle
-              cx="24" cy="24" r={R}
-              stroke="rgba(255,165,0,.25)"
-              strokeWidth="4"
-              fill="none"
-            />
-            {/* Progress */}
-            <circle
-              cx="24" cy="24" r={R}
-              stroke="url(#ringGrad)"
-              strokeWidth="5"
-              fill="none"
-              strokeLinecap="round"
-              strokeDasharray={dash}
-              strokeDashoffset={offset}
-              style={{ transition: "stroke-dashoffset 400ms ease" }}
-              transform="rotate(-90 24 24)"  // start at 12 o’clock
-            />
-          </svg>
-          <div className="pct">{pct}%</div>
+        <div className="line">
+          {wish  ? <span><strong>Wish:</strong> {wish}</span> : null}
+          {block ? <span><strong>Block:</strong> {block}</span> : null}
+          {micro ? <span><strong>Step:</strong> {micro}</span> : null}
         </div>
       </div>
 
-      {wish  ? <div><strong>Wish:</strong> {wish}</div>   : null}
-      {block ? <div><strong>Block:</strong> {block}</div> : null}
-      {micro ? <div><strong>Micro-step:</strong> {micro}</div> : null}
+      {/* right: compact ring */}
+      <div className="ring" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct} aria-label="Today's progress">
+        <svg className="svg" viewBox="0 0 44 44">
+          <defs>
+            <linearGradient id="ringGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%"   stopColor="#ffb74d" />
+              <stop offset="50%"  stopColor="#ff9800" />
+              <stop offset="100%" stopColor="#fb8c00" />
+            </linearGradient>
+          </defs>
+          <circle cx="22" cy="22" r={R} stroke="#ffe0a3" strokeWidth="4" fill="none" />
+          <circle
+            cx="22" cy="22" r={R}
+            stroke="url(#ringGrad)" strokeWidth="5" fill="none" strokeLinecap="round"
+            strokeDasharray={C} strokeDashoffset={offset}
+            transform="rotate(-90 22 22)"
+            style={{ transition: "stroke-dashoffset 400ms ease" }}
+          />
+        </svg>
+        <div className="pct">{pct}%</div>
+      </div>
 
       <style jsx>{`
         .recap {
-          margin: 8px 0 12px;
-          padding: 12px;
-          border-radius: 10px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 10px;
+          padding: 6px 10px;                 /* tighter */
+          border-radius: 8px;
           background: #fff8e6;
           border: 1px solid rgba(255,165,0,.35);
-          font-size: 14px;
-          line-height: 1.5;
+          font-size: 13px;                    /* smaller */
+          line-height: 1.3;                   /* compact */
+          margin: 4px 0 8px;                  /* less vertical space */
         }
-        .head {
-          display: grid;
-          grid-template-columns: 1fr auto;
-          align-items: center;
-          gap: 12px;
-          margin-bottom: 6px;
+        .left { min-width: 0; }               /* allow ellipsis */
+        .title { font-weight: 700; margin-bottom: 2px; }
+        .line {
+          display: flex; gap: 8px; flex-wrap: nowrap;
+          white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
         }
-        .title { font-weight: 800; }
-        .ring {
-          position: relative;
-          width: 52px; height: 52px;
-        }
-        .svg {
-          display: block;
-          width: 52px; height: 52px;
-          filter: drop-shadow(0 0 8px rgba(255,153,0,.25));
-        }
-        .pct {
-          position: absolute; inset: 0;
-          display: grid; place-items: center;
-          font-weight: 900; font-size: 12px; color: #9a6a00;
-        }
+        .line > span:not(:last-child)::after { content: " | "; opacity: .5; margin-left: 8px; }
+        .ring { position: relative; width: 44px; height: 44px; flex: 0 0 auto; }
+        .svg { display: block; width: 44px; height: 44px; filter: drop-shadow(0 0 6px rgba(255,153,0,.18)); }
+        .pct { position: absolute; inset: 0; display: grid; place-items: center; font-weight: 800; font-size: 11px; color: #9a6a00; }
         @media (prefers-reduced-motion: reduce) {
           .svg circle[stroke-dashoffset] { transition: none !important; }
         }
