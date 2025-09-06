@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import { get, set } from '../src/flowState';
+import MagicalButton from "../components/Shared/MagicalButton";
 
 export default function ChecklistPage() {
   const router = useRouter();
@@ -77,21 +78,9 @@ export default function ChecklistPage() {
             </ol>
           </div>
 
-          {/* single primary CTA */}
-          <button
-            onClick={goChat}
-            style={{
-              width: '100%',
-              padding: '12px 16px',
-              borderRadius: 14,
-              border: 0,
-              background: '#ffd600',
-              fontWeight: 900,
-              cursor: 'pointer'
-            }}
-          >
-            ✨ I’m ready → NEXT STEP
-          </button>
+         <MagicalButton onClick={goChat}}>
+  ✨ I’m ready → NEXT STEP
+</MagicalButton>
         </div>
       </section>
     </main>
