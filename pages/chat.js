@@ -596,8 +596,7 @@ function handleLooksRight() {
       default:          return 10;
     }
   };
-  const pct = Math.max(0, Math.min(100, phaseToPct(phase)));
-
+const pct = 75;
   const wish  = S.currentSession?.wish  ?? S.currentWish?.wish;
   const block = S.currentSession?.block ?? S.currentWish?.block;
   const micro = S.currentSession?.micro ?? S.currentWish?.micro;
