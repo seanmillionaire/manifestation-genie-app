@@ -170,28 +170,6 @@ if (sigilTriggers.some(w => lastUserMessage.includes(w)) || (lastWasQuestion && 
 }
 
 
-    // expanded nudges so “what else” etc. also fire
-    const sigilTriggers = [
-      "sigil","seal","ritual","wish","888","money","flow","rich","paid","cash",
-      "what else","more","next","continue","ok","done"
-    ];
-
-    // if the last assistant ended with a question and the user reply is short, break state
-    const lastAssistant = [...cleanedHistory].reverse().find(m => m.role === "assistant");
-    const lastWasQuestion = !!(lastAssistant && /\?\s*$/.test(lastAssistant.content || ""));
-    const shortPing = rawText.trim().split(/\s+/).length <= 3;
-
-    if (sigilTriggers.some(w => lastUserMessage.includes(w)) || (lastWasQuestion && shortPing)) {
-      const sigil = getRandomSigil();
-      await saveTurn({
-        conversationId: convoId,
-        messages: [
-          ...(text ? [{ role: "user", content: text }] : []),
-          { role: "assistant", content: sigil }
-        ]
-      });
-      return res.status(200).json({ reply: sigil, conversationId: convoId });
-    }
 
     // Loop-break: after 2 assistant replies since last user, hard-stop with sigil
     const assistantSince = assistantRepliesSinceLastUser(cleanedHistory);
