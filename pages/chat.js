@@ -583,32 +583,114 @@ function handleLooksRight() {
             {/* Stage: chat */}
             {stage === "chat" && (
               <>
-              {/* --- Today Recap (always visible) --- */}
-<div
-  style={{
-    margin: "8px 0 12px",
-    padding: "10px 12px",
-    borderRadius: 10,
-    background: "#fff8e6",
-    border: "1px solid rgba(255,165,0,.35)",
-    fontSize: 14,
-    lineHeight: 1.5,
-  }}
-  aria-live="polite"
->
-  <div style={{ fontWeight: 800, marginBottom: 4 }}>
-    {new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })} — Today’s Session
-  </div>
-  { (S.currentSession?.wish ?? S.currentWish?.wish) ? (
-    <div><strong>Wish:</strong> {S.currentSession?.wish ?? S.currentWish?.wish}</div>
-  ) : null }
-  { (S.currentSession?.block ?? S.currentWish?.block) ? (
-    <div><strong>Block:</strong> {S.currentSession?.block ?? S.currentWish?.block}</div>
-  ) : null }
-  { (S.currentSession?.micro ?? S.currentWish?.micro) ? (
-    <div><strong>Micro-step:</strong> {S.currentSession?.micro ?? S.currentWish?.micro}</div>
-  ) : null }
-</div>
+{/* --- Today Recap (with animated progress) --- */}
+{(() => {
+  // Map the current phase → % complete
+  const phaseToPct = (p) => {
+    switch (p) {
+      case "intro": return 20;        // greeted + recap
+      case "exercise1": return 45;    // doing the 2-min reset
+      case "dob": return 65;          // numerology input
+      case "work": return 85;         // generating aligned actions
+      case "free": return 100;        // done for today (chat freely)
+      default: return 10;             // confirm or boot
+    }
+  };
+  const pct = Math.max(0, Math.min(100, phaseToPct(phase)));
+
+  const wish  = S.currentSession?.wish  ?? S.currentWish?.wish;
+  const block = S.currentSession?.block ?? S.currentWish?.block;
+  const micro = S.currentSession?.micro ?? S.currentWish?.micro;
+
+  return (
+    <div className="recap" aria-live="polite">
+      <div className="title">
+        {new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })} — Today’s Session
+      </div>
+      {wish  ? <div><strong>Wish:</strong> {wish}</div>   : null}
+      {block ? <div><strong>Block:</strong> {block}</div> : null}
+      {micro ? <div><strong>Micro-step:</strong> {micro}</div> : null}
+
+      {/* Progress bar */}
+      <div className="progWrap" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct}
+           aria-label="Today's progress">
+        <div className="track">
+          <div className="fill" style={{ width: `${pct}%` }}>
+            <span className="shine" aria-hidden="true" />
+          </div>
+        </div>
+        <div className="pct">{pct}%</div>
+      </div>
+
+      <style jsx>{`
+        .recap {
+          margin: 8px 0 12px;
+          padding: 10px 12px;
+          border-radius: 10px;
+          background: #fff8e6;
+          border: 1px solid rgba(255,165,0,.35);
+          font-size: 14px;
+          line-height: 1.5;
+        }
+        .title { font-weight: 800; margin-bottom: 4px; }
+
+        .progWrap {
+          display: grid;
+          grid-template-columns: 1fr auto;
+          align-items: center;
+          gap: 10px;
+          margin-top: 10px;
+        }
+        .track {
+          position: relative;
+          height: 10px;
+          border-radius: 999px;
+          background: linear-gradient(180deg, #fff1cc, #ffe2a3);
+          border: 1px solid rgba(255,165,0,.35);
+          overflow: hidden;
+        }
+        .fill {
+          position: relative;
+          height: 100%;
+          border-radius: 999px;
+          background: linear-gradient(90deg, #ffb74d, #ff9800, #fb8c00);
+          box-shadow: 0 0 16px rgba(255,153,0,.45) inset;
+          transition: width 300ms ease; /* feels responsive but gentle */
+          will-change: width;
+        }
+        .shine {
+          position: absolute;
+          top: -40%;
+          left: -20%;
+          width: 35%;
+          height: 180%;
+          transform: skewX(-20deg);
+          background: linear-gradient(90deg, rgba(255,255,255,0), rgba(255,255,255,.7), rgba(255,255,255,0));
+          opacity: .6;
+          animation: shimmer 1.6s linear infinite;
+          mix-blend-mode: screen;
+        }
+        .pct {
+          font-weight: 900;
+          font-size: 12px;
+          color: #9a6a00;
+          min-width: 36px;
+          text-align: right;
+        }
+
+        @keyframes shimmer {
+          0%   { transform: translateX(-120%) skewX(-20deg); }
+          100% { transform: translateX(220%)  skewX(-20deg); }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+          .shine { animation: none; }
+        }
+      `}</style>
+    </div>
+  );
+})()}
+
 
                 <div
                   ref={listRef}
