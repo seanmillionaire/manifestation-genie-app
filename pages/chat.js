@@ -704,8 +704,12 @@ function handleLooksRight() {
 
               {/* --- Today Recap (compact + circular 75%) --- */}
 {(() => {
-  // fixed 75% for now (can wire to phase later)
-  const pct = 75;
+// 75% default; bump while/after Day-2 ritual
+let pct = 75;
+const d2phase = S.day2?.phase || null;
+if (d2phase === "booster") pct = 78; // small nudge while waiting for booster
+if (d2phase === "done")    pct = 80; // after booster success
+
 
   const wish  = S.currentSession?.wish  ?? S.currentWish?.wish;
   const block = S.currentSession?.block ?? S.currentWish?.block;
